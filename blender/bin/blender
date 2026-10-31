@@ -1,3 +1,11 @@
 #!/usr/bin/env bash
 ## @brief The blender command (headless use: blender -b ...).
-exec ~/.local/share/modules/blender/app/current/blender "$@"
+## @details Renders (-b/--background) take the shared GPU lock (/tmp/ai-gpu.lock, same as ai gen) and free the GPU first.
+B=~/.local/share/modules/blender/app/current/blender
+case " $* " in
+  *" -b "*|*" --background "*)
+    exec 9>/tmp/ai-gpu.lock
+    flock -n 9 || { echo "  waiting for another GPU job (ai gen / blender) to finish..." >&2; flock 9; }
+    ai free >&2 ;;
+esac
+exec "$B" "$@"

@@ -197,8 +197,8 @@ def unload_llm(log):
     for _ in range(60):   # llama-swap stops the server asynchronously
         try:
             running = api("/running", base=LLM).get("running", [])
-        except Exception:
-            running = []
+        except Exception as e:   # unknown state is not "unloaded"
+            log(f"cannot check the model server: {e}"); return False
         if not running:
             log("chat models unloaded"); return True
         time.sleep(1)

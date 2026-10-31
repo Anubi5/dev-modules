@@ -7,12 +7,13 @@ if ! "$A/bin/llama-server" --version >/dev/null 2>&1; then   # missing, or moved
   echo "  building llama.cpp with CUDA - 15-30 min, no output meanwhile"
   [ -d "$A/src/llama.cpp" ] || git clone --depth 1 https://github.com/ggml-org/llama.cpp "$A/src/llama.cpp"
   cmake -S "$A/src/llama.cpp" -B "$A/src/llama.cpp/build" -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCH:-89}" \
-        -DLLAMA_CURL=ON -DCMAKE_BUILD_TYPE=Release >/dev/null
+        -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release >/dev/null   # static: no library paths that break when moved
   cmake --build "$A/src/llama.cpp/build" -j "$(nproc)" --target llama-server llama-bench >/dev/null
-  cp -a "$A/src/llama.cpp/build/bin/." "$A/bin/"
+  rm -f "$A"/bin/lib*.so*                                       # old shared-library build
+  cp -a "$A/src/llama.cpp/build/bin/llama-server" "$A/src/llama.cpp/build/bin/llama-bench" "$A/bin/"
   rm -rf "$A/src/llama.cpp/build"
 fi
-"$A/bin/llama-server" --version >/dev/null 2>&1 || { echo "llama-server does not start"; exit 1; }
+"$A/bin/llama-server" --version >/dev/null 2>&1 || { echo "llama-server does not start:"; "$A/bin/llama-server" --version 2>&1 | tail -5; exit 1; }
 if [ ! -x "$A/bin/llama-swap" ]; then
   url=$(curl -s https://api.github.com/repos/mostlygeek/llama-swap/releases/latest | jq -r '.assets[].browser_download_url' \
         | grep -i linux | grep -Ei 'amd64|x86_64' | grep -E '\.tar\.gz$' | head -1)

@@ -4,6 +4,7 @@ set -euo pipefail
 cd "$MOD"; A=$MOD/app; mkdir -p "$A/bin" "$MOD/models"
 export PATH=/usr/local/cuda/bin:$PATH
 if ! "$A/bin/llama-server" --version >/dev/null 2>&1; then   # missing, or moved binaries that no longer start
+  echo "  building llama.cpp with CUDA - 15-30 min, no output meanwhile"
   [ -d "$A/src/llama.cpp" ] || git clone --depth 1 https://github.com/ggml-org/llama.cpp "$A/src/llama.cpp"
   cmake -S "$A/src/llama.cpp" -B "$A/src/llama.cpp/build" -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCH:-89}" \
         -DLLAMA_CURL=ON -DCMAKE_BUILD_TYPE=Release >/dev/null

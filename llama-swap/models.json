@@ -1,0 +1,88 @@
+{
+  "_comment": "Models for the dev distro. chat = llama.cpp models behind llama-swap (copied to /opt/ai/models); media = ComfyUI files (kept in <ModelsWin>\\comfy). Find a repo either by 'repo' (pinned) or by 'search' + 'must' (most-downloaded match). 'quant' = preferred file quantisations, first match wins. 'args' = extra llama-server flags ({moe} = tuned expert offload). 'vision' loads the image projector. 'ttl' = seconds idle before unload.",
+  "chat": [
+    {
+      "id": "qwen3.5-9b",
+      "name": "Qwen3.5 9B abliterated (daily, vision)",
+      "search": "Qwen3.5-9B abliterated",
+      "must": [
+        "qwen3.5",
+        "9b",
+        "abliterat",
+        "gguf"
+      ],
+      "quant": [
+        "Q6_K",
+        "Q8_0",
+        "Q5_K_M",
+        "Q4_K_M"
+      ],
+      "mmproj": true,
+      "vision": true,
+      "args": "-c 32768 -ctk q8_0 -ctv q8_0",
+      "ttl": 300,
+      "alias": "default",
+      "long_prompt_test": true
+    },
+    {
+      "id": "gemma4-12b",
+      "name": "Gemma 4 12B abliterated (writing)",
+      "repo": "huihui-ai/Huihui-gemma-4-12B-it-qat-q4_0-unquantized-abliterated-GGUF",
+      "search": "gemma-4-12B abliterated",
+      "must": [
+        "gemma",
+        "4",
+        "12b",
+        "abliterat",
+        "gguf"
+      ],
+      "quant": [
+        "Q4_K_M",
+        "Q4_K",
+        "Q5_K_M",
+        "Q6_K"
+      ],
+      "mmproj": false,
+      "args": "-c 16384 -ctk q8_0 -ctv q8_0",
+      "ttl": 300
+    },
+    {
+      "id": "qwen3.6-35b",
+      "name": "Qwen3.6 35B-A3B abliterated (heavy, agent)",
+      "repo": "mradermacher/Huihui-Qwen3.6-35B-A3B-abliterated-GGUF",
+      "quant": [
+        "Q4_K_M",
+        "Q4_K_S",
+        "IQ4_XS"
+      ],
+      "mmproj": true,
+      "vision": false,
+      "args": "--n-cpu-moe {moe} -c 65536 -ctk q8_0 -ctv q8_0",
+      "ttl": 300,
+      "long_prompt_test": true,
+      "moe_tune": [
+        40,
+        36,
+        32,
+        28,
+        24,
+        20,
+        16,
+        12
+      ],
+      "moe_default": 36
+    },
+    {
+      "id": "coder-7b",
+      "name": "Qwen2.5-Coder 7B (autocomplete)",
+      "repo": "Qwen/Qwen2.5-Coder-7B-Instruct-GGUF",
+      "quant": [
+        "q4_k_m"
+      ],
+      "mmproj": false,
+      "args": "-c 8192",
+      "ttl": 300,
+      "speed_test_only": true
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+## @brief Called by "ai free": ComfyUI unloads its models.
+curl -s -m 20 -o /dev/null -X POST http://127.0.0.1:8188/free -H "Content-Type: application/json" -d '{"unload_models":true,"free_memory":true}' && echo "  ComfyUI memory freed" || true

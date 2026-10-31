@@ -1,0 +1,24 @@
+---
+name: gpu-generate
+description: Generate an image (SDXL) or a short video (Wan 2.2) on the local GPU with "ai gen"; it frees the GPU from the chat model first and gives it back afterwards.
+---
+
+# GPU generate
+
+## When to Use
+The user asks for a picture, illustration, concept art, texture, reference image or short video clip.
+
+## Procedure
+1. Write a concrete prompt: subject, setting, style, lighting, camera. Add a negative prompt only if needed.
+2. Pick a short name for the result (it becomes the file name), e.g. `castle-concept`.
+3. Run ONE command and wait for it to finish (the GPU is shared; the chat model is unloaded meanwhile):
+   - image: `ai gen image "<prompt>" --name <name> [--size 1024x1024] [--upscale] [--seed N]`
+   - video: `ai gen video "<prompt>" --name <name> [--frames 33]`  (33 frames ~ 1.4 s, ~2-6 min; 121 ~ 5 s)
+4. The last lines after `OUTPUT` are the file paths (in `~/work/outputs/comfy/<date>/`). Report them and the seed.
+5. If the result belongs to a project, copy it into `~/work/projects/<project>/output/`.
+
+## Rules
+- Never run two `ai gen` commands at the same time; never call the ComfyUI API directly.
+- If it prints `GPU busy` or `ComfyUI is busy`, wait and retry once. If it prints `FAILED`, report the error line - do not loop.
+- Limits: sides 512-1536 px, up to 60 steps, up to 121 video frames. Don't chat-request other models while a job runs.
+- Sizes are multiples of 64; 1024x1024, 1152x896 and 896x1152 work best for SDXL.

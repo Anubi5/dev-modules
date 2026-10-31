@@ -1,0 +1,7 @@
+# ComfyUI model files: <huggingface repo> <file name> <ComfyUI folder>
+# Files already in D:\AI\models\comfy (= /models/comfy) are used as they are; missing ones are downloaded into this module.
+stabilityai/stable-diffusion-xl-base-1.0 sd_xl_base_1.0.safetensors checkpoints
+Comfy-Org/Wan_2.2_ComfyUI_Repackaged wan2.2_vae.safetensors vae
+Comfy-Org/Wan_2.2_ComfyUI_Repackaged umt5_xxl_fp8_e4m3fn_scaled.safetensors text_encoders
+QuantStack/Wan2.2-TI2V-5B-GGUF Wan2.2-TI2V-5B-Q8_0.gguf diffusion_models
+Kim2091/UltraSharp 4x-UltraSharp.safetensors upscale_models

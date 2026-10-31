@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+## @brief The blender command (headless use: blender -b ...).
+exec ~/.local/share/modules/blender/app/current/blender "$@"

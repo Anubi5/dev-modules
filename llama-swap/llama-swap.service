@@ -1,0 +1,8 @@
+[Unit]
+Description=Model server + chat page (127.0.0.1:8080)
+
+[Service]
+WorkingDirectory=%h/.local/share/modules/llama-swap
+ExecStart=%h/.local/share/modules/llama-swap/app/bin/llama-swap --config %h/.local/share/modules/llama-swap/llama-swap.yaml --listen 127.0.0.1:8080
+Restart=on-failure
+RestartSec=5

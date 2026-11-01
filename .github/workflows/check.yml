@@ -14,3 +14,8 @@ jobs:
       - name: Custom nodes are pinned to a commit
         run: |
           grep -vE '^\s*(#|$)' comfyui/nodes.txt | awk 'NF < 2 || $2 !~ /^[0-9a-f]{40}$/ {print "not pinned " $0; bad=1} END {exit bad}'
+      - name: Python undefined names (pyflakes)
+        run: |
+          pip install -q pyflakes
+          python3 -m pyflakes $(git ls-files '*.py') > pf.txt || true; cat pf.txt
+          ! grep -q "undefined name" pf.txt

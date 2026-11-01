@@ -8,6 +8,8 @@ import hashlib
 import os
 import sys
 
+from huggingface_hub import HfApi, hf_hub_download
+
 CODE_FORMATS = (".pt", ".pth", ".bin", ".ckpt", ".pkl")   # pickle-based: can run code when loaded
 
 

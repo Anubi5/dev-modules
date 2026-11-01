@@ -33,7 +33,8 @@ it unloads the chat model through the model-serving contract, runs one fixed wor
 Settings come from each model's official template or card; tune them in `profiles.json`.
 
 ## Recipe: one character in several poses (tested 1 Nov 2026)
-Best current route: SDXL (`realvis`) with `--face` + `--pose` + `--fix-faces --fix-hands` + `--hires`, about 3 min per image.
+Best current route: SDXL (`realvis`) with `--face` + `--pose` + `--fix-faces --fix-hands` + `--hires`, about 3 min per image;
+FLUX 3 with two references for poses SDXL gets wrong (see the end of this section).
 1. **Character reference**: one clear, front-facing head-and-shoulders portrait of the character (`--model realvis`).
 2. **Pose sources**: any person in each pose, e.g. Z-Image (fast). Only the skeleton is used, never the look.
 3. **Final images**: the *same* character description (exact clothes, hair, eyes), the same `--seed`, plus
@@ -55,8 +56,8 @@ What we learned:
 - **Full-body pose sources fix most anatomy problems.** With a head-to-feet source, crouching (tying a shoelace) came
   out clean: correct hands, two sneakers. The earlier cropped source had given a third sneaker and a melted hand.
 - **Sitting cross-legged fails on SDXL** - upside-down figure at pose strength 0.65 *and* 0.85, although the skeleton
-  was correct. Overlapping legs are too ambiguous for the pose ControlNet. Use the FLUX 3 route below for such poses
-  (lying, cross-legged, tangled limbs), or try other seeds.
+  was correct. Overlapping legs are too ambiguous for the pose ControlNet. The FLUX 3 route below got the same pose
+  right on the first try (clean hands, two feet, same outfit) - use it for lying, sitting cross-legged, tangled limbs.
 - **Clothes stay consistent only through the text**: FaceID keeps the face, the description keeps the outfit - repeat
   it word for word. Same seed for all images keeps lighting and style close.
 - **Small faces** (full body at 896x1152) need `--fix-faces`; likeness weak -> `--face-weight 0.75` (above ~0.8 faces
@@ -68,7 +69,8 @@ What we learned:
 - **FLUX 3 route** (hard poses, very consistent outfits): give the character and the pose source as two references:
   `ai gen edit "Create a photograph of the woman from the first image (same face, hair and outfit), in exactly the pose
   of the person in the second image: <pose>. Full body, head to feet in frame, <background>; change the background
-  completely." --image <reference> --image <pose source>` (no FaceID or hand repair; not yet compared side by side).
+  completely." --image <reference> --image <pose source>` - ~1.5 min, no FaceID or hand repair needed in the test.
+  The face likeness comes from the reference image alone, so it is a bit looser than SDXL with `--face`.
 
 ## Adding a model, LoRA, checkpoint or node
 Pick the lightest step that does what you need.

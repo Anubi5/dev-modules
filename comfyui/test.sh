@@ -20,7 +20,7 @@ PY=$MOD/app/ComfyUI/.venv/bin/python
 "$PY" -c 'import insightface' 2>/dev/null || echo "  (FaceID unavailable: InsightFace not installed - plain IPAdapter face works)"
 while read -r repo want folder name; do
   case "$repo" in ''|\#*) continue ;; esac
-  name=${name:-$(basename "$want")}
+  case "${name:-}" in ''|sha256:*) name=$(basename "$want") ;; esac
   [ -e "${MODELS_MOUNT:-/models}/comfy/$folder/$name" ] || [ -e "$MOD/models/$folder/$name" ] || { echo "  missing $folder/$name"; miss=1; }
 done < "$MOD/models.txt"
 [ $miss = 0 ] || exit 1

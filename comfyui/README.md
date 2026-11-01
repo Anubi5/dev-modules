@@ -10,6 +10,9 @@ it unloads the chat model through the model-serving contract, runs one fixed wor
 - Pickle-based model files (`.pt`, `.pth`, `.bin`) can run code when loaded: their hash is recorded on first fetch and a
   file that changes later is moved aside (`.quarantined`) instead of being used.
 - Model files already in D:\AI\models\comfy are used read-only; missing ones download into `$MOD/models`.
+- `models.txt` takes Hugging Face lines and direct-download lines (`<https URL> <file> <folder> sha256:<hex>`, e.g. Juggernaut
+  XL Ragnarok from CivitAI); a direct download is kept only if its SHA-256 matches. Pick a checkpoint per image with
+  `ai gen image ... --checkpoint juggernaut` (default: RealVisXL).
 - Your saved workflows and settings: `~/work/comfyui/` (kept on removal). Results: `~/work/outputs/comfy/<date>/`.
 - `test.sh --full` = SDXL image + upscale, a Wan video, and a pose + face + face/hand repair + tiled-upscale job, all through `ai gen`.
 

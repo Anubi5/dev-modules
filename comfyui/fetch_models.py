@@ -52,8 +52,43 @@ def check_hash(path, own):
     return True
 
 
+def fetch_url(url, dest, sha):
+    """!
+    @brief Downloads a file from a direct URL (e.g. CivitAI) to dest, only if its SHA-256 matches the pinned one.
+    @param url  Download URL.  @param dest  Final path.  @param sha  Expected SHA-256 (hex).
+    @return None; raises on failure (the partial file is removed).
+    """
+    import urllib.error
+    import urllib.request
+    part = dest + ".part"
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    req = urllib.request.Request(url, headers={"User-Agent": "dev-modules/1.0"})
+    h, done, last = hashlib.sha256(), 0, 0
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r, open(part, "wb") as f:
+            total = int(r.headers.get("Content-Length") or 0)
+            for block in iter(lambda: r.read(1 << 20), b""):
+                f.write(block); h.update(block); done += len(block)
+                if done - last >= 256 << 20:   # progress every 256 MB
+                    last = done; print(f"    {done >> 20} MB{f' of {total >> 20} MB' if total else ''}", flush=True)
+    except urllib.error.HTTPError as e:
+        os.path.exists(part) and os.remove(part)
+        if e.code in (401, 403):
+            raise RuntimeError(f"the site wants a login for this file - download it in your browser and put it in "
+                               f"D:\\AI\\models\\comfy\\{os.path.basename(os.path.dirname(dest))}") from None
+        raise
+    if h.hexdigest().lower() != sha.lower():
+        os.remove(part)
+        raise RuntimeError(f"checksum mismatch (expected {sha[:12]}..., got {h.hexdigest()[:12]}...) - file discarded")
+    os.replace(part, dest)
+
+
 def main():
-    """! @brief Reads "<repo> <file or path in repo> <folder> [save as]" lines and downloads only what is missing. @return exit code """
+    """!
+    @brief Reads "<repo> <file or path in repo> <folder> [save as]" lines (Hugging Face) and
+           "<https URL> <file name> <folder> sha256:<hex>" lines (direct download, checksum required) and
+           downloads only what is missing. @return exit code
+    """
     lst, ro, own = sys.argv[1:4]
     failed = 0
     for line in open(lst):
@@ -61,11 +96,21 @@ def main():
             continue
         parts = line.split()
         repo, want, folder = parts[:3]
-        name = parts[3] if len(parts) > 3 else os.path.basename(want)
+        sha = next((x[7:] for x in parts[3:] if x.startswith("sha256:")), None)
+        name = next((x for x in parts[3:] if not x.startswith("sha256:")), os.path.basename(want))
         have = [os.path.join(root, folder, name) for root in (ro, own) if os.path.exists(os.path.join(root, folder, name))]
         if have:
             print(f"  {folder}/{name}: present", flush=True)
             failed += 0 if check_hash(os.path.abspath(have[0]), own) else 1
+            continue
+        if repo.startswith("https://"):
+            try:
+                if not sha:
+                    raise RuntimeError("direct downloads need a sha256:<hex> in the list")
+                print(f"  downloading {name} from {repo.split('/')[2]} (checksum pinned)", flush=True)
+                fetch_url(repo, os.path.join(own, folder, name), sha)
+            except Exception as e:
+                print(f"  CHECK {name}: {e}"); failed += 1
             continue
         try:
             match = [f for f in HfApi().list_repo_files(repo) if f == want or f.endswith("/" + want)][0]

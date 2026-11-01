@@ -3,6 +3,8 @@
 stabilityai/stable-diffusion-xl-base-1.0 sd_xl_base_1.0.safetensors checkpoints
 # Photoreal SDXL fine-tune used by ai gen (openrail++); works with every SDXL ControlNet / IPAdapter / detailer here
 SG161222/RealVisXL_V5.0 RealVisXL_V5.0_fp16.safetensors checkpoints
+# Juggernaut XL "Ragnarok" (KandooAI / RunDiffusion; CivitAI only) - ai gen image ... --checkpoint juggernaut
+https://civitai.com/api/download/models/1759168?fileId=1659952 juggernautXL_ragnarok.safetensors checkpoints sha256:DD08FA32F98D05A2443CA1419E46DF1575A0811F6E3B246D9DD47FF20F5EB66A
 Comfy-Org/Wan_2.2_ComfyUI_Repackaged wan2.2_vae.safetensors vae
 Comfy-Org/Wan_2.2_ComfyUI_Repackaged umt5_xxl_fp8_e4m3fn_scaled.safetensors text_encoders
 QuantStack/Wan2.2-TI2V-5B-GGUF Wan2.2-TI2V-5B-Q8_0.gguf diffusion_models

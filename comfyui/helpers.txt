@@ -1,0 +1,5 @@
+# Helper models some nodes fetch on first use - fetched at install, so they work with the internet off.
+# <huggingface repo> <file> <folder inside ComfyUI> [save as]
+# DWPose (pick bbox_detector yolox_l.onnx and pose_estimator dw-ll_ucoco_384.onnx in the DWPose node: ONNX, no code inside)
+yzd-v/DWPose yolox_l.onnx custom_nodes/comfyui_controlnet_aux/ckpts/yzd-v/DWPose
+yzd-v/DWPose dw-ll_ucoco_384.onnx custom_nodes/comfyui_controlnet_aux/ckpts/yzd-v/DWPose

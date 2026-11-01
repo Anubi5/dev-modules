@@ -112,6 +112,24 @@ def fetch(repo, filename, dest, seed=None, model_id=None):
     return download(repo, filename, local_dir=dest)
 
 
+def upgrade_record(old, spec):
+    """!
+    @brief Older records only list the first file: add every split part found next to it and the quantisation,
+           but only when that file is the first-choice quantisation (else the online lookup decides).
+    @param old  Record from models.json (may be empty).  @param spec  The models.json "chat" entry.
+    @return The record, upgraded when that is certain.
+    """
+    if not old.get("file") or old.get("files"):
+        return old
+    first = spec["quant"][0]
+    if not re.search(r"[-_.]" + re.escape(first) + r"(-\d{5}-of-\d{5})?\.gguf$", old["file"], re.I):
+        return old
+    m = re.search(r"-\d{5}-of-(\d{5})\.gguf$", old["file"])
+    parts = [old["file"]] if not m else \
+        [re.sub(r"-\d{5}-of-", f"-{i:05d}-of-", old["file"]) for i in range(1, int(m.group(1)) + 1)]
+    return dict(old, files=parts, quant=spec["quant"])
+
+
 def chat_models(specs, out, seed=None):
     """!
     @brief Resolves every chat model and writes <out>/models.json with the local file paths.
@@ -127,7 +145,8 @@ def chat_models(specs, out, seed=None):
     for spec in specs:
         try:
             print(f"\n[{spec['id']}]")
-            old = manifest.get(spec["id"], {})       # offline repair: reuse it only if it matches what models.json asks for now
+            old = upgrade_record(manifest.get(spec["id"], {}), spec)
+                                                     # offline repair: reuse it only if it matches what models.json asks for now
             have = old.get("files", []) + ([old.get("mmproj")] if spec.get("mmproj") else [])
             if old.get("files") and old.get("quant") == spec["quant"] \
                     and (not spec.get("repo") or old.get("repo") == spec["repo"]) \

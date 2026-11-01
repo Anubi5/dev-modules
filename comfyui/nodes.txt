@@ -1,12 +1,13 @@
-# ComfyUI custom nodes (git repos), one per line
-https://github.com/city96/ComfyUI-GGUF
-https://github.com/Comfy-Org/ComfyUI-Manager
+# ComfyUI custom nodes: <git repo> <pinned commit>. Custom nodes run their own Python code inside ComfyUI, so each is
+# pinned: an update only arrives when you change the commit here (check the repo's changes first), push, dev mod update.
+# Removing a line moves that node out on the next update. ComfyUI-Manager is not installed: nodes come only from here.
+https://github.com/city96/ComfyUI-GGUF 6ea2651e7df66d7585f6ffee804b20e92fb38b8a
 # ControlNet preprocessors (DWPose/OpenPose, depth, canny, lineart ...)
-https://github.com/Fannovel16/comfyui_controlnet_aux
+https://github.com/Fannovel16/comfyui_controlnet_aux a587a4c1594524c1d2de5cd1a86cd868ff448e1c
 # Consistent faces / style references (maintenance mode since 2025, still the standard)
-https://github.com/cubiq/ComfyUI_IPAdapter_plus
+https://github.com/cubiq/ComfyUI_IPAdapter_plus a0f451a5113cf9becb0847b92884cb10cbdec0ef
 # Face and hand repair (FaceDetailer); the Subpack brings the YOLO detectors
-https://github.com/ltdrdata/ComfyUI-Impact-Pack
-https://github.com/ltdrdata/ComfyUI-Impact-Subpack
+https://github.com/ltdrdata/ComfyUI-Impact-Pack 244e93ef9883aaf241d5d0e54ebb57e3b2e840d3
+https://github.com/ltdrdata/ComfyUI-Impact-Subpack 50c7b71a6a224734cc9b21963c6d1926816a97f1
 # Tiled upscaling with redraw
-https://github.com/ssitu/ComfyUI_UltimateSDUpscale
+https://github.com/ssitu/ComfyUI_UltimateSDUpscale a5547db9e1d07d3318bb21e9e9c474f4c1e9c8df

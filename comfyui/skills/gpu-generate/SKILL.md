@@ -20,10 +20,15 @@ The user asks for a picture, illustration, concept art, texture, reference image
      - `--face <image>`: keep the face from a picture with ONE clear face. `--face-weight 0.3-1.2` (0.65; above ~0.8 faces get gaunt and distorted).
      - `--fix-faces` / `--fix-hands`: redraw faces / hands in more detail (use for people, especially full-body shots).
      - `--hires`: also save a detailed 2x copy (slow); `--upscale`: a fast 2x copy.
-     - `--checkpoint <name>`: another SDXL model, only when the user asks for one (default: RealVisXL, photoreal).
+     - `--model realvis|juggernaut|sdxl-base`: realvis (default) = photoreal, flattering portraits, best with `--face`;
+       juggernaut = natural documentary photos and scenes; sdxl-base = general/artistic. Each brings its own tuned settings.
+     - `--style art` for illustration, concept art, paintings, textures (the default `photo` style pushes away from art).
+     - `--negative ""` means no negative prompt at all.
      Reference images must be inside `~/work` (usually `~/work/inputs/`) as .png/.jpg/.webp.
    - video: `ai gen video "<prompt>" --name <name> [--frames 33]`  (33 frames ~ 1.4 s, ~2-6 min; 121 ~ 5 s)
-4. The last lines after `OUTPUT` are the file paths (in `~/work/outputs/comfy/<date>/`). Report them and the seed.
+4. The lines after `OUTPUT` are the file paths (in `~/work/outputs/comfy/<date>/`); `record:` is a .json with every
+   setting used. Report the files and the seed. With repair/upscale options, `<name>_base_*` is the untouched original -
+   offer it if the repaired one looks worse.
 5. If the result belongs to a project, copy it into `~/work/projects/<project>/output/`.
 
 ## Rules

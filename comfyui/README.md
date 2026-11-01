@@ -11,8 +11,12 @@ it unloads the chat model through the model-serving contract, runs one fixed wor
   file that changes later is moved aside (`.quarantined`) instead of being used.
 - Model files already in D:\AI\models\comfy are used read-only; missing ones download into `$MOD/models`.
 - `models.txt` takes Hugging Face lines and direct-download lines (`<https URL> <file> <folder> sha256:<hex>`, e.g. Juggernaut
-  XL Ragnarok from CivitAI); a direct download is kept only if its SHA-256 matches. Pick a checkpoint per image with
-  `ai gen image ... --checkpoint juggernaut` (default: RealVisXL).
+  XL Ragnarok from CivitAI); a direct download is kept only if its SHA-256 matches. Models and their tuned settings live in
+  `profiles.json` (`ai gen image ... --model realvis|juggernaut|sdxl-base`, `--style photo|art`); `--checkpoint <file>` uses
+  any other SDXL file (checked to be SDXL). Every result gets a `.json` record (prompt, seed, model, settings, time, memory);
+  with repair/upscale options the untouched original is kept as `<name>_base_*`.
+- `ai gen schema` saves ComfyUI's node definitions (`~/work/outputs/comfy/schema.json`); committed as `schema.json`, the
+  GitHub check validates every workflow variant against it (`check_workflows.py`) without a GPU.
 - Your saved workflows and settings: `~/work/comfyui/` (kept on removal). Results: `~/work/outputs/comfy/<date>/`.
 - `test.sh --full` = SDXL image + upscale, a Wan video, and a pose + face + face/hand repair + tiled-upscale job, all through `ai gen`.
 

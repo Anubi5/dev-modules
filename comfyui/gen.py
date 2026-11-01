@@ -123,34 +123,62 @@ def slug(name):
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:40] or "untitled"
 
 
-CKPT = "RealVisXL_V5.0_fp16.safetensors"   # photoreal SDXL fine-tune (base SDXL looks waxy); any SDXL checkpoint works here
-SAMPLER, SCHEDULER, CFG = "dpmpp_sde", "karras", 4.5   # RealVisXL's recommendation; CFG above ~6 gives the oversaturated "AI" look
-NEGATIVE = ("cartoon, painting, illustration, 3d render, cgi, plastic skin, airbrushed, smooth skin, doll, oversaturated, "
-            "bad hands, bad anatomy, deformed, face asymmetry, eyes asymmetry, deformed eyes, blurry, low quality, watermark, text")
-CKPT_DIRS = ["/models/comfy/checkpoints", os.path.expanduser("~/.local/share/modules/comfyui/models/checkpoints")]
+PROFILES = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles.json")))
+NEGATIVE = PROFILES["styles"]["photo"]["negative"]            # default style; kept as a name for the tests
+CKPT_DIRS = [os.path.join(env("MODELS_MOUNT", "/models"), "comfy", "checkpoints"),
+             os.path.expanduser("~/.local/share/modules/comfyui/models/checkpoints")]
+
+
+def profile(name=None):
+    """! @brief Settings for a model from profiles.json (default model when name is None). @return dict incl. "name" """
+    name = name or PROFILES["default"]
+    if name not in PROFILES["models"]:
+        sys.exit(f"--model {name}: unknown. Models: {', '.join(PROFILES['models'])}")
+    return dict(PROFILES["models"][name], name=name)
+
+
+def negative_for(prof, style):
+    """! @brief Default negative prompt for a model and style (the model's own, else the style's). @return text """
+    return prof.get("negative", {}).get(style, PROFILES["styles"][style]["negative"])
+
+
+def is_sdxl(path):
+    """! @brief Reads a .safetensors header and tells whether it is an SDXL checkpoint (has SDXL's 2nd text encoder). """
+    try:
+        with open(path, "rb") as f:
+            n = int.from_bytes(f.read(8), "little")
+            head = f.read(min(n, 50 << 20)).decode("utf-8", "ignore")
+        return "conditioner.embedders.1.model" in head
+    except OSError:
+        return False
 
 
 def find_checkpoint(name):
     """!
-    @brief Picks an SDXL checkpoint by (part of) its file name, e.g. "juggernaut", "realvis", "sd_xl_base".
-    @param name  Name or part of it (case-insensitive).  @return The file name, or exits listing what is there.
+    @brief --checkpoint: an SDXL checkpoint by (part of) its file name. Uses the matching profile's settings when there is
+           one, else the default model's settings.
+    @param name  Name or part of it (case-insensitive).  @return Profile dict with "file" set, or exits listing what is there.
     """
-    have = sorted({f for d in CKPT_DIRS if os.path.isdir(d) for f in os.listdir(d) if f.endswith(".safetensors")})
-    hit = [f for f in have if name.lower() in f.lower()]
+    found = {f: os.path.join(d, f) for d in CKPT_DIRS if os.path.isdir(d) for f in os.listdir(d) if f.endswith(".safetensors")}
+    hit = [f for f in sorted(found) if name.lower() in f.lower()]
     if len(hit) != 1:
-        sys.exit(f"--checkpoint {name}: {'ambiguous' if hit else 'not found'}. Available: {', '.join(have) or 'none'}"
-                 " (add your own to D:\\AI\\models\\comfy\\checkpoints; SDXL checkpoints only)")
-    return hit[0]
+        sys.exit(f"--checkpoint {name}: {'ambiguous' if hit else 'not found'}. Available: {', '.join(sorted(found)) or 'none'}"
+                 " (add your own to D:\\AI\\models\\comfy\\checkpoints)")
+    if not is_sdxl(found[hit[0]]):
+        sys.exit(f"--checkpoint {name}: {hit[0]} is not an SDXL checkpoint - this workflow needs SDXL")
+    known = [k for k, v in PROFILES["models"].items() if v.get("file") == hit[0]]
+    return profile(known[0]) if known else dict(profile(), file=hit[0], name=hit[0])
 
 
 POSE_CN = "controlnet-union-sdxl-promax.safetensors"
 FACE_DET, HAND_DET = "bbox/face_yolov8m.pt", "bbox/hand_yolov8s.pt"
 
 
-def detailer(image, model, pos, neg, detector, seed, denoise):
+def detailer(image, model, pos, neg, detector, seed, denoise, prof):
     """! @brief FaceDetailer inputs (Impact Pack) that redraw what the detector finds. @return inputs dict """
     return {"image": image, "model": model, "clip": ["4", 1], "vae": ["4", 2], "guide_size": 512, "guide_size_for": True,
-            "max_size": 1024, "seed": seed, "steps": 20, "cfg": CFG, "sampler_name": SAMPLER, "scheduler": SCHEDULER,
+            "max_size": 1024, "seed": seed, "steps": 20, "cfg": prof["cfg"], "sampler_name": prof["sampler"],
+            "scheduler": prof["scheduler"],
             "positive": pos, "negative": neg, "denoise": denoise, "feather": 5, "noise_mask": True, "force_inpaint": True,
             "bbox_threshold": 0.5, "bbox_dilation": 10, "bbox_crop_factor": 3.0, "sam_detection_hint": "center-1",
             "sam_dilation": 0, "sam_threshold": 0.93, "sam_bbox_expansion": 0, "sam_mask_hint_threshold": 0.7,
@@ -159,7 +187,7 @@ def detailer(image, model, pos, neg, detector, seed, denoise):
 
 
 def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix, pose=None, face=None, fix_faces=False,
-         fix_hands=False, hires=False, pose_strength=0.65, face_weight=0.65, ckpt=CKPT):
+         fix_hands=False, hires=False, pose_strength=0.65, face_weight=0.65, prof=None, save_base=None):
     """!
     @brief SDXL text-to-image workflow with optional pose control, a face to keep, face/hand repair and upscaling.
     @param prompt    What to draw.  @param negative  What to avoid.  @param seed  Random seed.
@@ -170,10 +198,14 @@ def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix, pose=Non
     @param fix_faces Redraw detected faces (FaceDetailer).  @param fix_hands  Redraw detected hands.
     @param hires     Also save a detailed 2x copy (Ultimate SD Upscale: tiles redrawn).
     @param pose_strength  How strictly the pose is followed (0.3-1.0).  @param face_weight  How strongly the face is kept.
+    @param prof      Model settings from profiles.json (default model when None).
+    @param save_base Also save the image before repair/upscale ("<name>_base"); default: when repairing or upscaling.
     @return Workflow in ComfyUI API format.
     """
+    prof = prof or profile()
+    S, K, C = prof["sampler"], prof["scheduler"], prof["cfg"]
     wf = {
-        "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": ckpt}},
+        "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": prof["file"]}},
         "5": {"class_type": "EmptyLatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
         "6": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 1], "text": prompt}},
         "7": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 1], "text": negative}},
@@ -204,18 +236,20 @@ def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix, pose=Non
         })
         cpos, cneg = ["34", 0], ["34", 1]
     wf.update({
-        "3": {"class_type": "KSampler", "inputs": {"seed": seed, "steps": steps, "cfg": CFG, "sampler_name": SAMPLER,
-              "scheduler": SCHEDULER, "denoise": 1.0, "model": model, "positive": cpos, "negative": cneg, "latent_image": ["5", 0]}},
+        "3": {"class_type": "KSampler", "inputs": {"seed": seed, "steps": steps, "cfg": C, "sampler_name": S,
+              "scheduler": K, "denoise": 1.0, "model": model, "positive": cpos, "negative": cneg, "latent_image": ["5", 0]}},
         "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
     })
     image = ["8", 0]
+    if save_base if save_base is not None else (fix_faces or fix_hands or hires):   # keep the original next to the repaired one
+        wf["14"] = {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_base", "images": image}}
     if fix_faces:   # repairs use the plain prompts (no pose steering on the crops) and the face-keeping model
         wf["40"] = {"class_type": "UltralyticsDetectorProvider", "inputs": {"model_name": FACE_DET}}
-        wf["41"] = {"class_type": "FaceDetailer", "inputs": detailer(image, model, pos, neg, ["40", 0], seed, 0.35)}
+        wf["41"] = {"class_type": "FaceDetailer", "inputs": detailer(image, model, pos, neg, ["40", 0], seed, 0.35, prof)}
         image = ["41", 0]
     if fix_hands:
         wf["42"] = {"class_type": "UltralyticsDetectorProvider", "inputs": {"model_name": HAND_DET}}
-        wf["43"] = {"class_type": "FaceDetailer", "inputs": detailer(image, model, pos, neg, ["42", 0], seed, 0.45)}
+        wf["43"] = {"class_type": "FaceDetailer", "inputs": detailer(image, model, pos, neg, ["42", 0], seed, 0.45, prof)}
         image = ["43", 0]
     wf["9"] = {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix, "images": image}}
     if upscale or hires:
@@ -229,8 +263,8 @@ def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix, pose=Non
     if hires:
         wf.update({
             "50": {"class_type": "UltimateSDUpscale", "inputs": {"image": image, "model": model, "positive": pos, "negative": neg,
-                   "vae": ["4", 2], "upscale_by": 2.0, "seed": seed, "steps": 20, "cfg": CFG, "sampler_name": SAMPLER,
-                   "scheduler": SCHEDULER, "denoise": 0.2, "upscale_model": ["10", 0], "mode_type": "Linear", "tile_width": 1024,
+                   "vae": ["4", 2], "upscale_by": 2.0, "seed": seed, "steps": 20, "cfg": C, "sampler_name": S,
+                   "scheduler": K, "denoise": 0.2, "upscale_model": ["10", 0], "mode_type": "Linear", "tile_width": 1024,
                    "tile_height": 1024, "mask_blur": 12, "tile_padding": 48, "seam_fix_mode": "None", "seam_fix_denoise": 1.0,
                    "seam_fix_width": 64, "seam_fix_mask_blur": 8, "seam_fix_padding": 16, "force_uniform_tiles": True,
                    "tiled_decode": False, "batch_size": 1}},
@@ -413,6 +447,7 @@ def run_job(wf, timeout, log=print):
                      for k in ("images", "gifs", "videos") for f in o.get(k, []) if f.get("type") == "output"]
             err = " ".join(m[1].get("exception_message", "")[:400] for m in st.get("messages", []) if m[0] == "execution_error")
             ok = st.get("status_str") == "success" and bool(files) and all(os.path.exists(f) and os.path.getsize(f) > 2000 for f in files)
+            JOB.update(secs=round(time.time() - t0), peak_gb=round(mon.peak / 1024, 1))
             log(f"{'done' if ok else 'failed'} in {time.time()-t0:.0f} s, peak GPU memory {mon.peak/1024:.1f} GB")
             return ok, files, err
         cancel(pid, log)
@@ -452,15 +487,77 @@ def generate(wf, timeout, wait=600, log=print, uploads=None):
             release(log, JOB.pop("pid", None))
 
 
+def dump_schema(path):
+    """!
+    @brief Saves the input definitions of the nodes ai gen uses, read from the running ComfyUI (/object_info), so the
+           workflows can be checked without a GPU (check_workflows.py, CI). File-name lists are left out.
+    @param path  Where to write the JSON.  @return 0 on success.
+    """
+    if not comfy_up():
+        subprocess.run(["systemctl", "--user", "start", "comfyui"], stderr=subprocess.DEVNULL)
+        for _ in range(90):
+            if comfy_up(): break
+            time.sleep(2)
+    info = api("/object_info", timeout=120)
+    used = {n["class_type"] for wf in (sdxl("x", "y", 1, 1, 1024, 1024, True, "p", pose="a", face="b", fix_faces=True,
+                                             fix_hands=True, hires=True), wan("x", "y", 1, 1, 5, "p")) for n in wf.values()}
+    out = {}
+    for c in sorted(used):
+        if c not in info:
+            out[c] = None; continue
+        spec = {}
+        for part in ("required", "optional"):
+            for k, v in info[c]["input"].get(part, {}).items():
+                t = v[0] if isinstance(v, list) and v else v
+                opts = t if isinstance(t, list) else (v[1].get("options") if t == "COMBO" and len(v) > 1
+                                                      and isinstance(v[1], dict) else None)   # old and new combo formats
+                files = opts and any(str(x).lower().endswith((".safetensors", ".pt", ".pth", ".bin", ".gguf", ".onnx",
+                                                              ".png", ".jpg", ".jpeg", ".webp")) for x in opts)
+                spec[k] = {"part": part, "type": "COMBO" if opts is not None else str(t),
+                           "values": opts if opts and not files else None}   # file lists vary per machine
+        out[c] = spec
+    with open(path, "w") as f:
+        json.dump(out, f, indent=1, sort_keys=True)
+    print(f"schema of {len(out)} nodes written to {path}")
+    return 0
+
+
+def write_record(files, info):
+    """!
+    @brief Saves "<image>.json" next to the main output: what was asked, what was used, how long it took.
+    @param files  Output paths.  @param info  Request details.  @return Path of the record, or None.
+    """
+    main = [f for f in files if not re.search(r"_(base|pose|hires|upscaled)_\d+_\.", os.path.basename(f))] or files[:1]
+    if not main:
+        return None
+    rec = {"time": datetime.datetime.now().isoformat(timespec="seconds"), **info, "outputs": files,
+           "duration_s": JOB.get("secs"), "peak_gpu_gb": JOB.get("peak_gb")}
+    try:                                                  # module version and checked model hashes, when known
+        rec["module"] = open(os.path.expanduser("~/.local/state/modules/comfyui/source")).read().strip()
+        hashes = {l.split(" ", 3)[-1].strip(): l.split(" ", 1)[0]
+                  for l in open(os.path.expanduser("~/.local/share/modules/comfyui/models/.hashes")) if l.strip()}
+        rec["model_sha256"] = {os.path.basename(k): v for k, v in hashes.items() if os.path.basename(k) == info.get("model_file")}
+    except OSError:
+        pass
+    path = os.path.splitext(main[0])[0] + ".json"
+    with open(path, "w") as f:
+        json.dump(rec, f, indent=1)
+    return path
+
+
 def main():
     """!
     @brief Command-line entry point. @return 0 on success, 1 on failure.
     """
     ap = argparse.ArgumentParser(description="Generate an image or video on the GPU (hands the GPU over from the chat model).")
+    if sys.argv[1:2] == ["schema"]:              # ai gen schema: node definitions for the offline workflow check
+        return dump_schema(os.path.join(OUTPUT, "schema.json"))
     ap.add_argument("kind", choices=["image", "video"])
     ap.add_argument("prompt")
     ap.add_argument("--name", default="", help="short name for the output files (default: from the prompt)")
-    ap.add_argument("--negative", default=None, help="what to avoid (default: a realism-focused list; video: blurry, distorted)")
+    ap.add_argument("--model", metavar="NAME", help=f"image model: {', '.join(PROFILES['models'])} (default {PROFILES['default']})")
+    ap.add_argument("--style", choices=list(PROFILES["styles"]), default="photo", help="image: photo (default) or art")
+    ap.add_argument("--negative", default=None, help='what to avoid (default: per model and style; "" = nothing)')
     ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--steps", type=int, default=None)
     ap.add_argument("--size", default="1024x1024", help="image size WxH (multiples of 64)")
@@ -470,7 +567,7 @@ def main():
     ap.add_argument("--pose-strength", type=float, default=0.65, help="how strictly to follow the pose, 0.3-1.0")
     ap.add_argument("--face", metavar="IMAGE", help="image: keep this face (in ~/work; one clear face)")
     ap.add_argument("--face-weight", type=float, default=0.65, help="how strongly to keep the face, 0.3-1.2 (high values distort it)")
-    ap.add_argument("--checkpoint", metavar="NAME", help="image: another SDXL checkpoint by (part of) its name, e.g. juggernaut")
+    ap.add_argument("--checkpoint", metavar="NAME", help="image: any SDXL checkpoint file by (part of) its name")
     ap.add_argument("--fix-faces", action="store_true", help="image: redraw faces in more detail")
     ap.add_argument("--fix-hands", action="store_true", help="image: redraw hands in more detail")
     ap.add_argument("--frames", type=int, default=33, help="video length, 4n+1 (33 ~ 1.4 s, 121 ~ 5 s)")
@@ -498,24 +595,42 @@ def main():
         if not (0.3 <= a.pose_strength <= 1.0 and 0.3 <= a.face_weight <= 1.2):
             sys.exit("--pose-strength must be 0.3-1.0 and --face-weight 0.3-1.2")
         uploads = [(n, check_input(f)) for n, f in (("30", a.pose), ("21", a.face)) if f]
-        wf = sdxl(a.prompt, a.negative or NEGATIVE, seed, a.steps or 30, w, h, a.upscale, prefix, pose="pending" if a.pose else None,
+        if a.model and a.checkpoint:
+            sys.exit("use --model or --checkpoint, not both")
+        prof = find_checkpoint(a.checkpoint) if a.checkpoint else profile(a.model)
+        if prof["arch"] != "sdxl":
+            sys.exit(f"--model {prof['name']}: {prof['arch']} models are not wired into ai gen yet")
+        neg = a.negative if a.negative is not None else negative_for(prof, a.style)
+        steps = a.steps or prof["steps"]
+        wf = sdxl(a.prompt, neg, seed, steps, w, h, a.upscale, prefix, pose="pending" if a.pose else None,
                   face="pending" if a.face else None, fix_faces=a.fix_faces, fix_hands=a.fix_hands, hires=a.hires,
-                  pose_strength=a.pose_strength, face_weight=a.face_weight,
-                  ckpt=find_checkpoint(a.checkpoint) if a.checkpoint else CKPT)
+                  pose_strength=a.pose_strength, face_weight=a.face_weight, prof=prof)
+        info = {"kind": "image", "prompt": a.prompt, "negative": neg, "seed": seed, "model": prof["name"],
+                "model_file": prof["file"], "sampler": prof["sampler"], "scheduler": prof["scheduler"], "cfg": prof["cfg"],
+                "steps": steps, "size": f"{w}x{h}", "style": a.style,
+                "options": {k: getattr(a, k) for k in ("upscale", "hires", "fix_faces", "fix_hands")},
+                "pose": a.pose and {"file": a.pose, "strength": a.pose_strength},
+                "face": a.face and {"file": a.face, "weight": a.face_weight}}
         limit = a.timeout or (1800 if a.hires or a.fix_hands or a.fix_faces else 900)
     else:
         frames = max(5, (a.frames - 1) // 4 * 4 + 1)
-        if a.pose or a.face or a.fix_faces or a.fix_hands or a.hires or a.checkpoint:
-            sys.exit("--pose/--face/--fix-faces/--fix-hands/--hires/--checkpoint are for images")
+        if a.pose or a.face or a.fix_faces or a.fix_hands or a.hires or a.checkpoint or a.model:
+            sys.exit("--pose/--face/--fix-faces/--fix-hands/--hires/--checkpoint/--model are for images")
         uploads = []
-        wf, limit = wan(a.prompt, a.negative or "static, blurry, distorted, low quality, watermark", seed, a.steps or 20, frames, prefix), a.timeout or 3600
+        neg = a.negative if a.negative is not None else "static, blurry, distorted, low quality, watermark"
+        wf, limit = wan(a.prompt, neg, seed, a.steps or 20, frames, prefix), a.timeout or 3600
+        info = {"kind": "video", "prompt": a.prompt, "negative": neg, "seed": seed, "model": "wan2.2-ti2v-5b",
+                "steps": a.steps or 20, "frames": frames}
     log = lambda s: print(f"  {s}", flush=True)
     ok, files, err = generate(wf, limit, log=log, uploads=uploads)
     if err:
         print(f"  error: {err}")
+    rec = write_record(files, info) if ok else None
     print(f"OUTPUT (seed {seed})" if ok else "FAILED")
     for f in files:
         print(f)
+    if rec:
+        print(f"  record: {rec}")
     return 0 if ok else 1
 
 

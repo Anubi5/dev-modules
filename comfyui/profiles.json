@@ -1,0 +1,34 @@
+{
+  "_comment": [
+    "Settings per image model, used by ai gen (--model <name>). Starting values come from each model's card;",
+    "Phase 3 tunes them on the RTX 4080 Laptop. Add a model: put its file in models.txt (or D:\\AI\\models\\comfy\\...),",
+    "add an entry here with its architecture and settings, push, dev mod update comfyui.",
+    "arch: sdxl = works with --pose/--face/--fix-*/--hires (SDXL ControlNet, IPAdapter FaceID, FaceDetailer)."
+  ],
+  "default": "realvis",
+  "styles": {
+    "photo": {"negative": "cartoon, painting, illustration, 3d render, cgi, plastic skin, airbrushed, smooth skin, doll, oversaturated, bad hands, bad anatomy, deformed, face asymmetry, eyes asymmetry, deformed eyes, blurry, low quality, watermark, text"},
+    "art":   {"negative": "blurry, low quality, jpeg artifacts, watermark, signature, text, bad anatomy, deformed, extra fingers, extra limbs"}
+  },
+  "models": {
+    "realvis": {
+      "arch": "sdxl", "file": "RealVisXL_V5.0_fp16.safetensors",
+      "sampler": "dpmpp_sde", "scheduler": "karras", "cfg": 4.5, "steps": 30,
+      "about": "photoreal, flattering portraits; best with --face", "licence": "openrail++",
+      "source": "huggingface.co/SG161222/RealVisXL_V5.0 (card: DPM++ SDE Karras, 30+ steps)"
+    },
+    "juggernaut": {
+      "arch": "sdxl", "file": "juggernautXL_ragnarok.safetensors",
+      "sampler": "dpmpp_2m_sde", "scheduler": "karras", "cfg": 4.0, "steps": 35,
+      "negative": {"photo": "blurry, low quality, watermark, text, deformed hands"},
+      "about": "photoreal, natural documentary look, strong scenes", "licence": "see civitai.com/models/133005",
+      "source": "civitai.com/models/133005 (Ragnarok: DPM++ 2M SDE, 30-40 steps, CFG 3-6, start with little negative)"
+    },
+    "sdxl-base": {
+      "arch": "sdxl", "file": "sd_xl_base_1.0.safetensors",
+      "sampler": "dpmpp_2m", "scheduler": "karras", "cfg": 6.0, "steps": 30,
+      "about": "original SDXL: general and artistic, weakest at photos", "licence": "openrail++",
+      "source": "huggingface.co/stabilityai/stable-diffusion-xl-base-1.0"
+    }
+  }
+}

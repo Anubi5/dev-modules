@@ -44,7 +44,7 @@ def main():
         ok, files, err = gen.generate(wf, 1800, log=log, uploads=[("30", portrait), ("21", portrait)])
         print(f"  pose + face + face/hand repair + tiled upscale: {'OK' if ok else 'FAILED'}  {', '.join(files) or '-'}"
               f"{'  error: ' + err if err else ''}")
-        results.append(ok and len(files) == 3)          # pose skeleton, image, detailed 2x copy
+        results.append(ok and len(files) == 4)          # pose skeleton, base image, repaired image, detailed 2x copy
     return 0 if all(results) else 1
 
 

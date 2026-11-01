@@ -23,33 +23,52 @@ def sha256(path):
     return h.hexdigest()
 
 
-def check_hash(path, own):
-    """!
-    @brief Pickle-based files: records the hash the first time, refuses the file if it changes later.
-    @param path  The model file (absolute).  @param own  Writable folder holding the .hashes record.
-    @return True if the file may be used.
-    """
-    if not path.endswith(CODE_FORMATS):
-        return True
-    rec = os.path.join(own, ".hashes")
+def load_record(rec):
+    """! @brief Reads the .hashes record: "<sha256> <size> <mtime_ns> <path>" (older lines: "<sha256> <path>"). @return {path: (sha, size, mtime)} """
     known = {}
     if os.path.exists(rec):
         for line in open(rec):
-            if line.strip():
-                digest, name = line.rstrip("\n").split(" ", 1)
-                known[name] = digest
-    h = sha256(path)
-    if path not in known:
-        with open(rec, "a") as f:
-            f.write(f"{h} {path}\n")
+            f = line.rstrip("\n").split(" ", 3)
+            if len(f) == 4 and f[1].isdigit() and f[2].isdigit():
+                known[f[3]] = (f[0], int(f[1]), int(f[2]))
+            elif len(f) >= 2:
+                known[" ".join(f[1:])] = (f[0], -1, -1)
+    return known
+
+
+def check_hash(path, own, pinned=None):
+    """!
+    @brief Integrity check for a model file, present or just downloaded.
+           Pinned files (sha256: in the list) must match the pin. Unpinned pickle-based files (can run code when
+           loaded) are recorded on first sight and refused if they change later. Unpinned safetensors are not checked.
+           A file that was already checked and has not changed (same size and time) is not hashed again.
+    @param path  The model file (absolute).  @param own  Writable folder holding the .hashes record.
+    @param pinned  Expected SHA-256 from the list, or None.
+    @return True if the file may be used.
+    """
+    if not pinned and not path.endswith(CODE_FORMATS):
         return True
-    if known[path] != h:
-        if os.access(os.path.dirname(path), os.W_OK):
-            os.replace(path, path + ".quarantined")   # so nothing loads it
-        print(f"  CHECK {path} changed since it was first fetched (hash mismatch) - moved aside as .quarantined;"
-              f" if the change is expected, delete its line from {rec}")
-        return False
-    return True
+    rec = os.path.join(own, ".hashes")
+    known, st = load_record(rec), os.stat(path)
+    old = known.get(path)
+    if old and old[1:] == (st.st_size, st.st_mtime_ns) and (not pinned or old[0].lower() == pinned.lower()):
+        return True                                   # checked before, unchanged
+    h = sha256(path)
+    want = (pinned or (old[0] if old else h)).lower()
+    if h.lower() == want:
+        known[path] = (h, st.st_size, st.st_mtime_ns)
+        with open(rec + ".new", "w") as f:
+            f.writelines(f"{v[0]} {v[1]} {v[2]} {k}\n" for k, v in known.items())
+        os.replace(rec + ".new", rec)
+        return True
+    why = "does not match its pinned checksum" if pinned else "changed since it was first fetched"
+    if os.access(os.path.dirname(path), os.W_OK):
+        os.replace(path, path + ".quarantined")      # so nothing loads it
+        print(f"  CHECK {path} {why} - moved aside as {os.path.basename(path)}.quarantined (delete it to fetch again)")
+    else:
+        print(f"  CHECK {path} {why} - it is in the read-only Windows models folder: replace or delete it there"
+              f" (D:\\AI\\models\\...). ComfyUI could still load it, so the install stops here.")
+    return False
 
 
 def fetch_url(url, dest, sha):
@@ -101,7 +120,7 @@ def main():
         have = [os.path.join(root, folder, name) for root in (ro, own) if os.path.exists(os.path.join(root, folder, name))]
         if have:
             print(f"  {folder}/{name}: present", flush=True)
-            failed += 0 if check_hash(os.path.abspath(have[0]), own) else 1
+            failed += 0 if check_hash(os.path.abspath(have[0]), own, sha) else 1
             continue
         if repo.startswith("https://"):
             try:
@@ -109,6 +128,7 @@ def main():
                     raise RuntimeError("direct downloads need a sha256:<hex> in the list")
                 print(f"  downloading {name} from {repo.split('/')[2]} (checksum pinned)", flush=True)
                 fetch_url(repo, os.path.join(own, folder, name), sha)
+                check_hash(os.path.abspath(os.path.join(own, folder, name)), own, sha)   # record it as checked
             except Exception as e:
                 print(f"  CHECK {name}: {e}"); failed += 1
             continue

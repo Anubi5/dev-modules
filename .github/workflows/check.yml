@@ -19,3 +19,5 @@ jobs:
           pip install -q pyflakes
           python3 -m pyflakes $(git ls-files '*.py') > pf.txt || true; cat pf.txt
           ! grep -q "undefined name" pf.txt
+      - name: ai gen workflows match the pinned ComfyUI node definitions
+        run: python3 comfyui/check_workflows.py

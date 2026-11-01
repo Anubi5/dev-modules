@@ -45,7 +45,7 @@ say "InsightFace (for FaceID; built from source the first time, a few minutes)"
   || echo "  CHECK InsightFace did not install - IPAdapter FaceID will not work (plain IPAdapter face does)"
 [ -f "$LOCK" ] || { uv pip freeze --python .venv > "$LOCK"; echo "  Python package versions locked in $LOCK"; }
 
-roots() {   # model folders, same layout under the read-only Windows folder and the module's own folder
+roots() {   # model folders, same layout on D: and in the module's own folder (older installs; emptied by the move to D:)
   printf '%s\n' '  checkpoints: checkpoints' '  diffusion_models: diffusion_models' '  unet: diffusion_models' '  vae: vae' \
     '  text_encoders: text_encoders' '  clip: text_encoders' '  loras: loras' '  upscale_models: upscale_models' \
     '  controlnet: controlnet' '  clip_vision: clip_vision' '  ipadapter: ipadapter' '  ultralytics: ultralytics' \
@@ -53,10 +53,13 @@ roots() {   # model folders, same layout under the read-only Windows folder and 
 { echo 'windows:'; echo "  base_path: ${MODELS_MOUNT:-/models}/comfy"; roots; echo 'module:'; echo "  base_path: $MOD/models"; roots; } > extra_model_paths.yaml
 
 say "model files (models.txt) - each download shows its progress"
-.venv/bin/python "$MOD/fetch_models.py" "$MOD/models.txt" "${MODELS_MOUNT:-/models}/comfy" "$MOD/models"
+# model files live on D: (read-only at /models); D: is writable at /models-rw only while Windows runs "dev mod add|update".
+# Older copies inside the distro ($MOD/models) are moved to D: on the way; the checksum record stays in $MOD/models.
+.venv/bin/python "$MOD/fetch_models.py" "$MOD/models.txt" "${MODELS_MOUNT:-/models}/comfy" "${MODELS_RW:-/models-rw}/comfy" \
+  "$MOD/models" "$MOD/models"
 say "helper models (pose detection, InsightFace faces)"
 # helper models the nodes would fetch on first use - fetched now, so everything works with the internet off
-.venv/bin/python "$MOD/fetch_models.py" "$MOD/helpers.txt" /nonexistent "$C"; rm -rf "$C/_dl"
+.venv/bin/python "$MOD/fetch_models.py" "$MOD/helpers.txt" /nonexistent "$C" "$C"; rm -rf "$C/_dl"
 I=$C/models/insightface/models/buffalo_l
 if [ ! -f "$I/w600k_r50.onnx" ]; then
   mkdir -p "$I"; curl -sfL -o "$A/buffalo_l.zip" https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip \

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-## @brief Builds llama.cpp (CUDA) and fetches llama-swap into $MOD/app, gets the models in models.json, writes llama-swap.yaml.
+## @brief Builds llama.cpp (CUDA) and fetches llama-swap into $MOD/app, gets the models in models.json (on D:), writes llama-swap.yaml.
 set -euo pipefail
 cd "$MOD"; A=$MOD/app; mkdir -p "$A/bin" "$MOD/models"
 export PATH=/usr/local/cuda/bin:$PATH
@@ -21,7 +21,9 @@ if [ ! -x "$A/bin/llama-swap" ]; then
 fi
 [ -x "$A/venv/bin/python" ] || python3 -m venv "$A/venv"
 "$A/venv/bin/pip" install -q -U huggingface_hub requests
-"$A/venv/bin/python" resolve_models.py --config models.json --out "$MOD/models" --seed "${MODELS_MOUNT:-/models}/llm"
+# model files live on D: (read-only at /models); D: is writable at /models-rw only while Windows runs "dev mod add|update"
+"$A/venv/bin/python" resolve_models.py --config models.json --state "$MOD/models" \
+  --ro "${MODELS_MOUNT:-/models}/llm" --rw "${MODELS_RW:-/models-rw}/llm"
 [ -n "${MOE_CPU:-}" ] && [ ! -f "$MOD/moe.conf" ] && echo "$MOE_CPU" > "$MOD/moe.conf"
 "$A/venv/bin/python" make_config.py >/dev/null
 echo "llama-swap ready: $(grep -c 'cmd:' "$MOD/llama-swap.yaml") models"

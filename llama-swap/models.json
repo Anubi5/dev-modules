@@ -1,5 +1,5 @@
 {
-  "_comment": "Models for the dev distro. chat = llama.cpp models behind llama-swap (copied to /opt/ai/models); media = ComfyUI files (kept in <ModelsWin>\\comfy). Find a repo either by 'repo' (pinned) or by 'search' + 'must' (most-downloaded match). 'quant' = preferred file quantisations, first match wins. 'args' = extra llama-server flags ({moe} = tuned expert offload). 'vision' loads the image projector. 'ttl' = seconds idle before unload.",
+  "_comment": "Models for the dev distro. chat = llama.cpp models behind llama-swap (files in <ModelsWin>\\llm\\<id>; 'local_copy' also keeps a copy inside the distro: the 35B reads its MoE experts from the file while answering, ~2.5x slower from D:); media = ComfyUI files (kept in <ModelsWin>\\comfy). Find a repo either by 'repo' (pinned) or by 'search' + 'must' (most-downloaded match). 'quant' = preferred file quantisations, first match wins. 'args' = extra llama-server flags ({moe} = tuned expert offload). 'vision' loads the image projector. 'ttl' = seconds idle before unload.",
   "chat": [
     {
       "id": "qwen3.5-9b",
@@ -48,6 +48,7 @@
     },
     {
       "id": "qwen3.6-35b",
+      "local_copy": true,
       "name": "Qwen3.6 35B-A3B abliterated (heavy, agent)",
       "repo": "mradermacher/Huihui-Qwen3.6-35B-A3B-abliterated-GGUF",
       "quant": [

@@ -1,5 +1,5 @@
 # ComfyUI model files: <huggingface repo> <file or path in the repo> <ComfyUI folder> [save as]
-# Files already in D:\AI\models\comfy (= /models/comfy) are used as they are; missing ones are downloaded into this module.
+# Files live in D:\AI\models\comfy (= /models/comfy, read-only); missing ones are downloaded there by dev mod add|update (Windows).
 stabilityai/stable-diffusion-xl-base-1.0 sd_xl_base_1.0.safetensors checkpoints
 # Photoreal SDXL fine-tune used by ai gen (openrail++); works with every SDXL ControlNet / IPAdapter / detailer here
 SG161222/RealVisXL_V5.0 RealVisXL_V5.0_fp16.safetensors checkpoints

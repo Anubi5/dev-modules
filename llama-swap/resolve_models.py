@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """!
 @file resolve_models.py
-@brief Finds, copies or downloads the model files listed in models.json.
+@brief Finds or downloads the chat model files listed in models.json - they live on D:, never inside the distro.
 
-Chat models land in <out>/<id>/ and are recorded in <out>/models.json (id -> file paths).
-With --media, the ComfyUI files are placed in <out>/<folder>/ instead.
-A file that already exists is reused; with --seed, it is copied from an earlier download
-(<seed>/<id>/<file>) before anything is downloaded. Every choice is printed for the log.
+Chat model files live in D:\\AI\\models\\llm\\<id>\\ (read-only at /models/llm inside). Downloads and the one-time move
+of older in-distro copies need D: writable at /models-rw, which only Windows turns on ("dev mod add|update").
+The record of which files each model uses is <state>/models.json (id -> file paths). Every choice is printed.
+With --media, the ComfyUI files are placed in <out>/<folder>/ instead (older setup path).
 
 Usage:
-  resolve_models.py --config models.json --out $MOD/models [--seed /mnt/models-rw/llm]
-  resolve_models.py --config models.json --media --out /mnt/models-rw/comfy
+  resolve_models.py --config models.json --state $MOD/models --ro /models/llm [--rw /models-rw/llm]
+  resolve_models.py --config models.json --media --out /models-rw/comfy
 """
 import argparse
 import json
@@ -84,32 +84,74 @@ def pick_files(files, quants):
     return []
 
 
-def fetch(repo, filename, dest, seed=None, model_id=None):
+def same_file(a, b):
+    """! @brief True if both files exist with the same non-zero size (model files are never edited in place). """
+    return os.path.exists(a) and os.path.exists(b) and os.path.getsize(a) == os.path.getsize(b) > 0
+
+
+def move_to_d(src, dst, keep=False):
     """!
-    @brief Makes one file available in dest: reuse it, copy it from the seed folder, or download it.
-    @param repo      Repository id.
-    @param filename  File name inside the repository.
-    @param dest      Target folder.
-    @param seed      Optional folder with an earlier download (<seed>/<model_id>/<filename>).
-    @param model_id  Model id used for the seed folder layout.
-    @return Local path of the file.
+    @brief Moves an older in-distro copy to D: (copy, size check, then delete the in-distro copy unless keep).
+    @param src  File inside the distro.  @param dst  Path under the writable D: mount.  @param keep  Keep src.
     """
-    target = os.path.join(dest, filename)
-    if os.path.exists(target) and os.path.getsize(target) > 0:
-        print(f"  {filename}: already present")
-        return target
-    if seed and model_id:
-        src = os.path.join(seed, model_id, filename)
-        if os.path.exists(src) and os.path.getsize(src) > 0:
-            print(f"  {filename}: copying from {seed}")
-            os.makedirs(os.path.dirname(target), exist_ok=True)
-            shutil.copy2(src, target + ".part")                       # complete copies only become the real file
-            if os.path.getsize(target + ".part") != os.path.getsize(src):
-                raise RuntimeError(f"copy of {filename} is incomplete")
-            os.replace(target + ".part", target)
-            return target
-    print(f"  {repo} :: {filename}")
-    return download(repo, filename, local_dir=dest)
+    keep or print(f"  {os.path.basename(src)}: moving to D: ({os.path.getsize(src) >> 20} MB)")
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    shutil.copyfile(src, dst + ".part")
+    if os.path.getsize(dst + ".part") != os.path.getsize(src):
+        os.remove(dst + ".part"); raise RuntimeError(f"copy of {os.path.basename(src)} to D: is incomplete")
+    os.replace(dst + ".part", dst)
+    keep or os.remove(src)
+
+
+def place(rel, ro, rw, legacy, repo=None, local=False):
+    """!
+    @brief Makes one file available on D: and returns the path to load it from.
+           On D: already -> use it (and delete a leftover in-distro copy). Only in the distro -> move it to D: when
+           D: is writable, else keep using it for now. Missing -> download straight to D: (needs D: writable).
+           local=True (models.json "local_copy"): D: keeps the original, and a copy inside the distro is loaded -
+           for a model that reads its file while it runs (MoE experts in RAM), which is much slower from D:.
+    @param rel     "<id>/<file in repo>".  @param ro  Read-only D: root (/models/llm).
+    @param rw      Writable D: root (/models-rw/llm) or None.  @param legacy  In-distro root ($MOD/models).
+    @param repo    Repository to download from; None = offline check only.  @param local  Keep a copy in the distro.
+    @return Path to load the file from.
+    """
+    on_d, old = os.path.join(ro, rel), os.path.join(legacy, rel)
+    have_d = os.path.exists(on_d) and os.path.getsize(on_d) > 0
+    have_old = os.path.exists(old) and os.path.getsize(old) > 0
+    if local and have_old and (same_file(old, on_d) or (not have_d and not rw)):
+        return old
+    if have_d:
+        if same_file(old, on_d) and not local:
+            os.remove(old); print(f"  {os.path.basename(rel)}: removed the duplicate inside the distro (same file on D:)")
+        if not local:
+            return on_d
+    elif have_old:
+        if not rw:
+            print(f"  {os.path.basename(rel)}: still inside the distro only - run 'dev mod update llama-swap' from Windows to move it to D:")
+            return old
+        if local:                                        # original to D:, keep the distro copy
+            print(f"  {os.path.basename(rel)}: copying the original to D:")
+            move_to_d(old, os.path.join(rw, rel), keep=True)
+            return old
+        move_to_d(old, os.path.join(rw, rel)); return on_d
+    else:
+        if not repo:
+            raise RuntimeError(f"{rel} is missing")
+        if not rw:
+            raise RuntimeError(f"{rel} is missing - downloads go to D:\\AI\\models, run 'dev mod update llama-swap' from Windows")
+        print(f"  {repo} :: {os.path.basename(rel)} -> D:")
+        model_id, filename = rel.split("/", 1)
+        download(repo, filename, local_dir=os.path.join(rw, model_id))
+        shutil.rmtree(os.path.join(rw, model_id, ".cache"), ignore_errors=True)   # Hugging Face bookkeeping
+        if not local:
+            return on_d
+    print(f"  {os.path.basename(rel)}: copying into the distro (local_copy: loads from the distro's own disk)")
+    os.makedirs(os.path.dirname(old), exist_ok=True)
+    shutil.copyfile(on_d, old + ".part")
+    if os.path.getsize(old + ".part") != os.path.getsize(on_d):
+        os.remove(old + ".part"); raise RuntimeError(f"copy of {os.path.basename(rel)} is incomplete")
+    os.replace(old + ".part", old)
+    return old
 
 
 def upgrade_record(old, spec):
@@ -130,28 +172,44 @@ def upgrade_record(old, spec):
     return dict(old, files=parts, quant=spec["quant"])
 
 
-def chat_models(specs, out, seed=None):
+def chat_models(specs, state, ro, rw=None):
     """!
-    @brief Resolves every chat model and writes <out>/models.json with the local file paths.
+    @brief Resolves every chat model and writes <state>/models.json with the paths to load each file from.
     @param specs  models.json "chat" list.
-    @param out    Folder for the model files (one sub-folder per model id).
-    @param seed   Optional folder with an earlier download to copy from.
+    @param state  In-distro folder for the record (and, from older setups, model copies that are moved to D:).
+    @param ro     Read-only D: folder (/models/llm).  @param rw  Writable D: folder (/models-rw/llm) or None.
     @return Number of models that failed.
     """
-    os.makedirs(out, exist_ok=True)
-    manifest_path = os.path.join(out, "models.json")
+    os.makedirs(state, exist_ok=True)
+    manifest_path = os.path.join(state, "models.json")
     manifest = json.load(open(manifest_path)) if os.path.exists(manifest_path) else {}
     failed = 0
     for spec in specs:
         try:
             print(f"\n[{spec['id']}]")
             old = upgrade_record(manifest.get(spec["id"], {}), spec)
-                                                     # offline repair: reuse it only if it matches what models.json asks for now
-            have = old.get("files", []) + ([old.get("mmproj")] if spec.get("mmproj") else [])
+
+            def rel(p):   # "<id>/<file>" of a recorded path, whether it is on D: or inside the distro
+                for root in (state, ro, rw or ro):
+                    if p.startswith(root.rstrip("/") + "/"):
+                        return os.path.relpath(p, root)
+                return os.path.join(spec["id"], os.path.basename(p))
+            # offline: reuse the record if it matches what models.json asks for now (moving files to D: on the way)
             if old.get("files") and old.get("quant") == spec["quant"] \
-                    and (not spec.get("repo") or old.get("repo") == spec["repo"]) \
-                    and all(f and os.path.exists(f) and os.path.getsize(f) > 0 for f in have):
-                print(f"  {os.path.basename(old['file'])}: already present ({old.get('repo')}, all {len(old['files'])} part(s))"); continue
+                    and (not spec.get("repo") or old.get("repo") == spec["repo"]):
+                try:
+                    local = bool(spec.get("local_copy"))
+                    entry = dict(old, files=[place(rel(f), ro, rw, state, local=local) for f in old["files"]])
+                    entry["file"] = entry["files"][0]
+                    if spec.get("mmproj") and old.get("mmproj"):
+                        entry["mmproj"] = place(rel(old["mmproj"]), ro, rw, state)   # small, read once
+                    if not spec.get("mmproj") or entry.get("mmproj"):
+                        manifest[spec["id"]] = entry
+                        json.dump(manifest, open(manifest_path, "w"), indent=2)
+                        print(f"  {os.path.basename(entry['file'])}: ready ({old.get('repo')}, {len(entry['files'])} part(s))")
+                        continue
+                except RuntimeError:
+                    pass                                  # a recorded file is gone: look it up again below
             repo = find_repo(spec)
             if not repo:
                 print("  no matching repo found"); failed += 1; continue
@@ -159,18 +217,20 @@ def chat_models(specs, out, seed=None):
             chosen = pick_files(files, spec["quant"])
             if not chosen:
                 print(f"  {repo}: no file matching {spec['quant']}"); failed += 1; continue
-            dest = os.path.join(out, spec["id"])
-            paths = [fetch(repo, f, dest, seed, spec["id"]) for f in chosen]
+            paths = [place(f"{spec['id']}/{f}", ro, rw, state, repo, bool(spec.get("local_copy"))) for f in chosen]
             entry = {"repo": repo, "file": paths[0], "files": paths, "quant": spec["quant"]}   # every part of split files
             if spec.get("mmproj"):
                 mm = sorted((f for f in files if "mmproj" in f.lower() and f.lower().endswith(".gguf")),
                             key=lambda f: (0 if re.search("q8", f, re.I) else 1, len(f)))
                 if mm:
-                    entry["mmproj"] = fetch(repo, mm[0], dest, seed, spec["id"])
+                    entry["mmproj"] = place(f"{spec['id']}/{mm[0]}", ro, rw, state, repo)
             manifest[spec["id"]] = entry
             json.dump(manifest, open(manifest_path, "w"), indent=2)
         except Exception as e:
             print(f"  {spec['id']} FAILED: {str(e)[:200]}"); failed += 1
+    for d, _, _ in sorted(os.walk(state), reverse=True):          # empty model folders left after the move
+        if d != state and not os.listdir(d):
+            os.rmdir(d)
     return failed
 
 
@@ -207,12 +267,15 @@ def main():
     """
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True, help="models.json")
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out", help="--media: ComfyUI model root")
     ap.add_argument("--media", action="store_true", help="ComfyUI files instead of chat models")
-    ap.add_argument("--seed", help="earlier download (<seed>/<id>/<file>) to copy from")
+    ap.add_argument("--state", help="in-distro folder for the record (models.json)")
+    ap.add_argument("--ro", default="/models/llm", help="chat models on D:, read-only")
+    ap.add_argument("--rw", help="the same folder writable (only during dev mod add|update from Windows)")
     a = ap.parse_args()
     cfg = json.load(open(a.config))
-    n = media_models(cfg["media"], a.out) if a.media else chat_models(cfg["chat"], a.out, a.seed)
+    rw = a.rw if a.rw and os.path.isdir(a.rw) and os.access(a.rw, os.W_OK) else None
+    n = media_models(cfg["media"], a.out) if a.media else chat_models(cfg["chat"], a.state, a.ro, rw)
     print(f"\n{n} item(s) failed" if n else "\nall items available")
     sys.exit(1 if n else 0)
 

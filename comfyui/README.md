@@ -9,7 +9,8 @@ it unloads the chat model through the model-serving contract, runs one fixed wor
   `COMFY_UPGRADE=1 dev mod update comfyui` for fresh Python packages. ComfyUI-Manager is not installed.
 - Pickle-based model files (`.pt`, `.pth`, `.bin`) can run code when loaded: their hash is recorded on first fetch and a
   file that changes later is moved aside (`.quarantined`) instead of being used.
-- Model files already in D:\AI\models\comfy are used read-only; missing ones download into `$MOD/models`.
+- Model files live only in D:\AI\models\comfy (read-only inside). Missing ones download straight to D: - that needs
+  D: writable, which only `dev mod add|update comfyui` from Windows turns on (for the length of the run).
 - `models.txt` takes Hugging Face lines and direct-download lines (`<https URL> <file> <folder> sha256:<hex>`, e.g. Juggernaut
   XL Ragnarok from CivitAI); a direct download is kept only if its SHA-256 matches. Models and their tuned settings live in
   `profiles.json` (`ai gen image ... --model realvis|juggernaut|sdxl-base`, `--style photo|art`); `--checkpoint <file>` uses

@@ -23,7 +23,8 @@ in `ai-sandbox/config/sandbox.env`).
 3. A module has a test.
 
 Scripts get these variables: `MOD` (the module's folder), `MOD_NAME`, `WORK_DIR`, `MODELS_MOUNT` (the read-only
-Windows models folder), `LLM_PORT` (the model-serving contract: OpenAI-style API + `POST /api/models/unload`),
+Windows models folder), `MODELS_RW` (the same folder writable - only mounted while Windows runs `dev mod add|update`;
+model files go there, never into the module folder), `LLM_PORT` (the model-serving contract: OpenAI-style API + `POST /api/models/unload`),
 `CUDA_ARCH`, `MOE_CPU`.
 
 ## Adding a model or a ComfyUI node

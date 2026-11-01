@@ -8,6 +8,7 @@ import hashlib
 import os
 import sys
 
+os.environ.setdefault("HF_HUB_DISABLE_XET", "1")    # the Xet downloader can hang after a file is complete
 from huggingface_hub import HfApi, hf_hub_download
 
 CODE_FORMATS = (".pt", ".pth", ".bin", ".ckpt", ".pkl")   # pickle-based: can run code when loaded

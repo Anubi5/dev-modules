@@ -1,0 +1,1109 @@
+{
+ "CLIPLoader": {
+  "clip_name": {
+   "part": "required",
+   "type": "COMBO",
+   "values": null
+  },
+  "device": {
+   "part": "optional",
+   "type": "COMBO",
+   "values": [
+    "default",
+    "cpu"
+   ]
+  },
+  "type": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "stable_diffusion",
+    "stable_cascade",
+    "sd3",
+    "stable_audio",
+    "mochi",
+    "ltxv",
+    "pixart",
+    "cosmos",
+    "lumina2",
+    "wan",
+    "hidream",
+    "chroma",
+    "ace",
+    "omnigen2",
+    "qwen_image",
+    "hunyuan_image",
+    "flux2",
+    "ovis",
+    "longcat_image",
+    "cogvideox",
+    "lens",
+    "pixeldit",
+    "ideogram4",
+    "boogu",
+    "krea2",
+    "joyimage",
+    "mage",
+    "minimax",
+    "yue2",
+    "flux3",
+    "moss_image",
+    "fibo2"
+   ]
+  }
+ },
+ "CLIPTextEncode": {
+  "clip": {
+   "part": "required",
+   "type": "CLIP",
+   "values": null
+  },
+  "text": {
+   "part": "required",
+   "type": "STRING",
+   "values": null
+  }
+ },
+ "CheckpointLoaderSimple": {
+  "ckpt_name": {
+   "part": "required",
+   "type": "COMBO",
+   "values": null
+  }
+ },
+ "ControlNetApplyAdvanced": {
+  "control_net": {
+   "part": "required",
+   "type": "CONTROL_NET",
+   "values": null
+  },
+  "end_percent": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "image": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  },
+  "negative": {
+   "part": "required",
+   "type": "CONDITIONING",
+   "values": null
+  },
+  "positive": {
+   "part": "required",
+   "type": "CONDITIONING",
+   "values": null
+  },
+  "start_percent": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "strength": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "vae": {
+   "part": "optional",
+   "type": "VAE",
+   "values": null
+  }
+ },
+ "ControlNetLoader": {
+  "control_net_name": {
+   "part": "required",
+   "type": "COMBO",
+   "values": null
+  }
+ },
+ "DWPreprocessor": {
+  "bbox_detector": {
+   "part": "optional",
+   "type": "COMBO",
+   "values": null
+  },
+  "detect_body": {
+   "part": "optional",
+   "type": "COMBO",
+   "values": [
+    "enable",
+    "disable"
+   ]
+  },
+  "detect_face": {
+   "part": "optional",
+   "type": "COMBO",
+   "values": [
+    "enable",
+    "disable"
+   ]
+  },
+  "detect_hand": {
+   "part": "optional",
+   "type": "COMBO",
+   "values": [
+    "enable",
+    "disable"
+   ]
+  },
+  "image": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  },
+  "pose_estimator": {
+   "part": "optional",
+   "type": "COMBO",
+   "values": null
+  },
+  "resolution": {
+   "part": "optional",
+   "type": "INT",
+   "values": null
+  },
+  "scale_stick_for_xinsr_cn": {
+   "part": "optional",
+   "type": "COMBO",
+   "values": [
+    "disable",
+    "enable"
+   ]
+  }
+ },
+ "EmptyLatentImage": {
+  "batch_size": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "height": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "width": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  }
+ },
+ "FaceDetailer": {
+  "bbox_crop_factor": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "bbox_detector": {
+   "part": "required",
+   "type": "BBOX_DETECTOR",
+   "values": null
+  },
+  "bbox_dilation": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "bbox_threshold": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "cfg": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "clip": {
+   "part": "required",
+   "type": "CLIP",
+   "values": null
+  },
+  "cycle": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "denoise": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "detailer_hook": {
+   "part": "optional",
+   "type": "DETAILER_HOOK",
+   "values": null
+  },
+  "drop_size": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "feather": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "force_inpaint": {
+   "part": "required",
+   "type": "BOOLEAN",
+   "values": null
+  },
+  "guide_size": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "guide_size_for": {
+   "part": "required",
+   "type": "BOOLEAN",
+   "values": null
+  },
+  "image": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  },
+  "inpaint_model": {
+   "part": "optional",
+   "type": "BOOLEAN",
+   "values": null
+  },
+  "max_size": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "model": {
+   "part": "required",
+   "type": "MODEL",
+   "values": null
+  },
+  "negative": {
+   "part": "required",
+   "type": "CONDITIONING",
+   "values": null
+  },
+  "noise_mask": {
+   "part": "required",
+   "type": "BOOLEAN",
+   "values": null
+  },
+  "noise_mask_feather": {
+   "part": "optional",
+   "type": "INT",
+   "values": null
+  },
+  "positive": {
+   "part": "required",
+   "type": "CONDITIONING",
+   "values": null
+  },
+  "sam_bbox_expansion": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "sam_detection_hint": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "center-1",
+    "horizontal-2",
+    "vertical-2",
+    "rect-4",
+    "diamond-4",
+    "mask-area",
+    "mask-points",
+    "mask-point-bbox",
+    "none"
+   ]
+  },
+  "sam_dilation": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "sam_mask_hint_threshold": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "sam_mask_hint_use_negative": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "False",
+    "Small",
+    "Outter"
+   ]
+  },
+  "sam_model_opt": {
+   "part": "optional",
+   "type": "SAM_MODEL",
+   "values": null
+  },
+  "sam_threshold": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "sampler_name": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "euler",
+    "euler_cfg_pp",
+    "euler_ancestral",
+    "euler_ancestral_cfg_pp",
+    "heun",
+    "heunpp2",
+    "exp_heun_2_x0",
+    "exp_heun_2_x0_sde",
+    "dpm_2",
+    "dpm_2_ancestral",
+    "lms",
+    "dpm_fast",
+    "dpm_adaptive",
+    "dpmpp_2s_ancestral",
+    "dpmpp_2s_ancestral_cfg_pp",
+    "dpmpp_sde",
+    "dpmpp_sde_gpu",
+    "dpmpp_2m",
+    "dpmpp_2m_cfg_pp",
+    "dpmpp_2m_sde",
+    "dpmpp_2m_sde_gpu",
+    "dpmpp_2m_sde_heun",
+    "dpmpp_2m_sde_heun_gpu",
+    "dpmpp_3m_sde",
+    "dpmpp_3m_sde_gpu",
+    "ddpm",
+    "lcm",
+    "ipndm",
+    "ipndm_v",
+    "deis",
+    "cfgpp_ud10_ab",
+    "res_multistep",
+    "res_multistep_cfg_pp",
+    "res_multistep_ancestral",
+    "res_multistep_ancestral_cfg_pp",
+    "gradient_estimation",
+    "gradient_estimation_cfg_pp",
+    "er_sde",
+    "seeds_2",
+    "seeds_3",
+    "sa_solver",
+    "sa_solver_pece",
+    "ddim",
+    "uni_pc",
+    "uni_pc_bh2"
+   ]
+  },
+  "scheduler": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "simple",
+    "sgm_uniform",
+    "karras",
+    "exponential",
+    "ddim_uniform",
+    "beta",
+    "normal",
+    "linear_quadratic",
+    "kl_optimal",
+    "AYS SDXL",
+    "AYS SD1",
+    "AYS SVD",
+    "GITS[coeff=1.2]",
+    "LTXV[default]",
+    "OSS FLUX",
+    "OSS Wan",
+    "OSS Chroma"
+   ]
+  },
+  "scheduler_func_opt": {
+   "part": "optional",
+   "type": "SCHEDULER_FUNC",
+   "values": null
+  },
+  "seed": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "segm_detector_opt": {
+   "part": "optional",
+   "type": "SEGM_DETECTOR",
+   "values": null
+  },
+  "steps": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "tiled_decode": {
+   "part": "optional",
+   "type": "BOOLEAN",
+   "values": null
+  },
+  "tiled_encode": {
+   "part": "optional",
+   "type": "BOOLEAN",
+   "values": null
+  },
+  "vae": {
+   "part": "required",
+   "type": "VAE",
+   "values": null
+  },
+  "wildcard": {
+   "part": "required",
+   "type": "STRING",
+   "values": null
+  }
+ },
+ "IPAdapterFaceID": {
+  "attn_mask": {
+   "part": "optional",
+   "type": "MASK",
+   "values": null
+  },
+  "clip_vision": {
+   "part": "optional",
+   "type": "CLIP_VISION",
+   "values": null
+  },
+  "combine_embeds": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "concat",
+    "add",
+    "subtract",
+    "average",
+    "norm average"
+   ]
+  },
+  "embeds_scaling": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "V only",
+    "K+V",
+    "K+V w/ C penalty",
+    "K+mean(V) w/ C penalty"
+   ]
+  },
+  "end_at": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "image": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  },
+  "image_negative": {
+   "part": "optional",
+   "type": "IMAGE",
+   "values": null
+  },
+  "insightface": {
+   "part": "optional",
+   "type": "INSIGHTFACE",
+   "values": null
+  },
+  "ipadapter": {
+   "part": "required",
+   "type": "IPADAPTER",
+   "values": null
+  },
+  "model": {
+   "part": "required",
+   "type": "MODEL",
+   "values": null
+  },
+  "start_at": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "weight": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "weight_faceidv2": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "weight_type": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "linear",
+    "ease in",
+    "ease out",
+    "ease in-out",
+    "reverse in-out",
+    "weak input",
+    "weak output",
+    "weak middle",
+    "strong middle",
+    "style transfer",
+    "composition",
+    "strong style transfer",
+    "style and composition",
+    "style transfer precise",
+    "composition precise"
+   ]
+  }
+ },
+ "IPAdapterUnifiedLoaderFaceID": {
+  "ipadapter": {
+   "part": "optional",
+   "type": "IPADAPTER",
+   "values": null
+  },
+  "lora_strength": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "model": {
+   "part": "required",
+   "type": "MODEL",
+   "values": null
+  },
+  "preset": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "FACEID",
+    "FACEID PLUS - SD1.5 only",
+    "FACEID PLUS V2",
+    "FACEID PORTRAIT (style transfer)",
+    "FACEID PORTRAIT UNNORM - SDXL only (strong)"
+   ]
+  },
+  "provider": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "CPU",
+    "CUDA",
+    "ROCM",
+    "DirectML",
+    "OpenVINO",
+    "CoreML"
+   ]
+  }
+ },
+ "ImageScaleBy": {
+  "image": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  },
+  "scale_by": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "upscale_method": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "nearest-exact",
+    "bilinear",
+    "area",
+    "bicubic",
+    "lanczos"
+   ]
+  }
+ },
+ "ImageUpscaleWithModel": {
+  "image": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  },
+  "upscale_model": {
+   "part": "required",
+   "type": "UPSCALE_MODEL",
+   "values": null
+  }
+ },
+ "KSampler": {
+  "cfg": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "denoise": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "latent_image": {
+   "part": "required",
+   "type": "LATENT",
+   "values": null
+  },
+  "model": {
+   "part": "required",
+   "type": "MODEL",
+   "values": null
+  },
+  "negative": {
+   "part": "required",
+   "type": "CONDITIONING",
+   "values": null
+  },
+  "positive": {
+   "part": "required",
+   "type": "CONDITIONING",
+   "values": null
+  },
+  "sampler_name": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "euler",
+    "euler_cfg_pp",
+    "euler_ancestral",
+    "euler_ancestral_cfg_pp",
+    "heun",
+    "heunpp2",
+    "exp_heun_2_x0",
+    "exp_heun_2_x0_sde",
+    "dpm_2",
+    "dpm_2_ancestral",
+    "lms",
+    "dpm_fast",
+    "dpm_adaptive",
+    "dpmpp_2s_ancestral",
+    "dpmpp_2s_ancestral_cfg_pp",
+    "dpmpp_sde",
+    "dpmpp_sde_gpu",
+    "dpmpp_2m",
+    "dpmpp_2m_cfg_pp",
+    "dpmpp_2m_sde",
+    "dpmpp_2m_sde_gpu",
+    "dpmpp_2m_sde_heun",
+    "dpmpp_2m_sde_heun_gpu",
+    "dpmpp_3m_sde",
+    "dpmpp_3m_sde_gpu",
+    "ddpm",
+    "lcm",
+    "ipndm",
+    "ipndm_v",
+    "deis",
+    "cfgpp_ud10_ab",
+    "res_multistep",
+    "res_multistep_cfg_pp",
+    "res_multistep_ancestral",
+    "res_multistep_ancestral_cfg_pp",
+    "gradient_estimation",
+    "gradient_estimation_cfg_pp",
+    "er_sde",
+    "seeds_2",
+    "seeds_3",
+    "sa_solver",
+    "sa_solver_pece",
+    "ddim",
+    "uni_pc",
+    "uni_pc_bh2"
+   ]
+  },
+  "scheduler": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "simple",
+    "sgm_uniform",
+    "karras",
+    "exponential",
+    "ddim_uniform",
+    "beta",
+    "normal",
+    "linear_quadratic",
+    "kl_optimal"
+   ]
+  },
+  "seed": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "steps": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  }
+ },
+ "LoadImage": {
+  "image": {
+   "part": "required",
+   "type": "COMBO",
+   "values": null
+  }
+ },
+ "ModelSamplingSD3": {
+  "model": {
+   "part": "required",
+   "type": "MODEL",
+   "values": null
+  },
+  "shift": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  }
+ },
+ "SaveAnimatedWEBP": {
+  "filename_prefix": {
+   "part": "required",
+   "type": "STRING",
+   "values": null
+  },
+  "fps": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "images": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  },
+  "lossless": {
+   "part": "required",
+   "type": "BOOLEAN",
+   "values": null
+  },
+  "method": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "default",
+    "fastest",
+    "slowest"
+   ]
+  },
+  "quality": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  }
+ },
+ "SaveImage": {
+  "filename_prefix": {
+   "part": "required",
+   "type": "STRING",
+   "values": null
+  },
+  "images": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  }
+ },
+ "SetUnionControlNetType": {
+  "control_net": {
+   "part": "required",
+   "type": "CONTROL_NET",
+   "values": null
+  },
+  "type": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "auto",
+    "openpose",
+    "depth",
+    "hed/pidi/scribble/ted",
+    "canny/lineart/anime_lineart/mlsd",
+    "normal",
+    "segment",
+    "tile",
+    "repaint"
+   ]
+  }
+ },
+ "UltimateSDUpscale": {
+  "batch_size": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "cfg": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "denoise": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "force_uniform_tiles": {
+   "part": "required",
+   "type": "BOOLEAN",
+   "values": null
+  },
+  "image": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  },
+  "mask_blur": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "mode_type": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "Linear",
+    "Chess",
+    "None"
+   ]
+  },
+  "model": {
+   "part": "required",
+   "type": "MODEL",
+   "values": null
+  },
+  "negative": {
+   "part": "required",
+   "type": "CONDITIONING",
+   "values": null
+  },
+  "positive": {
+   "part": "required",
+   "type": "CONDITIONING",
+   "values": null
+  },
+  "sampler_name": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "euler",
+    "euler_cfg_pp",
+    "euler_ancestral",
+    "euler_ancestral_cfg_pp",
+    "heun",
+    "heunpp2",
+    "exp_heun_2_x0",
+    "exp_heun_2_x0_sde",
+    "dpm_2",
+    "dpm_2_ancestral",
+    "lms",
+    "dpm_fast",
+    "dpm_adaptive",
+    "dpmpp_2s_ancestral",
+    "dpmpp_2s_ancestral_cfg_pp",
+    "dpmpp_sde",
+    "dpmpp_sde_gpu",
+    "dpmpp_2m",
+    "dpmpp_2m_cfg_pp",
+    "dpmpp_2m_sde",
+    "dpmpp_2m_sde_gpu",
+    "dpmpp_2m_sde_heun",
+    "dpmpp_2m_sde_heun_gpu",
+    "dpmpp_3m_sde",
+    "dpmpp_3m_sde_gpu",
+    "ddpm",
+    "lcm",
+    "ipndm",
+    "ipndm_v",
+    "deis",
+    "cfgpp_ud10_ab",
+    "res_multistep",
+    "res_multistep_cfg_pp",
+    "res_multistep_ancestral",
+    "res_multistep_ancestral_cfg_pp",
+    "gradient_estimation",
+    "gradient_estimation_cfg_pp",
+    "er_sde",
+    "seeds_2",
+    "seeds_3",
+    "sa_solver",
+    "sa_solver_pece",
+    "ddim",
+    "uni_pc",
+    "uni_pc_bh2"
+   ]
+  },
+  "scheduler": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "simple",
+    "sgm_uniform",
+    "karras",
+    "exponential",
+    "ddim_uniform",
+    "beta",
+    "normal",
+    "linear_quadratic",
+    "kl_optimal"
+   ]
+  },
+  "seam_fix_denoise": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "seam_fix_mask_blur": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "seam_fix_mode": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "None",
+    "Band Pass",
+    "Half Tile",
+    "Half Tile + Intersections"
+   ]
+  },
+  "seam_fix_padding": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "seam_fix_width": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "seed": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "steps": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "tile_height": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "tile_padding": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "tile_width": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "tiled_decode": {
+   "part": "required",
+   "type": "BOOLEAN",
+   "values": null
+  },
+  "upscale_by": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "upscale_model": {
+   "part": "required",
+   "type": "UPSCALE_MODEL",
+   "values": null
+  },
+  "vae": {
+   "part": "required",
+   "type": "VAE",
+   "values": null
+  }
+ },
+ "UltralyticsDetectorProvider": {
+  "model_name": {
+   "part": "required",
+   "type": "COMBO",
+   "values": null
+  }
+ },
+ "UnetLoaderGGUF": {
+  "unet_name": {
+   "part": "required",
+   "type": "COMBO",
+   "values": null
+  }
+ },
+ "UpscaleModelLoader": {
+  "model_name": {
+   "part": "required",
+   "type": "COMBO",
+   "values": null
+  }
+ },
+ "VAEDecode": {
+  "samples": {
+   "part": "required",
+   "type": "LATENT",
+   "values": null
+  },
+  "vae": {
+   "part": "required",
+   "type": "VAE",
+   "values": null
+  }
+ },
+ "VAELoader": {
+  "vae_name": {
+   "part": "required",
+   "type": "COMBO",
+   "values": null
+  }
+ },
+ "Wan22ImageToVideoLatent": {
+  "batch_size": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "height": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "length": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "start_image": {
+   "part": "optional",
+   "type": "IMAGE",
+   "values": null
+  },
+  "vae": {
+   "part": "required",
+   "type": "VAE",
+   "values": null
+  },
+  "width": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  }
+ }
+}

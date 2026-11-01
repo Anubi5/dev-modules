@@ -10,8 +10,8 @@ in `ai-sandbox/config/sandbox.env`).
 <name>/
   README.md      what it is, how to use it
   install.sh     install or update - runs as dev, safe to run again (skips finished work)
-  remove.sh      module-specific cleanup (the runner stops its services and deletes its folder)
-  test.sh        quick real check; "test.sh --full" for the slow one
+  remove.sh      optional module-specific cleanup (if it fails, nothing is removed)
+  test.sh        required: quick check; "test.sh --full" for the slow one
   *.service      optional: systemd --user units, started on demand (ai start <name>)
   bin/           optional: commands linked into ~/.local/bin; bin/ai-<x> becomes "ai <x>"
   skills/<s>/    optional: SKILL.md for agents, installed for Hermes, Claude Code and Codex

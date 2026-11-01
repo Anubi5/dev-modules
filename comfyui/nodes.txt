@@ -1,3 +1,12 @@
 # ComfyUI custom nodes (git repos), one per line
 https://github.com/city96/ComfyUI-GGUF
 https://github.com/Comfy-Org/ComfyUI-Manager
+# ControlNet preprocessors (DWPose/OpenPose, depth, canny, lineart ...)
+https://github.com/Fannovel16/comfyui_controlnet_aux
+# Consistent faces / style references (maintenance mode since 2025, still the standard)
+https://github.com/cubiq/ComfyUI_IPAdapter_plus
+# Face and hand repair (FaceDetailer); the Subpack brings the YOLO detectors
+https://github.com/ltdrdata/ComfyUI-Impact-Pack
+https://github.com/ltdrdata/ComfyUI-Impact-Subpack
+# Tiled upscaling with redraw
+https://github.com/ssitu/ComfyUI_UltimateSDUpscale

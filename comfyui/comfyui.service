@@ -3,6 +3,6 @@ Description=ComfyUI (127.0.0.1:8188)
 
 [Service]
 WorkingDirectory=%h/.local/share/modules/comfyui/app/ComfyUI
-ExecStart=%h/.local/share/modules/comfyui/app/ComfyUI/.venv/bin/python main.py --listen 127.0.0.1 --port 8188 --output-directory %h/work/outputs/comfy --input-directory %h/work/inputs --temp-directory %h/work/scratch/comfy --user-directory %h/work/comfyui
+ExecStart=%h/.local/share/modules/comfyui/app/ComfyUI/.venv/bin/python main.py --listen 127.0.0.1 --port 8188 --offline --output-directory %h/work/outputs/comfy --input-directory %h/work/inputs --temp-directory %h/work/scratch/comfy --user-directory %h/work/comfyui
 Restart=on-failure
 RestartSec=5

@@ -10,15 +10,19 @@ uv pip install -q --python .venv -r requirements.txt huggingface_hub
 cd custom_nodes
 while read -r r; do                                    # empty lines and # comments are skipped
   case "$r" in ''|'#'*) continue ;; esac
-  n=$(basename "$r" .git); [ -d "$n" ] || git clone --depth 1 "$r" "$n"
+  n=$(basename "$r" .git); [ -d "$n" ] || git clone -q --depth 1 --recurse-submodules --shallow-submodules "$r" "$n"
   if [ -f "$n/requirements.txt" ]; then uv pip install -q --python ../.venv -r "$n/requirements.txt"; fi
 done < "$MOD/nodes.txt"
+# FaceID needs InsightFace (built here; its face models download on first use). Optional: the rest works without it.
+../.venv/bin/python -c 'import insightface' 2>/dev/null || uv pip install -q --python ../.venv insightface onnxruntime-gpu \
+  || echo "  CHECK InsightFace did not install - IPAdapter FaceID will not work (plain IPAdapter face does)"
 cd "$C"
 printf '%s\n' 'windows:' "  base_path: ${MODELS_MOUNT:-/models}/comfy" '  checkpoints: checkpoints' '  diffusion_models: diffusion_models' \
   '  unet: diffusion_models' '  vae: vae' '  text_encoders: text_encoders' '  clip: text_encoders' '  loras: loras' '  upscale_models: upscale_models' \
-  '  controlnet: controlnet' 'module:' "  base_path: $MOD/models" '  checkpoints: checkpoints' '  diffusion_models: diffusion_models' \
+  '  controlnet: controlnet' '  clip_vision: clip_vision' '  ipadapter: ipadapter' 'module:' "  base_path: $MOD/models" '  checkpoints: checkpoints' '  diffusion_models: diffusion_models' \
   '  unet: diffusion_models' '  vae: vae' '  text_encoders: text_encoders' '  clip: text_encoders' '  loras: loras' '  upscale_models: upscale_models' \
-  '  controlnet: controlnet' > extra_model_paths.yaml
+  '  controlnet: controlnet' '  clip_vision: clip_vision' '  ipadapter: ipadapter' '  ultralytics: ultralytics' \
+  '  ultralytics_bbox: ultralytics/bbox' '  ultralytics_segm: ultralytics/segm' > extra_model_paths.yaml
 for d in ~/work/comfyui/default/ComfyUI-Manager ~/work/comfyui/__manager; do   # Manager: no installs from arbitrary git URLs
   mkdir -p "$d"; printf '[default]\nsecurity_level = normal\nnetwork_mode = public\n' > "$d/config.ini"
 done

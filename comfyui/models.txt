@@ -1,7 +1,17 @@
-# ComfyUI model files: <huggingface repo> <file name> <ComfyUI folder>
+# ComfyUI model files: <huggingface repo> <file or path in the repo> <ComfyUI folder> [save as]
 # Files already in D:\AI\models\comfy (= /models/comfy) are used as they are; missing ones are downloaded into this module.
 stabilityai/stable-diffusion-xl-base-1.0 sd_xl_base_1.0.safetensors checkpoints
 Comfy-Org/Wan_2.2_ComfyUI_Repackaged wan2.2_vae.safetensors vae
 Comfy-Org/Wan_2.2_ComfyUI_Repackaged umt5_xxl_fp8_e4m3fn_scaled.safetensors text_encoders
 QuantStack/Wan2.2-TI2V-5B-GGUF Wan2.2-TI2V-5B-Q8_0.gguf diffusion_models
 Kim2091/UltraSharp 4x-UltraSharp.safetensors upscale_models
+# Pose / depth / edges: one SDXL ControlNet for all control types (use "SetUnionControlNetType" or Apply ControlNet)
+xinsir/controlnet-union-sdxl-1.0 diffusion_pytorch_model_promax.safetensors controlnet controlnet-union-sdxl-promax.safetensors
+# Consistent faces: IPAdapter (face reference image) + FaceID Plus v2 (stronger, uses InsightFace) + the CLIP vision encoder
+h94/IP-Adapter models/image_encoder/model.safetensors clip_vision CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors
+h94/IP-Adapter sdxl_models/ip-adapter-plus-face_sdxl_vit-h.safetensors ipadapter
+h94/IP-Adapter-FaceID ip-adapter-faceid-plusv2_sdxl.bin ipadapter
+h94/IP-Adapter-FaceID ip-adapter-faceid-plusv2_sdxl_lora.safetensors loras
+# Face / hand repair (FaceDetailer): detectors
+Bingsu/adetailer face_yolov8m.pt ultralytics/bbox
+Bingsu/adetailer hand_yolov8s.pt ultralytics/bbox

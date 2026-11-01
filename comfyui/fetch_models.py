@@ -11,17 +11,19 @@ from huggingface_hub import HfApi, hf_hub_download
 
 
 def main():
-    """! @brief Reads "<repo> <file> <folder>" lines and downloads only what is missing. @return exit code """
+    """! @brief Reads "<repo> <file or path in repo> <folder> [save as]" lines and downloads only what is missing. @return exit code """
     lst, ro, own = sys.argv[1:4]
     failed = 0
     for line in open(lst):
         if not line.strip() or line.lstrip().startswith("#"):
             continue
-        repo, name, folder = line.split()[:3]
+        parts = line.split()
+        repo, want, folder = parts[:3]
+        name = parts[3] if len(parts) > 3 else os.path.basename(want)
         if any(os.path.exists(os.path.join(root, folder, name)) for root in (ro, own)):
             continue
         try:
-            match = [f for f in HfApi().list_repo_files(repo) if f.endswith(name)][0]
+            match = [f for f in HfApi().list_repo_files(repo) if f == want or f.endswith("/" + want)][0]
             print(f"  downloading {repo} :: {match}", flush=True)
             path = hf_hub_download(repo, match, local_dir=os.path.join(own, "_dl"))
             os.makedirs(os.path.join(own, folder), exist_ok=True)

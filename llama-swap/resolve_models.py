@@ -127,11 +127,12 @@ def chat_models(specs, out, seed=None):
     for spec in specs:
         try:
             print(f"\n[{spec['id']}]")
-            old = manifest.get(spec["id"], {})                          # offline repair: reuse what is recorded and present
-            have = [old.get("file")] + ([old.get("mmproj")] if spec.get("mmproj") else [])
-            if all(f and os.path.exists(f) and os.path.getsize(f) > 0 for f in have) \
-                    and (not spec.get("repo") or old.get("repo") == spec["repo"]):
-                print(f"  {os.path.basename(old['file'])}: already present ({old.get('repo')})"); continue
+            old = manifest.get(spec["id"], {})       # offline repair: reuse it only if it matches what models.json asks for now
+            have = old.get("files", []) + ([old.get("mmproj")] if spec.get("mmproj") else [])
+            if old.get("files") and old.get("quant") == spec["quant"] \
+                    and (not spec.get("repo") or old.get("repo") == spec["repo"]) \
+                    and all(f and os.path.exists(f) and os.path.getsize(f) > 0 for f in have):
+                print(f"  {os.path.basename(old['file'])}: already present ({old.get('repo')}, all {len(old['files'])} part(s))"); continue
             repo = find_repo(spec)
             if not repo:
                 print("  no matching repo found"); failed += 1; continue
@@ -141,7 +142,7 @@ def chat_models(specs, out, seed=None):
                 print(f"  {repo}: no file matching {spec['quant']}"); failed += 1; continue
             dest = os.path.join(out, spec["id"])
             paths = [fetch(repo, f, dest, seed, spec["id"]) for f in chosen]
-            entry = {"repo": repo, "file": paths[0]}
+            entry = {"repo": repo, "file": paths[0], "files": paths, "quant": spec["quant"]}   # every part of split files
             if spec.get("mmproj"):
                 mm = sorted((f for f in files if "mmproj" in f.lower() and f.lower().endswith(".gguf")),
                             key=lambda f: (0 if re.search("q8", f, re.I) else 1, len(f)))

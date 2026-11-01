@@ -52,15 +52,23 @@ dev share
 What we learned:
 - **The skeleton decides the framing.** If the pose source has no head (or feet) in frame, the result has none either.
   Always ask for "entire body from head to feet in frame" and check `<name>_pose_*.png` first when a result looks wrong.
-- **Unusual poses** (sitting cross-legged, lying, crouching, upside-down) need `--pose-strength 0.8-0.9`; at the default
-  0.65 SDXL produced a broken, upside-down figure for "sitting cross-legged". A different `--seed` also helps.
+- **Full-body pose sources fix most anatomy problems.** With a head-to-feet source, crouching (tying a shoelace) came
+  out clean: correct hands, two sneakers. The earlier cropped source had given a third sneaker and a melted hand.
+- **Sitting cross-legged fails on SDXL** - upside-down figure at pose strength 0.65 *and* 0.85, although the skeleton
+  was correct. Overlapping legs are too ambiguous for the pose ControlNet. Use the FLUX 3 route below for such poses
+  (lying, cross-legged, tangled limbs), or try other seeds.
 - **Clothes stay consistent only through the text**: FaceID keeps the face, the description keeps the outfit - repeat
   it word for word. Same seed for all images keeps lighting and style close.
 - **Small faces** (full body at 896x1152) need `--fix-faces`; likeness weak -> `--face-weight 0.75` (above ~0.8 faces
   get gaunt); pose too stiff -> `--pose-strength 0.55`.
-- Hands are much better with `--fix-hands` but not guaranteed in complex poses - keep the `_base_` original to compare.
-- Alternative for very consistent outfits: `ai gen edit "the same woman, same face, hair and outfit, now <pose>; change
-  the pose and background" --image <reference>` (FLUX 3 sees the whole reference; no face/hand repair).
+- Hands are much better with `--fix-hands` and a full-body source, but not guaranteed in complex poses - keep the
+  `_base_` original to compare, and re-run with another `--seed` if a hand is wrong.
+- Colours of small garment parts can drift (a black instead of white t-shirt under a closed jacket): name the colour
+  twice or add it to `--negative` (e.g. "black shirt").
+- **FLUX 3 route** (hard poses, very consistent outfits): give the character and the pose source as two references:
+  `ai gen edit "Create a photograph of the woman from the first image (same face, hair and outfit), in exactly the pose
+  of the person in the second image: <pose>. Full body, head to feet in frame, <background>; change the background
+  completely." --image <reference> --image <pose source>` (no FaceID or hand repair; not yet compared side by side).
 
 ## Adding a model, LoRA, checkpoint or node
 Pick the lightest step that does what you need.

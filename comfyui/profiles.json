@@ -4,9 +4,10 @@
     "Phase 3 tunes them on the RTX 4080 Laptop. Add a model: put its file in models.txt (or D:\\AI\\models\\comfy\\...),",
     "add an entry here with its architecture and settings, push, dev mod update comfyui.",
     "arch: sdxl = works with --pose/--face/--fix-*/--hires (SDXL ControlNet, IPAdapter FaceID, FaceDetailer).",
-    "arch: flux3 / zimage / anima = newer models with their own workflows (flux3 also does ai gen edit)."
+    "arch: flux3 / zimage / anima = newer models with their own workflows (flux3 also does ai gen edit).",
+    "Defaults chosen 1 Nov 2026 from a side-by-side test on the RTX 4080 laptop: zimage for plain images, juggernaut when SDXL-only tools are used, flux3 for edits/text/complex scenes, anima for illustration."
   ],
-  "default": "realvis",
+  "default": "zimage",
   "styles": {
     "photo": {
       "negative": "cartoon, painting, illustration, 3d render, cgi, plastic skin, airbrushed, smooth skin, doll, oversaturated, bad hands, bad anatomy, deformed, face asymmetry, eyes asymmetry, deformed eyes, blurry, low quality, watermark, text"
@@ -87,7 +88,7 @@
       "text_encoder": "qwen_3_06b_base.safetensors",
       "vae": "qwen_image_vae.safetensors",
       "pose_patch": "anima-lllite-pose-1.safetensors",
-      "pose_strength": 0.8,
+      "pose_strength": 1.0,
       "sampler": "er_sde",
       "scheduler": "simple",
       "cfg": 4.0,
@@ -107,7 +108,7 @@
       "text_encoder": "qwen_3_06b_base.safetensors",
       "vae": "qwen_image_vae.safetensors",
       "pose_patch": "anima-lllite-pose-1.safetensors",
-      "pose_strength": 0.8,
+      "pose_strength": 1.0,
       "sampler": "er_sde",
       "scheduler": "simple",
       "cfg": 1.0,
@@ -123,5 +124,6 @@
     }
   },
   "edit_model": "flux3",
-  "expander": "qwen3.5-9b"
+  "expander": "qwen3.5-9b",
+  "default_sdxl": "juggernaut"
 }

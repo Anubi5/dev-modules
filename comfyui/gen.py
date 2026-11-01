@@ -202,7 +202,9 @@ def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix, pose=Non
     @param save_base Also save the image before repair/upscale ("<name>_base"); default: when repairing or upscaling.
     @return Workflow in ComfyUI API format.
     """
-    prof = prof or profile()
+    prof = prof or profile(PROFILES.get("default_sdxl", "realvis"))
+    if prof["arch"] != "sdxl":
+        raise ValueError(f"sdxl() needs an SDXL model, got {prof['name']} ({prof['arch']})")
     S, K, C = prof["sampler"], prof["scheduler"], prof["cfg"]
     wf = {
         "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": prof["file"]}},
@@ -786,6 +788,8 @@ def main():
             if not a.image or len(a.image) > 4:
                 sys.exit("edit needs --image <file> (up to 4 with extra references)")
             a.model = a.model or PROFILES.get("edit_model", "flux3")
+        if not a.model and not a.checkpoint and (a.pose or a.face or a.fix_faces or a.fix_hands or a.hires):
+            a.model = PROFILES.get("default_sdxl", "realvis")    # those tools are SDXL-only
         prof = find_checkpoint(a.checkpoint) if a.checkpoint else profile(a.model)
         arch, style = prof["arch"], a.style or prof.get("style", "photo")
         allowed = {"sdxl": {"pose", "face", "fix_faces", "fix_hands", "hires"}, "anima": {"pose"}}.get(arch, set())
@@ -843,6 +847,9 @@ def main():
                 "steps": a.steps or 20, "frames": frames}
     log = lambda s: print(f"  {s}", flush=True)
     ok, files, err = generate(wf, limit, log=log, uploads=uploads)
+    if not ok and not files and re.search(r"read_file_slice|HostBuffer|deserializ|Unable to load|out of memory", err or "", re.I):
+        log(f"model loading failed ({err[:80]}) - retrying once")      # seen once right after the chat model unloaded
+        ok, files, err = generate(wf, limit, log=log, uploads=uploads)
     if err:
         print(f"  error: {err}")
     rec = write_record(files, info) if ok else None

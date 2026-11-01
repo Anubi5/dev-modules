@@ -23,14 +23,33 @@ it unloads the chat model through the model-serving contract, runs one fixed wor
 ## Image models (`profiles.json`, `ai gen models` shows which are ready)
 | `--model` | For | Notes |
 |---|---|---|
-| `realvis` (default) | photoreal people, portraits | SDXL: the only family with `--pose --face --fix-faces --fix-hands --hires` |
-| `juggernaut` | natural, documentary-looking photos | SDXL, same tools |
+| `zimage` (default) | photos, scenes, products - best realism in the test, ~25 s | Apache 2.0 |
+| `realvis` | close-up portraits, best with `--face` | SDXL: the only family with `--pose --face --fix-faces --fix-hands --hires` |
+| `juggernaut` | natural photos, products; the default when SDXL-only tools are used | SDXL, same tools |
 | `sdxl-base` | general / artistic | SDXL, same tools |
 | `flux3` | long prompts, text in images, layout; `ai gen edit` | optional (gated download, see models.txt); caption expanded by the local chat model with BFL's instructions (`prompts/`) |
-| `zimage` | fast photoreal (8 steps) | Apache 2.0 |
 | `anima`, `anima-turbo` | anime / illustration | `--pose` via Anima LLLite; non-commercial weights |
 
 Settings come from each model's official template or card; tune them in `profiles.json`.
+
+## Image module 1.0 (frozen 1 Nov 2026) - tested on the RTX 4080 Laptop (12 GB)
+| Job | Time | Peak GPU |
+|---|---|---|
+| SDXL image 1024² (realvis / juggernaut) | 18-31 s | 8-10.5 GB |
+| SDXL + pose + face + face/hand repair + detailed 2x | ~190 s | 11.2 GB |
+| Z-Image Turbo 1024² | 25-28 s | 10.5-10.8 GB |
+| Anima (+ pose) 896x1152 | 33-37 s | 6.4-7 GB |
+| FLUX 3 text-to-image (+ ~15 s caption expansion) | ~50 s | 11.0-11.4 GB |
+| FLUX 3 edit with one reference | ~75 s | 11.1-11.6 GB |
+| Wan 2.2 video, 33 frames | 75-86 s | 11.4-11.6 GB |
+
+Known limits: sides 512-1536 px; FLUX 3 invents shapes on product shots (use zimage/juggernaut); FLUX 3 edits keep the
+scene unless told to change it; jobs started in the ComfyUI page or chat requests during a job are not coordinated with
+`ai gen` (run `ai free` first, don't chat during big jobs); a first FLUX 3 load right after the chat model can fail once
+(`ai gen` retries automatically).
+
+Frozen means: no new image models unless a needed task cannot be done, a model breaks, or a clearly better one is
+measured on this machine. Settings changes go into `profiles.json` with the reason.
 
 ## From the command line (and for agents: skill `gpu-generate`)
 ```

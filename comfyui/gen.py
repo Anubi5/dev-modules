@@ -127,6 +127,22 @@ CKPT = "RealVisXL_V5.0_fp16.safetensors"   # photoreal SDXL fine-tune (base SDXL
 SAMPLER, SCHEDULER, CFG = "dpmpp_sde", "karras", 4.5   # RealVisXL's recommendation; CFG above ~6 gives the oversaturated "AI" look
 NEGATIVE = ("cartoon, painting, illustration, 3d render, cgi, plastic skin, airbrushed, smooth skin, doll, oversaturated, "
             "bad hands, bad anatomy, deformed, face asymmetry, eyes asymmetry, deformed eyes, blurry, low quality, watermark, text")
+CKPT_DIRS = ["/models/comfy/checkpoints", os.path.expanduser("~/.local/share/modules/comfyui/models/checkpoints")]
+
+
+def find_checkpoint(name):
+    """!
+    @brief Picks an SDXL checkpoint by (part of) its file name, e.g. "juggernaut", "realvis", "sd_xl_base".
+    @param name  Name or part of it (case-insensitive).  @return The file name, or exits listing what is there.
+    """
+    have = sorted({f for d in CKPT_DIRS if os.path.isdir(d) for f in os.listdir(d) if f.endswith(".safetensors")})
+    hit = [f for f in have if name.lower() in f.lower()]
+    if len(hit) != 1:
+        sys.exit(f"--checkpoint {name}: {'ambiguous' if hit else 'not found'}. Available: {', '.join(have) or 'none'}"
+                 " (add your own to D:\\AI\\models\\comfy\\checkpoints; SDXL checkpoints only)")
+    return hit[0]
+
+
 POSE_CN = "controlnet-union-sdxl-promax.safetensors"
 FACE_DET, HAND_DET = "bbox/face_yolov8m.pt", "bbox/hand_yolov8s.pt"
 
@@ -143,7 +159,7 @@ def detailer(image, model, pos, neg, detector, seed, denoise):
 
 
 def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix, pose=None, face=None, fix_faces=False,
-         fix_hands=False, hires=False, pose_strength=0.65, face_weight=0.65):
+         fix_hands=False, hires=False, pose_strength=0.65, face_weight=0.65, ckpt=CKPT):
     """!
     @brief SDXL text-to-image workflow with optional pose control, a face to keep, face/hand repair and upscaling.
     @param prompt    What to draw.  @param negative  What to avoid.  @param seed  Random seed.
@@ -157,7 +173,7 @@ def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix, pose=Non
     @return Workflow in ComfyUI API format.
     """
     wf = {
-        "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": CKPT}},
+        "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": ckpt}},
         "5": {"class_type": "EmptyLatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
         "6": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 1], "text": prompt}},
         "7": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 1], "text": negative}},
@@ -454,6 +470,7 @@ def main():
     ap.add_argument("--pose-strength", type=float, default=0.65, help="how strictly to follow the pose, 0.3-1.0")
     ap.add_argument("--face", metavar="IMAGE", help="image: keep this face (in ~/work; one clear face)")
     ap.add_argument("--face-weight", type=float, default=0.65, help="how strongly to keep the face, 0.3-1.2 (high values distort it)")
+    ap.add_argument("--checkpoint", metavar="NAME", help="image: another SDXL checkpoint by (part of) its name, e.g. juggernaut")
     ap.add_argument("--fix-faces", action="store_true", help="image: redraw faces in more detail")
     ap.add_argument("--fix-hands", action="store_true", help="image: redraw hands in more detail")
     ap.add_argument("--frames", type=int, default=33, help="video length, 4n+1 (33 ~ 1.4 s, 121 ~ 5 s)")
@@ -483,12 +500,13 @@ def main():
         uploads = [(n, check_input(f)) for n, f in (("30", a.pose), ("21", a.face)) if f]
         wf = sdxl(a.prompt, a.negative or NEGATIVE, seed, a.steps or 30, w, h, a.upscale, prefix, pose="pending" if a.pose else None,
                   face="pending" if a.face else None, fix_faces=a.fix_faces, fix_hands=a.fix_hands, hires=a.hires,
-                  pose_strength=a.pose_strength, face_weight=a.face_weight)
+                  pose_strength=a.pose_strength, face_weight=a.face_weight,
+                  ckpt=find_checkpoint(a.checkpoint) if a.checkpoint else CKPT)
         limit = a.timeout or (1800 if a.hires or a.fix_hands or a.fix_faces else 900)
     else:
         frames = max(5, (a.frames - 1) // 4 * 4 + 1)
-        if a.pose or a.face or a.fix_faces or a.fix_hands or a.hires:
-            sys.exit("--pose/--face/--fix-faces/--fix-hands/--hires are for images")
+        if a.pose or a.face or a.fix_faces or a.fix_hands or a.hires or a.checkpoint:
+            sys.exit("--pose/--face/--fix-faces/--fix-hands/--hires/--checkpoint are for images")
         uploads = []
         wf, limit = wan(a.prompt, a.negative or "static, blurry, distorted, low quality, watermark", seed, a.steps or 20, frames, prefix), a.timeout or 3600
     log = lambda s: print(f"  {s}", flush=True)

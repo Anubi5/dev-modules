@@ -1,0 +1,13 @@
+name: check
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell syntax
+        run: for f in $(git ls-files '*.sh' '*/bin/*'); do head -1 "$f" | grep -q bash && { bash -n "$f" || exit 1; }; done
+      - name: Python syntax
+        run: python3 -m py_compile $(git ls-files '*.py')
+      - name: Every module has README.md, install.sh and test.sh
+        run: for d in */; do [ "$d" = .github/ ] && continue; for f in README.md install.sh test.sh; do [ -f "$d$f" ] || { echo "missing $d$f"; exit 1; }; done; done

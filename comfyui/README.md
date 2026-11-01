@@ -32,6 +32,44 @@ it unloads the chat model through the model-serving contract, runs one fixed wor
 
 Settings come from each model's official template or card; tune them in `profiles.json`.
 
+## Adding a model, LoRA, checkpoint or node
+Pick the lightest step that does what you need.
+
+**1. Just try it (no repo change).** Put the file into the matching folder under `D:\AI\models\comfy\` and press `r`
+in the ComfyUI page (or restart it: `dev ai stop comfyui`, `dev comfy`):
+
+| File | Folder |
+|---|---|
+| SDXL checkpoint (one `.safetensors`, ~7 GB) | `checkpoints\` |
+| LoRA | `loras\` |
+| Diffusion model / text encoder / VAE of newer models (FLUX, Z-Image, Anima, Wan) | `diffusion_models\`, `text_encoders\`, `vae\` |
+| Upscaler | `upscale_models\` |
+| ControlNet / Anima LLLite patch | `controlnet\` / `model_patches\` |
+
+It appears in the matching loader node at once. An SDXL checkpoint also works with ai gen right away:
+`ai gen image "..." --checkpoint <part of its name>` (checked to be SDXL). LoRAs can only be used in the ComfyUI page
+for now - ai gen has no `--lora` yet (on the to-do list). Prefer `.safetensors`; a `.pt`/`.ckpt` file can run code
+when loaded.
+
+**2. Keep it, with a checksum (fetched on every PC).** Add a line to `models.txt`, push, `dev mod update comfyui`:
+```
+<huggingface repo> <path in the repo> <folder> sha256:<hex>                      # Hugging Face
+<https download URL> <file name> <folder> sha256:<hex>                           # e.g. CivitAI
+... optional                                                                      # gated / manual download: missing is not an error
+```
+The SHA-256 is on the file's Hugging Face page ("SHA256") or CivitAI file details. A file whose checksum does not
+match is refused (moved aside as `.quarantined`).
+
+**3. Make it an ai gen model with its own settings.** Add an entry to `profiles.json` (copy one of the same `arch`:
+`sdxl`, `flux3`, `zimage`, `anima`) with the file names and the sampler/scheduler/CFG/steps from the model's card,
+push, `dev mod update comfyui`. `ai gen models` shows it, `ai gen image ... --model <name>` uses it, and the CI checks
+its workflows. Record why in the entry's `source`.
+
+**4. A new architecture or a custom node** is code: a workflow builder in `gen.py` (copy one from the model's official
+ComfyUI template), its node pin in `nodes.txt` (`<git url> <commit>` - review the repo first, nodes run code), a job in
+`comfy_test.py`, then `ai gen schema` + `dev share outputs/comfy/schema.json` so CI checks it. This reopens the frozen
+module - only for a real need (see below).
+
 ## Image module 1.0 (frozen 1 Nov 2026) - tested on the RTX 4080 Laptop (12 GB)
 | Job | Time | Peak GPU |
 |---|---|---|

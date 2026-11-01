@@ -16,12 +16,16 @@ at_commit() {
   git -C "$3" fetch -q --depth 1 origin "$2" && git -C "$3" checkout -q --force "$2" \
     && git -C "$3" submodule -q update --init --depth 1 --recursive
 }
+say() { printf '  [%s] %s\n' "$(date +%H:%M:%S)" "$*"; }
+say "ComfyUI at the pinned commit ${COMFY_REF:0:10}"
 at_commit "$COMFY_REPO" "$COMFY_REF" "$C"
 cd "$C"
 [ -d .venv ] || uv venv -q --python 3.12 .venv
 LOCK=$A/constraints.txt; [ "${COMFY_UPGRADE:-0}" = 1 ] && rm -f "$LOCK"
 pin=(); [ -f "$LOCK" ] && pin=(--constraint "$LOCK")
+say "Python packages: PyTorch (CUDA) - large the first time"
 uv pip install -q --python .venv "${pin[@]}" torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+say "Python packages: ComfyUI requirements"
 uv pip install -q --python .venv "${pin[@]}" -r requirements.txt huggingface_hub
 
 # custom nodes: "<git url> <commit>" per line; nodes no longer listed are moved to app/removed-nodes/
@@ -29,12 +33,13 @@ mkdir -p custom_nodes "$A/removed-nodes"; keep=()
 while read -r r ref _; do
   case "$r" in ''|'#'*) continue ;; esac
   [ -n "${ref:-}" ] || { echo "  CHECK $r has no pinned commit in nodes.txt"; exit 1; }
-  n=$(basename "$r" .git); keep+=("$n")
+  n=$(basename "$r" .git); keep+=("$n"); say "custom node $n (${ref:0:10})"
   at_commit "$r" "$ref" "custom_nodes/$n" || { echo "  CHECK could not get $n at $ref"; exit 1; }
   if [ -f "custom_nodes/$n/requirements.txt" ]; then uv pip install -q --python .venv "${pin[@]}" -r "custom_nodes/$n/requirements.txt"; fi
 done < "$MOD/nodes.txt"
 for d in custom_nodes/*/; do n=$(basename "$d"); [ -d "$d/.git" ] || continue
   [[ " ${keep[*]} " == *" $n "* ]] || { mv "$d" "$A/removed-nodes/$n-$(date +%s)"; echo "  node $n no longer listed - moved to app/removed-nodes/"; }; done
+say "InsightFace (for FaceID; built from source the first time, a few minutes)"
 # FaceID needs InsightFace (built here). Optional: everything else works without it.
 .venv/bin/python -c 'import insightface' 2>/dev/null || uv pip install -q --python .venv "${pin[@]}" insightface onnxruntime-gpu \
   || echo "  CHECK InsightFace did not install - IPAdapter FaceID will not work (plain IPAdapter face does)"
@@ -47,7 +52,9 @@ roots() {   # model folders, same layout under the read-only Windows folder and 
     '  ultralytics_bbox: ultralytics/bbox' '  ultralytics_segm: ultralytics/segm'; }
 { echo 'windows:'; echo "  base_path: ${MODELS_MOUNT:-/models}/comfy"; roots; echo 'module:'; echo "  base_path: $MOD/models"; roots; } > extra_model_paths.yaml
 
+say "model files (models.txt) - each download shows its progress"
 .venv/bin/python "$MOD/fetch_models.py" "$MOD/models.txt" "${MODELS_MOUNT:-/models}/comfy" "$MOD/models"
+say "helper models (pose detection, InsightFace faces)"
 # helper models the nodes would fetch on first use - fetched now, so everything works with the internet off
 .venv/bin/python "$MOD/fetch_models.py" "$MOD/helpers.txt" /nonexistent "$C"; rm -rf "$C/_dl"
 I=$C/models/insightface/models/buffalo_l

@@ -64,6 +64,7 @@ def main():
         name = parts[3] if len(parts) > 3 else os.path.basename(want)
         have = [os.path.join(root, folder, name) for root in (ro, own) if os.path.exists(os.path.join(root, folder, name))]
         if have:
+            print(f"  {folder}/{name}: present", flush=True)
             failed += 0 if check_hash(os.path.abspath(have[0]), own) else 1
             continue
         try:

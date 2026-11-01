@@ -1,7 +1,7 @@
 # Modules
 
 Everything the workstation can do beyond its core is a **module**: one folder here, installed and removed with
-`dev mod add <name>` / `dev mod remove <name>`. The core (`ai-sandbox/`) never names a module.
+`dev mod add <name>` / `dev mod remove <name>`. The core only names modules as defaults (`$DefaultModules`) and in shortcuts such as `dev chat` / `dev comfy`. Try a local module first with `ai mod add --from <folder>`.
 Modules are installed from this git repository (settings `MODULES_REPO`, `MODULES_PATH`, `MODULES_BRANCH`
 in `ai-sandbox/config/sandbox.env`).
 

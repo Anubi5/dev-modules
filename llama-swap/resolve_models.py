@@ -47,7 +47,8 @@ def download(repo, filename, **kw):
 
 def find_repo(spec):
     """!
-    @brief Returns the repository for a chat model: the pinned 'repo' if it exists, else the most-downloaded search match.
+    @brief Returns the repository for a chat model: the pinned 'repo' (never replaced by a search if it is unavailable),
+           or - only when no repo is pinned - the most-downloaded search match.
     @param spec  One entry of models.json "chat".
     @return Repository id, or None if nothing matches.
     """
@@ -56,7 +57,8 @@ def find_repo(spec):
             api.model_info(spec["repo"])
             return spec["repo"]
         except Exception as e:
-            print(f"  pinned repo {spec['repo']} unavailable ({e}); searching instead")
+            print(f"  pinned repo {spec['repo']} unavailable ({e}) - not substituting another one")
+            return None
     if not spec.get("search"):
         return None
     for m in api.list_models(search=spec["search"], sort="downloads", limit=100):
@@ -101,7 +103,10 @@ def fetch(repo, filename, dest, seed=None, model_id=None):
         if os.path.exists(src) and os.path.getsize(src) > 0:
             print(f"  {filename}: copying from {seed}")
             os.makedirs(os.path.dirname(target), exist_ok=True)
-            shutil.copy2(src, target)
+            shutil.copy2(src, target + ".part")                       # complete copies only become the real file
+            if os.path.getsize(target + ".part") != os.path.getsize(src):
+                raise RuntimeError(f"copy of {filename} is incomplete")
+            os.replace(target + ".part", target)
             return target
     print(f"  {repo} :: {filename}")
     return download(repo, filename, local_dir=dest)
@@ -122,6 +127,11 @@ def chat_models(specs, out, seed=None):
     for spec in specs:
         try:
             print(f"\n[{spec['id']}]")
+            old = manifest.get(spec["id"], {})                          # offline repair: reuse what is recorded and present
+            have = [old.get("file")] + ([old.get("mmproj")] if spec.get("mmproj") else [])
+            if all(f and os.path.exists(f) and os.path.getsize(f) > 0 for f in have) \
+                    and (not spec.get("repo") or old.get("repo") == spec["repo"]):
+                print(f"  {os.path.basename(old['file'])}: already present ({old.get('repo')})"); continue
             repo = find_repo(spec)
             if not repo:
                 print("  no matching repo found"); failed += 1; continue

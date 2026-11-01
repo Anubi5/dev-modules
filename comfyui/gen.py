@@ -262,7 +262,7 @@ def cancel(pid, log):
     """
     q = api("/queue")
     if any(j[1] == pid for j in q.get("queue_running", [])):
-        api("/interrupt", {}); log("our job interrupted")
+        api("/interrupt", {"prompt_id": pid}); log("our job interrupted")   # ComfyUI stops it only if it is still ours
     elif any(j[1] == pid for j in q.get("queue_pending", [])):
         api("/queue", {"delete": [pid]}); log("our job removed from the queue")
 

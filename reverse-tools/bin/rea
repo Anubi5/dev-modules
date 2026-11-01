@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+## @brief The rea command: runs REA from the module folder with its own Java and Ghidra (nothing in ~/.bashrc).
+M=~/.local/share/modules/reverse-tools/app
+[ -x "$M/npm/node_modules/.bin/rea" ] || { echo "  REA is not installed yet - ask an agent (skill reverse-tools) to install it." >&2; exit 1; }
+export JAVA_HOME=$M/jdk-21 GHIDRA_INSTALL_DIR=$M/ghidra PATH=$M/jdk-21/bin:$PATH
+exec "$M/npm/node_modules/.bin/rea" "$@"

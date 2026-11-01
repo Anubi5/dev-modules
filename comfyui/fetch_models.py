@@ -116,7 +116,8 @@ def main():
         parts = line.split()
         repo, want, folder = parts[:3]
         sha = next((x[7:] for x in parts[3:] if x.startswith("sha256:")), None)
-        name = next((x for x in parts[3:] if not x.startswith("sha256:")), os.path.basename(want))
+        optional = "optional" in parts[3:]                # missing = that model is just not available, not an error
+        name = next((x for x in parts[3:] if not x.startswith("sha256:") and x != "optional"), os.path.basename(want))
         have = [os.path.join(root, folder, name) for root in (ro, own) if os.path.exists(os.path.join(root, folder, name))]
         if have:
             print(f"  {folder}/{name}: present", flush=True)
@@ -138,10 +139,16 @@ def main():
             path = hf_hub_download(repo, match, local_dir=os.path.join(own, "_dl"))
             os.makedirs(os.path.join(own, folder), exist_ok=True)
             os.replace(path, os.path.join(own, folder, name))
-            if not check_hash(os.path.abspath(os.path.join(own, folder, name)), own):
+            if not check_hash(os.path.abspath(os.path.join(own, folder, name)), own, sha):
                 failed += 1
         except Exception as e:
-            print(f"  {repo} {name}: {e}"); failed += 1
+            gated = "gated" in type(e).__name__.lower() or "401" in str(e) or "403" in str(e)
+            why = (f"needs a Hugging Face login: accept its licence on huggingface.co/{repo} and put the file into "
+                   f"D:\\AI\\models\\comfy\\{folder.replace('/', chr(92))}\\{name}") if gated else str(e)[:300]
+            if optional:
+                print(f"  (optional) {folder}/{name} not available - {why}")
+            else:
+                print(f"  CHECK {repo} {name}: {why}"); failed += 1
     return 1 if failed else 0
 
 

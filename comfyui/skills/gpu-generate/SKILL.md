@@ -1,6 +1,6 @@
 ---
 name: gpu-generate
-description: Generate an image (SDXL; optionally in a given pose, with a given face kept, faces/hands repaired, detailed upscale) or a short video (Wan 2.2) on the local GPU with "ai gen"; it frees the GPU from the chat model first and gives it back afterwards.
+description: Generate or edit an image (SDXL photoreal with pose/face/repair, FLUX 3, Z-Image, Anima for anime/illustration) or a short video (Wan 2.2) on the local GPU with "ai gen"; it frees the GPU from the chat model first and gives it back afterwards.
 ---
 
 # GPU generate
@@ -20,11 +20,17 @@ The user asks for a picture, illustration, concept art, texture, reference image
      - `--face <image>`: keep the face from a picture with ONE clear face. `--face-weight 0.3-1.2` (0.65; above ~0.8 faces get gaunt and distorted).
      - `--fix-faces` / `--fix-hands`: redraw faces / hands in more detail (use for people, especially full-body shots).
      - `--hires`: also save a detailed 2x copy (slow); `--upscale`: a fast 2x copy.
-     - `--model realvis|juggernaut|sdxl-base`: realvis (default) = photoreal, flattering portraits, best with `--face`;
-       juggernaut = natural documentary photos and scenes; sdxl-base = general/artistic. Each brings its own tuned settings.
+     - `--model <name>` (each brings its own tuned settings; `ai gen models` shows which are ready):
+       realvis (default) = photoreal portraits, the only family with `--face`/`--fix-*`/`--hires`; juggernaut = natural
+       documentary photos; sdxl-base = general/artistic; flux3 = follows long prompts, renders text, best composition
+       (prompt is expanded automatically; optional - may not be installed); zimage = fast photoreal (8 steps);
+       anima = anime/illustration (danbooru-style tags or plain text, `--pose` works); anima-turbo = fast anime drafts.
      - `--style art` for illustration, concept art, paintings, textures (the default `photo` style pushes away from art).
      - `--negative ""` means no negative prompt at all.
      Reference images must be inside `~/work` (usually `~/work/inputs/`) as .png/.jpg/.webp.
+   - edit: `ai gen edit "<what to change>" --image <file> [--image <extra reference>] --name <name>` (FLUX 3): change
+     an existing picture by instruction (recolour, replace, remove, restyle, put the person from image 1 into scene 2).
+     Describe the change; everything else stays. The output is a new file - the original is never touched.
    - video: `ai gen video "<prompt>" --name <name> [--frames 33]`  (33 frames ~ 1.4 s, ~2-6 min; 121 ~ 5 s)
 4. The lines after `OUTPUT` are the file paths (in `~/work/outputs/comfy/<date>/`); `record:` is a .json with every
    setting used. Report the files and the seed. With repair/upscale options, `<name>_base_*` is the untouched original -

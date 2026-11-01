@@ -3,32 +3,125 @@
     "Settings per image model, used by ai gen (--model <name>). Starting values come from each model's card;",
     "Phase 3 tunes them on the RTX 4080 Laptop. Add a model: put its file in models.txt (or D:\\AI\\models\\comfy\\...),",
     "add an entry here with its architecture and settings, push, dev mod update comfyui.",
-    "arch: sdxl = works with --pose/--face/--fix-*/--hires (SDXL ControlNet, IPAdapter FaceID, FaceDetailer)."
+    "arch: sdxl = works with --pose/--face/--fix-*/--hires (SDXL ControlNet, IPAdapter FaceID, FaceDetailer).",
+    "arch: flux3 / zimage / anima = newer models with their own workflows (flux3 also does ai gen edit)."
   ],
   "default": "realvis",
   "styles": {
-    "photo": {"negative": "cartoon, painting, illustration, 3d render, cgi, plastic skin, airbrushed, smooth skin, doll, oversaturated, bad hands, bad anatomy, deformed, face asymmetry, eyes asymmetry, deformed eyes, blurry, low quality, watermark, text"},
-    "art":   {"negative": "blurry, low quality, jpeg artifacts, watermark, signature, text, bad anatomy, deformed, extra fingers, extra limbs"}
+    "photo": {
+      "negative": "cartoon, painting, illustration, 3d render, cgi, plastic skin, airbrushed, smooth skin, doll, oversaturated, bad hands, bad anatomy, deformed, face asymmetry, eyes asymmetry, deformed eyes, blurry, low quality, watermark, text"
+    },
+    "art": {
+      "negative": "blurry, low quality, jpeg artifacts, watermark, signature, text, bad anatomy, deformed, extra fingers, extra limbs"
+    }
   },
   "models": {
     "realvis": {
-      "arch": "sdxl", "file": "RealVisXL_V5.0_fp16.safetensors",
-      "sampler": "dpmpp_sde", "scheduler": "karras", "cfg": 4.5, "steps": 30,
-      "about": "photoreal, flattering portraits; best with --face", "licence": "openrail++",
+      "arch": "sdxl",
+      "file": "RealVisXL_V5.0_fp16.safetensors",
+      "sampler": "dpmpp_sde",
+      "scheduler": "karras",
+      "cfg": 4.5,
+      "steps": 30,
+      "about": "photoreal, flattering portraits; best with --face",
+      "licence": "openrail++",
       "source": "huggingface.co/SG161222/RealVisXL_V5.0 (card: DPM++ SDE Karras, 30+ steps)"
     },
     "juggernaut": {
-      "arch": "sdxl", "file": "juggernautXL_ragnarok.safetensors",
-      "sampler": "dpmpp_2m_sde", "scheduler": "karras", "cfg": 4.0, "steps": 35,
-      "negative": {"photo": "blurry, low quality, watermark, text, deformed hands"},
-      "about": "photoreal, natural documentary look, strong scenes", "licence": "see civitai.com/models/133005",
+      "arch": "sdxl",
+      "file": "juggernautXL_ragnarok.safetensors",
+      "sampler": "dpmpp_2m_sde",
+      "scheduler": "karras",
+      "cfg": 4.0,
+      "steps": 35,
+      "negative": {
+        "photo": "blurry, low quality, watermark, text, deformed hands"
+      },
+      "about": "photoreal, natural documentary look, strong scenes",
+      "licence": "see civitai.com/models/133005",
       "source": "civitai.com/models/133005 (Ragnarok: DPM++ 2M SDE, 30-40 steps, CFG 3-6, start with little negative)"
     },
     "sdxl-base": {
-      "arch": "sdxl", "file": "sd_xl_base_1.0.safetensors",
-      "sampler": "dpmpp_2m", "scheduler": "karras", "cfg": 6.0, "steps": 30,
-      "about": "original SDXL: general and artistic, weakest at photos", "licence": "openrail++",
+      "arch": "sdxl",
+      "file": "sd_xl_base_1.0.safetensors",
+      "sampler": "dpmpp_2m",
+      "scheduler": "karras",
+      "cfg": 6.0,
+      "steps": 30,
+      "about": "original SDXL: general and artistic, weakest at photos",
+      "licence": "openrail++",
       "source": "huggingface.co/stabilityai/stable-diffusion-xl-base-1.0"
+    },
+    "flux3": {
+      "arch": "flux3",
+      "file": "flux3-image-klein-int8-convrot.safetensors",
+      "text_encoder": "qwen3vl_4b_int8_convrot.safetensors",
+      "vae": "flux2-vae.safetensors",
+      "sampler": "er_sde",
+      "edit_sampler": "euler",
+      "scheduler": "simple",
+      "cfg": 1.0,
+      "steps": 16,
+      "optional": true,
+      "about": "FLUX 3 Image Klein: prompt-faithful, text in images, edits (ai gen edit); caption expanded by the local model",
+      "licence": "FLUX Kommunity License (non-commercial; commercial-output exception for qualifying users)",
+      "source": "huggingface.co/black-forest-labs/flux-3-image-klein-comfy + Comfy template image_flux3_klein_distilled_* (16 steps, CFG 1)"
+    },
+    "zimage": {
+      "arch": "zimage",
+      "file": "z_image_turbo_int8_convrot.safetensors",
+      "text_encoder": "qwen_3_4b_fp8_mixed.safetensors",
+      "vae": "ae.safetensors",
+      "sampler": "res_multistep",
+      "scheduler": "simple",
+      "cfg": 1.0,
+      "steps": 8,
+      "shift": 3.0,
+      "about": "Z-Image Turbo: fast photoreal, 8 steps",
+      "licence": "Apache 2.0",
+      "source": "huggingface.co/Comfy-Org/Z-Image-Turbo + Comfy blueprint Text to Image (Z-Image-Turbo) (8 steps, CFG 1, res_multistep, shift 3)"
+    },
+    "anima": {
+      "arch": "anima",
+      "file": "anima-aesthetic-v1.1.safetensors",
+      "text_encoder": "qwen_3_06b_base.safetensors",
+      "vae": "qwen_image_vae.safetensors",
+      "pose_patch": "anima-lllite-pose-1.safetensors",
+      "pose_strength": 0.8,
+      "sampler": "er_sde",
+      "scheduler": "simple",
+      "cfg": 4.0,
+      "steps": 30,
+      "style": "art",
+      "negative": {
+        "art": "worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, sepia",
+        "photo": "worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, sepia"
+      },
+      "about": "Anima Aesthetic: anime / illustration (tags or plain text), --pose works",
+      "licence": "CircleStone Labs non-commercial (weights); outputs usable",
+      "source": "huggingface.co/circlestone-labs/Anima + Comfy template image_anima (30 steps, CFG 4, er_sde, simple)"
+    },
+    "anima-turbo": {
+      "arch": "anima",
+      "file": "anima-turbo-v1.1.safetensors",
+      "text_encoder": "qwen_3_06b_base.safetensors",
+      "vae": "qwen_image_vae.safetensors",
+      "pose_patch": "anima-lllite-pose-1.safetensors",
+      "pose_strength": 0.8,
+      "sampler": "er_sde",
+      "scheduler": "simple",
+      "cfg": 1.0,
+      "steps": 10,
+      "style": "art",
+      "negative": {
+        "art": "",
+        "photo": ""
+      },
+      "about": "Anima Turbo: fast drafts (8-12 steps, CFG 1)",
+      "licence": "CircleStone Labs non-commercial (weights); outputs usable",
+      "source": "huggingface.co/circlestone-labs/Anima (Turbo: CFG 1, 8-12 steps)"
     }
-  }
+  },
+  "edit_model": "flux3",
+  "expander": "qwen3.5-9b"
 }

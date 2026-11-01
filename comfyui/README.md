@@ -20,6 +20,18 @@ it unloads the chat model through the model-serving contract, runs one fixed wor
 - Your saved workflows and settings: `~/work/comfyui/` (kept on removal). Results: `~/work/outputs/comfy/<date>/`.
 - `test.sh --full` = SDXL image + upscale, a Wan video, and a pose + face + face/hand repair + tiled-upscale job, all through `ai gen`.
 
+## Image models (`profiles.json`, `ai gen models` shows which are ready)
+| `--model` | For | Notes |
+|---|---|---|
+| `realvis` (default) | photoreal people, portraits | SDXL: the only family with `--pose --face --fix-faces --fix-hands --hires` |
+| `juggernaut` | natural, documentary-looking photos | SDXL, same tools |
+| `sdxl-base` | general / artistic | SDXL, same tools |
+| `flux3` | long prompts, text in images, layout; `ai gen edit` | optional (gated download, see models.txt); caption expanded by the local chat model with BFL's instructions (`prompts/`) |
+| `zimage` | fast photoreal (8 steps) | Apache 2.0 |
+| `anima`, `anima-turbo` | anime / illustration | `--pose` via Anima LLLite; non-commercial weights |
+
+Settings come from each model's official template or card; tune them in `profiles.json`.
+
 ## From the command line (and for agents: skill `gpu-generate`)
 ```
 ai gen image "a knight in a cafe" --name knight --pose ~/work/inputs/pose.png --face ~/work/inputs/face.png \

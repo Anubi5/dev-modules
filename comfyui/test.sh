@@ -15,17 +15,19 @@ consistent-faces IPAdapterAdvanced
 face-repair FaceDetailer
 face/hand-detectors UltralyticsDetectorProvider
 tiled-upscale UltimateSDUpscale
+flux3-edit ReferenceMultiLatent
+anima-pose AnimaLLLiteApply
+zimage ModelSamplingAuraFlow
 LIST
 PY=$MOD/app/ComfyUI/.venv/bin/python
 "$PY" -c 'import insightface' 2>/dev/null || echo "  (FaceID unavailable: InsightFace not installed - plain IPAdapter face works)"
 while read -r repo want folder name; do
   case "$repo" in ''|\#*) continue ;; esac
+  case "${name:-}" in *optional*) continue ;; esac              # optional models: reported by "ai gen models" below
   case "${name:-}" in ''|sha256:*) name=$(basename "$want") ;; esac
   [ -e "${MODELS_MOUNT:-/models}/comfy/$folder/$name" ] || [ -e "$MOD/models/$folder/$name" ] || { echo "  missing $folder/$name"; miss=1; }
 done < "$MOD/models.txt"
-for f in $(jq -r '.models[].file' "$MOD/profiles.json"); do      # every model in profiles.json has its file
-  [ -e "${MODELS_MOUNT:-/models}/comfy/checkpoints/$f" ] || [ -e "$MOD/models/checkpoints/$f" ] || { echo "  CHECK profiles.json: $f missing"; miss=1; }
-done
+echo "  image models:"; python3 "$MOD/gen.py" models || miss=1     # every model in profiles.json: ready / optional / MISSING
 [ $miss = 0 ] || exit 1
 echo "  ComfyUI up, custom nodes loaded, all model files present"
 [ "${1:-}" = --full ] && { cd "$MOD" && exec python3 comfy_test.py; }

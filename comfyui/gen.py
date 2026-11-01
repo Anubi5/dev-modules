@@ -273,6 +273,138 @@ def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix, pose=Non
     return wf
 
 
+def _loaders(prof, clip_type):
+    """! @brief Model, text encoder and VAE loader nodes "1","2","3" for the newer (non-SDXL) architectures. """
+    return {"1": {"class_type": "UNETLoader", "inputs": {"unet_name": prof["file"], "weight_dtype": "default"}},
+            "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": prof["text_encoder"], "type": clip_type, "device": "default"}},
+            "3": {"class_type": "VAELoader", "inputs": {"vae_name": prof["vae"]}}}
+
+
+def _finish(wf, prof, seed, steps, model, pos, neg, latent, prefix, upscale):
+    """! @brief KSampler + decode + save (+ optional fast 2x copy) shared by the newer architectures. """
+    wf.update({
+        "8": {"class_type": "KSampler", "inputs": {"seed": seed, "steps": steps, "cfg": prof["cfg"], "sampler_name": prof["sampler"],
+              "scheduler": prof["scheduler"], "denoise": 1.0, "model": model, "positive": pos, "negative": neg, "latent_image": latent}},
+        "9": {"class_type": "VAEDecode", "inputs": {"samples": ["8", 0], "vae": ["3", 0]}},
+        "10": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix, "images": ["9", 0]}},
+    })
+    if upscale:
+        wf.update({
+            "11": {"class_type": "UpscaleModelLoader", "inputs": {"model_name": "4x-UltraSharp.safetensors"}},
+            "12": {"class_type": "ImageUpscaleWithModel", "inputs": {"upscale_model": ["11", 0], "image": ["9", 0]}},
+            "13": {"class_type": "ImageScaleBy", "inputs": {"image": ["12", 0], "upscale_method": "lanczos", "scale_by": 0.5}},
+            "14": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_upscaled", "images": ["13", 0]}},
+        })
+    return wf
+
+
+def flux3(prompt, seed, steps, width, height, prefix, prof, refs=(), upscale=False, megapixels=1.0):
+    """!
+    @brief FLUX 3 Image Klein (distilled) text-to-image, or editing when reference images are given (BFL/Comfy template:
+           CFG 1, references through ReferenceMultiLatent, the output takes the first reference's size).
+    @param prompt  The full (expanded) caption.  @param refs  Uploaded image names (first = <ref_image_0>).
+    @return Workflow in ComfyUI API format.
+    """
+    wf = _loaders(prof, "flux3")
+    wf.update({"4": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": prompt}},
+               "5": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["4", 0]}}})
+    if not refs:
+        wf["6"] = {"class_type": "EmptyFlux2LatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}}
+        return _finish(wf, prof, seed, steps, ["1", 0], ["4", 0], ["5", 0], ["6", 0], prefix, upscale)
+    rml = {"positive": ["4", 0], "negative": ["5", 0], "vae": ["3", 0], "resolution": "resize", "resolution.megapixels": megapixels}
+    for i, name in enumerate(refs):
+        wf[f"2{i}0"] = {"class_type": "LoadImage", "inputs": {"image": name}}
+        rml[f"images.image{i}"] = [f"2{i}0", 0]
+    wf["7"] = {"class_type": "ReferenceMultiLatent", "inputs": rml}
+    edit = dict(prof, sampler=prof.get("edit_sampler", prof["sampler"]))
+    return _finish(wf, edit, seed, steps, ["1", 0], ["7", 0], ["7", 1], ["7", 2], prefix, upscale)
+
+
+def anima(prompt, negative, seed, steps, width, height, prefix, prof, pose=None, pose_strength=0.8, upscale=False):
+    """!
+    @brief Anima text-to-image (illustration/anime), optionally steered by a pose (DWPose skeleton -> LLLite pose patch).
+    @return Workflow in ComfyUI API format.
+    """
+    wf = _loaders(prof, "stable_diffusion")
+    wf.update({"4": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": prompt}},
+               "5": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": negative}},
+               "6": {"class_type": "EmptyLatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}}})
+    model = ["1", 0]
+    if pose:
+        wf.update({
+            "30": {"class_type": "LoadImage", "inputs": {"image": pose}},
+            "31": {"class_type": "DWPreprocessor", "inputs": {"image": ["30", 0], "detect_hand": "enable", "detect_body": "enable",
+                   "detect_face": "enable", "resolution": 1024, "bbox_detector": "yolox_l.onnx",
+                   "pose_estimator": "dw-ll_ucoco_384.onnx", "scale_stick_for_xinsr_cn": "disable"}},
+            "32": {"class_type": "ModelPatchLoader", "inputs": {"name": prof["pose_patch"]}},
+            "33": {"class_type": "AnimaLLLiteApply", "inputs": {"model": model, "model_patch": ["32", 0], "image": ["31", 0],
+                   "strength": pose_strength, "start_percent": 0.0, "end_percent": 1.0}},
+            "35": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_pose", "images": ["31", 0]}},
+        })
+        model = ["33", 0]
+    return _finish(wf, prof, seed, steps, model, ["4", 0], ["5", 0], ["6", 0], prefix, upscale)
+
+
+def zimage(prompt, seed, steps, width, height, prefix, prof, upscale=False):
+    """!
+    @brief Z-Image Turbo text-to-image (8 steps, CFG 1, AuraFlow sampling shift 3 - official template).
+    @return Workflow in ComfyUI API format.
+    """
+    wf = _loaders(prof, "lumina2")
+    wf.update({"4": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": prompt}},
+               "5": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["4", 0]}},
+               "6": {"class_type": "EmptySD3LatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
+               "7": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["1", 0], "shift": prof.get("shift", 3.0)}}})
+    return _finish(wf, prof, seed, steps, ["7", 0], ["4", 0], ["5", 0], ["6", 0], prefix, upscale)
+
+
+def expand_prompt(request, kind, width=1024, height=1024, images=(), log=print):
+    """!
+    @brief FLUX 3 needs a full scene caption: the local chat model (model-serving contract, OpenAI API) expands the
+           request with BFL's own upsampler instructions (prompts/flux3_*.txt) before the GPU is handed to ComfyUI.
+    @param request  What the user asked.  @param kind  "t2i" or "edit".  @param images  Reference image paths (edit).
+    @return The caption, or the request unchanged (with a warning) when the chat model is not available.
+    """
+    import base64
+    sysmsg = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts", f"flux3_{kind}.txt")).read()
+    g = __import__("math").gcd(width, height)
+    text = (f"TARGET CANVAS: {width // g}:{height // g}\n" if kind == "t2i" else "") + request
+    content = [{"type": "text", "text": text}] + [
+        {"type": "image_url", "image_url": {"url": f"data:{IMAGE_TYPES[os.path.splitext(p)[1].lower()]};base64,"
+                                                   + base64.b64encode(open(p, "rb").read()).decode()}} for p in images]
+    body = {"model": PROFILES.get("expander", "qwen3.5-9b"), "temperature": 0.7, "max_tokens": 1200,
+            "chat_template_kwargs": {"enable_thinking": False},
+            "messages": [{"role": "system", "content": sysmsg}, {"role": "user", "content": content}]}
+    try:
+        log("expanding the request into a full caption (local chat model)")
+        out = api("/v1/chat/completions", body, timeout=300, base=LLM)["choices"][0]["message"]["content"]
+        out = re.sub(r"(?s)<think>.*?</think>", "", out).strip().strip('"')
+        if len(out) < 20:
+            raise ValueError("empty answer")
+        return out
+    except Exception as e:
+        log(f"CHECK prompt expansion failed ({str(e)[:120]}) - using the request as typed (results will be plainer)")
+        return request
+
+
+def models_report():
+    """! @brief Lists every image model in profiles.json and whether all its files are present. @return 0 if no required one is missing """
+    roots = [os.path.join(env("MODELS_MOUNT", "/models"), "comfy"), os.path.expanduser("~/.local/share/modules/comfyui/models")]
+    rc = 0
+    for name, p in PROFILES["models"].items():
+        need = {"sdxl": [("checkpoints", p["file"])]}.get(p["arch"], [("diffusion_models", p["file"]),
+               ("text_encoders", p.get("text_encoder")), ("vae", p.get("vae"))]) + \
+            ([("model_patches", p["pose_patch"])] if p.get("pose_patch") else [])
+        missing = [f"{d}/{f}" for d, f in need if f and not any(os.path.exists(os.path.join(r, d, f)) for r in roots)]
+        state = "ready" if not missing else ("not installed (optional)" if p.get("optional") else "MISSING")
+        print(f"  {name:12} {p['arch']:6} {state:26} {p.get('about', '')}")
+        for m in missing:
+            print(f"               missing {m}")
+        if missing and not p.get("optional"):
+            rc = 1
+    return rc
+
+
 def wan(prompt, negative, seed, steps, frames, prefix):
     """!
     @brief Wan 2.2 5B (GGUF Q8) text-to-video workflow, 640x352 at 24 fps, saved as animated WebP.
@@ -487,6 +619,27 @@ def generate(wf, timeout, wait=600, log=print, uploads=None):
             release(log, JOB.pop("pid", None))
 
 
+def all_workflows():
+    """! @brief One workflow per model and option combination (for the schema dump and check_workflows.py). """
+    import itertools
+    for name in PROFILES["models"]:
+        p = profile(name)
+        if p["arch"] == "sdxl":
+            for pose, face, ff, fh, hires, up in itertools.product([None, "p"], [None, "f"], *[[False, True]] * 4):
+                yield sdxl("x", "y", 1, p["steps"], 1024, 1024, up, "t", pose=pose, face=face, fix_faces=ff,
+                           fix_hands=fh, hires=hires, prof=p)
+        elif p["arch"] == "anima":
+            for pose, up in itertools.product([None, "p"], [False, True]):
+                yield anima("x", "y", 1, p["steps"], 1024, 1024, "t", p, pose=pose, upscale=up)
+        elif p["arch"] == "zimage":
+            for up in (False, True):
+                yield zimage("x", 1, p["steps"], 1024, 1024, "t", p, upscale=up)
+        elif p["arch"] == "flux3":
+            for refs, up in itertools.product([(), ("a",), ("a", "b")], [False, True]):
+                yield flux3("x", 1, p["steps"], 1024, 1024, "t", p, refs=refs, upscale=up)
+    yield wan("x", "y", 1, 20, 33, "t")
+
+
 def dump_schema(path):
     """!
     @brief Saves the input definitions of the nodes ai gen uses, read from the running ComfyUI (/object_info), so the
@@ -499,8 +652,7 @@ def dump_schema(path):
             if comfy_up(): break
             time.sleep(2)
     info = api("/object_info", timeout=120)
-    used = {n["class_type"] for wf in (sdxl("x", "y", 1, 1, 1024, 1024, True, "p", pose="a", face="b", fix_faces=True,
-                                             fix_hands=True, hires=True), wan("x", "y", 1, 1, 5, "p")) for n in wf.values()}
+    used = {n["class_type"] for wf in all_workflows() for n in wf.values()}
     out = {}
     for c in sorted(used):
         if c not in info:
@@ -509,8 +661,10 @@ def dump_schema(path):
         for part in ("required", "optional"):
             for k, v in info[c]["input"].get(part, {}).items():
                 t = v[0] if isinstance(v, list) and v else v
-                opts = t if isinstance(t, list) else (v[1].get("options") if t == "COMBO" and len(v) > 1
-                                                      and isinstance(v[1], dict) else None)   # old and new combo formats
+                opts = t if isinstance(t, list) else (v[1].get("options") if t in ("COMBO", "COMFY_DYNAMICCOMBO_V3")
+                                                      and len(v) > 1 and isinstance(v[1], dict) else None)  # combo formats
+                if opts and isinstance(opts[0], dict):           # dynamic combo: the option keys
+                    opts = [o.get("key") for o in opts]
                 files = opts and any(str(x).lower().endswith((".safetensors", ".pt", ".pth", ".bin", ".gguf", ".onnx",
                                                               ".png", ".jpg", ".jpeg", ".webp")) for x in opts)
                 spec[k] = {"part": part, "type": "COMBO" if opts is not None else str(t),
@@ -552,11 +706,16 @@ def main():
     ap = argparse.ArgumentParser(description="Generate an image or video on the GPU (hands the GPU over from the chat model).")
     if sys.argv[1:2] == ["schema"]:              # ai gen schema: node definitions for the offline workflow check
         return dump_schema(os.path.join(OUTPUT, "schema.json"))
-    ap.add_argument("kind", choices=["image", "video"])
-    ap.add_argument("prompt")
+    if sys.argv[1:2] == ["models"]:              # ai gen models: which image models are ready
+        return models_report()
+    ap.add_argument("kind", choices=["image", "video", "edit"], help="edit = change an image by instruction (FLUX 3)")
+    ap.add_argument("prompt", help="what to make; for edit: what to change")
+    ap.add_argument("--image", metavar="IMAGE", action="append", default=[],
+                    help="edit: the image to change (in ~/work); repeat for extra references (up to 4)")
+    ap.add_argument("--no-expand", action="store_true", help="FLUX 3: use the prompt as typed (no caption expansion)")
     ap.add_argument("--name", default="", help="short name for the output files (default: from the prompt)")
     ap.add_argument("--model", metavar="NAME", help=f"image model: {', '.join(PROFILES['models'])} (default {PROFILES['default']})")
-    ap.add_argument("--style", choices=list(PROFILES["styles"]), default="photo", help="image: photo (default) or art")
+    ap.add_argument("--style", choices=list(PROFILES["styles"]), default=None, help="image: photo or art (default: per model)")
     ap.add_argument("--negative", default=None, help='what to avoid (default: per model and style; "" = nothing)')
     ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--steps", type=int, default=None)
@@ -564,7 +723,7 @@ def main():
     ap.add_argument("--upscale", action="store_true", help="image: also save a fast 2x copy (4x-UltraSharp)")
     ap.add_argument("--hires", action="store_true", help="image: also save a detailed 2x copy (tiles redrawn, slower)")
     ap.add_argument("--pose", metavar="IMAGE", help="image: copy the body pose from this picture (in ~/work)")
-    ap.add_argument("--pose-strength", type=float, default=0.65, help="how strictly to follow the pose, 0.3-1.0")
+    ap.add_argument("--pose-strength", type=float, default=None, help="how strictly to follow the pose, 0.3-1.0 (default per model)")
     ap.add_argument("--face", metavar="IMAGE", help="image: keep this face (in ~/work; one clear face)")
     ap.add_argument("--face-weight", type=float, default=0.65, help="how strongly to keep the face, 0.3-1.2 (high values distort it)")
     ap.add_argument("--checkpoint", metavar="NAME", help="image: any SDXL checkpoint file by (part of) its name")
@@ -585,37 +744,69 @@ def main():
         sys.exit(f"less than {MIN_FREE >> 30} GB free in {OUTPUT}")
     seed = a.seed if a.seed is not None else random.randint(1, 2**31)
     prefix = f"{datetime.date.today():%Y-%m-%d}/{slug(a.name or ' '.join(a.prompt.split()[:6]))}"
-    if a.kind == "image":
+    if a.kind in ("image", "edit"):
         m = re.fullmatch(r"(\d{3,4})x(\d{3,4})", a.size)
         if not m:
             sys.exit("--size must look like 1024x1024")
         w, h = (int(v) // 64 * 64 for v in m.groups())
         if not (512 <= w <= MAX_SIDE and 512 <= h <= MAX_SIDE):
             sys.exit(f"--size: each side must be 512-{MAX_SIDE}")
-        if not (0.3 <= a.pose_strength <= 1.0 and 0.3 <= a.face_weight <= 1.2):
-            sys.exit("--pose-strength must be 0.3-1.0 and --face-weight 0.3-1.2")
-        uploads = [(n, check_input(f)) for n, f in (("30", a.pose), ("21", a.face)) if f]
         if a.model and a.checkpoint:
             sys.exit("use --model or --checkpoint, not both")
+        if a.kind == "edit":
+            if not a.image or len(a.image) > 4:
+                sys.exit("edit needs --image <file> (up to 4 with extra references)")
+            a.model = a.model or PROFILES.get("edit_model", "flux3")
         prof = find_checkpoint(a.checkpoint) if a.checkpoint else profile(a.model)
-        if prof["arch"] != "sdxl":
-            sys.exit(f"--model {prof['name']}: {prof['arch']} models are not wired into ai gen yet")
-        neg = a.negative if a.negative is not None else negative_for(prof, a.style)
+        arch, style = prof["arch"], a.style or prof.get("style", "photo")
+        allowed = {"sdxl": {"pose", "face", "fix_faces", "fix_hands", "hires"}, "anima": {"pose"}}.get(arch, set())
+        used = [o for o in ("pose", "face", "fix_faces", "fix_hands", "hires") if getattr(a, o)]
+        if [o for o in used if o not in allowed]:
+            sys.exit(f"--model {prof['name']} ({arch}) does not support --{', --'.join(o.replace('_', '-') for o in used if o not in allowed)}"
+                     " - those work with the SDXL models (realvis, juggernaut, sdxl-base)" + (" and --pose with anima" if arch != "anima" else ""))
+        if a.kind == "edit" and arch != "flux3":
+            sys.exit("edit needs a FLUX 3 model (--model flux3)")
+        if a.image and a.kind != "edit":
+            sys.exit("--image is for edit")
+        pose_strength = a.pose_strength if a.pose_strength is not None else prof.get("pose_strength", 0.65)
+        if not (0.3 <= pose_strength <= 1.0 and 0.3 <= a.face_weight <= 1.2):
+            sys.exit("--pose-strength must be 0.3-1.0 and --face-weight 0.3-1.2")
+        neg = a.negative if a.negative is not None else negative_for(prof, style)
         steps = a.steps or prof["steps"]
-        wf = sdxl(a.prompt, neg, seed, steps, w, h, a.upscale, prefix, pose="pending" if a.pose else None,
-                  face="pending" if a.face else None, fix_faces=a.fix_faces, fix_hands=a.fix_hands, hires=a.hires,
-                  pose_strength=a.pose_strength, face_weight=a.face_weight, prof=prof)
-        info = {"kind": "image", "prompt": a.prompt, "negative": neg, "seed": seed, "model": prof["name"],
+        log0 = lambda t: print(f"  {t}", flush=True)
+        prompt = a.prompt
+        if arch == "sdxl":
+            uploads = [(n, check_input(f)) for n, f in (("30", a.pose), ("21", a.face)) if f]
+            wf = sdxl(prompt, neg, seed, steps, w, h, a.upscale, prefix, pose="pending" if a.pose else None,
+                      face="pending" if a.face else None, fix_faces=a.fix_faces, fix_hands=a.fix_hands, hires=a.hires,
+                      pose_strength=pose_strength, face_weight=a.face_weight, prof=prof)
+        elif arch == "anima":
+            uploads = [("30", check_input(a.pose))] if a.pose else []
+            wf = anima(prompt, neg, seed, steps, w, h, prefix, prof, pose="pending" if a.pose else None,
+                       pose_strength=pose_strength, upscale=a.upscale)
+        elif arch == "zimage":
+            uploads, neg = [], ""                           # CFG 1: no negative prompt
+            wf = zimage(prompt, seed, steps, w, h, prefix, prof, upscale=a.upscale)
+        elif arch == "flux3":
+            refs = [check_input(f) for f in a.image]
+            if not a.no_expand:
+                prompt = expand_prompt(a.prompt, "edit" if refs else "t2i", w, h, refs, log=log0)
+            uploads, neg = [(f"2{i}0", f) for i, f in enumerate(refs)], ""
+            wf = flux3(prompt, seed, steps, w, h, prefix, prof, refs=["pending"] * len(refs), upscale=a.upscale)
+        else:
+            sys.exit(f"--model {prof['name']}: architecture {arch} is not wired into ai gen")
+        info = {"kind": a.kind, "prompt": a.prompt, "expanded_prompt": prompt if prompt != a.prompt else None,
+                "negative": neg, "seed": seed, "model": prof["name"], "arch": arch,
                 "model_file": prof["file"], "sampler": prof["sampler"], "scheduler": prof["scheduler"], "cfg": prof["cfg"],
-                "steps": steps, "size": f"{w}x{h}", "style": a.style,
+                "steps": steps, "size": f"{w}x{h}", "style": style,
                 "options": {k: getattr(a, k) for k in ("upscale", "hires", "fix_faces", "fix_hands")},
-                "pose": a.pose and {"file": a.pose, "strength": a.pose_strength},
-                "face": a.face and {"file": a.face, "weight": a.face_weight}}
-        limit = a.timeout or (1800 if a.hires or a.fix_hands or a.fix_faces else 900)
+                "pose": a.pose and {"file": a.pose, "strength": pose_strength},
+                "face": a.face and {"file": a.face, "weight": a.face_weight}, "images": a.image or None}
+        limit = a.timeout or (1800 if a.hires or a.fix_hands or a.fix_faces or arch == "flux3" else 900)
     else:
         frames = max(5, (a.frames - 1) // 4 * 4 + 1)
-        if a.pose or a.face or a.fix_faces or a.fix_hands or a.hires or a.checkpoint or a.model:
-            sys.exit("--pose/--face/--fix-faces/--fix-hands/--hires/--checkpoint/--model are for images")
+        if a.pose or a.face or a.fix_faces or a.fix_hands or a.hires or a.checkpoint or a.model or a.image:
+            sys.exit("--pose/--face/--fix-faces/--fix-hands/--hires/--checkpoint/--model/--image are for images")
         uploads = []
         neg = a.negative if a.negative is not None else "static, blurry, distorted, low quality, watermark"
         wf, limit = wan(a.prompt, neg, seed, a.steps or 20, frames, prefix), a.timeout or 3600

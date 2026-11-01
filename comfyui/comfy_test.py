@@ -8,6 +8,7 @@ Uses the same fixed workflows, lock, unload/free and output folder as "ai gen", 
 Outputs go to COMFY_OUTPUT/<date>/selftest-*. Exit code 0 only if every job produced its files there.
 """
 import datetime
+import os
 import sys
 
 import gen
@@ -45,6 +46,38 @@ def main():
         print(f"  pose + face + face/hand repair + tiled upscale: {'OK' if ok else 'FAILED'}  {', '.join(files) or '-'}"
               f"{'  error: ' + err if err else ''}")
         results.append(ok and len(files) == 4)          # pose skeleton, base image, repaired image, detailed 2x copy
+    # newer models: one real job each (FLUX 3 only when its files are there - it is optional)
+    def ready(name):
+        p = gen.profile(name)
+        roots = [os.path.join(gen.env("MODELS_MOUNT", "/models"), "comfy"), os.path.expanduser("~/.local/share/modules/comfyui/models")]
+        files = [("diffusion_models", p["file"]), ("text_encoders", p["text_encoder"]), ("vae", p["vae"])]
+        return all(any(os.path.exists(os.path.join(r, d, f)) for r in roots) for d, f in files)
+    newer = [("Z-Image Turbo", "zimage", lambda p: gen.zimage("RAW photo of an old fisherman mending a net on a pier, overcast, 35mm",
+                                                              5, p["steps"], 1024, 1024, f"{day}/selftest-zimage", p)),
+             ("Anima (+ pose from the portrait)", "anima",
+              lambda p: gen.anima("1girl, solo, standing, red coat, autumn park, detailed illustration", p["negative"]["art"], 6,
+                                  p["steps"], 896, 1152, f"{day}/selftest-anima", p, pose="pending" if portrait else None))]
+    if ready("flux3"):
+        newer.append(("FLUX 3 Klein (caption expanded by the local model)", "flux3",
+                      lambda p: gen.flux3(gen.expand_prompt("a cozy bookshop window at dusk with a sign reading \"OPEN\"", "t2i",
+                                                            log=log), 7, p["steps"], 1024, 1024, f"{day}/selftest-flux3", p)))
+    else:
+        print("  FLUX 3 Klein: not installed (optional) - skipped")
+    for label, name, build in newer:
+        if name != "flux3" and not ready(name):
+            print(f"  {label}: FAILED  model files missing"); results.append(False); continue
+        p = gen.profile(name)
+        ups = [("30", portrait)] if name == "anima" and portrait else []
+        ok, files, err = gen.generate(build(p), 1200, log=log, uploads=ups)
+        print(f"  {label}: {'OK' if ok else 'FAILED'}  {', '.join(files) or '-'}{'  error: ' + err if err else ''}")
+        results.append(ok)
+    if ready("flux3") and portrait:
+        p = gen.profile("flux3")
+        cap = gen.expand_prompt("put this woman in a yellow raincoat on a rainy city street, keep her face", "edit", images=[portrait], log=log)
+        ok, files, err = gen.generate(gen.flux3(cap, 8, p["steps"], 1024, 1024, f"{day}/selftest-flux3-edit", p, refs=["pending"]),
+                                      1200, log=log, uploads=[("200", portrait)])
+        print(f"  FLUX 3 edit (reference image): {'OK' if ok else 'FAILED'}  {', '.join(files) or '-'}{'  error: ' + err if err else ''}")
+        results.append(ok)
     return 0 if all(results) else 1
 
 

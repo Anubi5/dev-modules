@@ -19,3 +19,21 @@ h94/IP-Adapter-FaceID ip-adapter-faceid-plusv2_sdxl_lora.safetensors loras
 # Face / hand repair (FaceDetailer): detectors
 Bingsu/adetailer face_yolov8m.pt ultralytics/bbox
 Bingsu/adetailer hand_yolov8s.pt ultralytics/bbox
+# --- FLUX 3 Image Klein (distilled, INT8) - general images + ai edit. Gated on Hugging Face (FLUX Kommunity License,
+#     non-commercial): accept it at huggingface.co/black-forest-labs/flux-3-image-klein-comfy and put the 3 files into
+#     D:\AI\models\comfy\{diffusion_models,text_encoders,vae}; they are checked against these checksums.
+black-forest-labs/flux-3-image-klein-comfy diffusion_models/flux3-image-klein-int8-convrot.safetensors diffusion_models sha256:847d8933548afd93df4af2cac2498e70891bf28d9dae06d695f536992e168fe2 optional
+black-forest-labs/flux-3-image-klein-comfy text_encoders/qwen3vl_4b_int8_convrot.safetensors text_encoders sha256:32de113cbf8282b02cbff0794b637b9d6676da09314a1db5a30bcea9bf4ee01c optional
+black-forest-labs/flux-3-image-klein-comfy vae/flux2-vae.safetensors vae sha256:868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3 optional
+# --- Anima (CircleStone Labs, non-commercial licence for the weights; images may be used commercially) - illustration/anime
+circlestone-labs/Anima split_files/diffusion_models/anima-aesthetic-v1.1.safetensors diffusion_models sha256:3c1868387a3a1ff504bbb87c33678321965ead381fcf87afbd0264daa600c082
+circlestone-labs/Anima split_files/diffusion_models/anima-turbo-v1.1.safetensors diffusion_models sha256:fba11953276b57edf59d1dc4f1857ac05aa079c56f982b4d7c20298d57d3f7eb
+circlestone-labs/Anima split_files/text_encoders/qwen_3_06b_base.safetensors text_encoders sha256:cd2a512003e2f9f3cd3c32a9c3573f820bb28c940f73c57b1ddaa983d9223eba
+circlestone-labs/Anima split_files/vae/qwen_image_vae.safetensors vae sha256:a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f
+Comfy-Org/Anima-LLLite model_patches/anima-lllite-pose-1.safetensors model_patches sha256:ddb543be5e74ce8ca79ae45807aa0c1328a4888e00706727c6fd7100dde7c864
+Comfy-Org/Anima-LLLite model_patches/anima-lllite-depth-1.safetensors model_patches sha256:81357e51cd59874b4fbdda1eb3117aa73eafe36cc7efb9cf80a152d6bc8d0602
+Comfy-Org/Anima-LLLite model_patches/anima-lllite-lineart-1.safetensors model_patches sha256:1abfde93493445390632788339627c37c69c7792aef1e8104cf15ea5f2d379e9
+# --- Z-Image Turbo (Tongyi-MAI, Apache 2.0) - fast photoreal, 8 steps; INT8 model + FP8 text encoder fit 12 GB
+Comfy-Org/Z-Image-Turbo split_files/diffusion_models/z_image_turbo_int8_convrot.safetensors diffusion_models sha256:be517ebd47c912a5626a588e1aeea43e6be4a43c0cdcd2b48a2a780d9f358635
+Comfy-Org/Z-Image-Turbo split_files/text_encoders/qwen_3_4b_fp8_mixed.safetensors text_encoders sha256:72450b19758172c5a7273cf7de729d1c17e7f434a104a00167624cba94f68f15
+Comfy-Org/Z-Image-Turbo split_files/vae/ae.safetensors vae sha256:afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38

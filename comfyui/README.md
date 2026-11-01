@@ -32,6 +32,36 @@ it unloads the chat model through the model-serving contract, runs one fixed wor
 
 Settings come from each model's official template or card; tune them in `profiles.json`.
 
+## Recipe: one character in several poses (tested 1 Nov 2026)
+Best current route: SDXL (`realvis`) with `--face` + `--pose` + `--fix-faces --fix-hands` + `--hires`, about 3 min per image.
+1. **Character reference**: one clear, front-facing head-and-shoulders portrait of the character (`--model realvis`).
+2. **Pose sources**: any person in each pose, e.g. Z-Image (fast). Only the skeleton is used, never the look.
+3. **Final images**: the *same* character description (exact clothes, hair, eyes), the same `--seed`, plus
+   `--face <reference> --pose <source> --fix-faces --fix-hands --hires`.
+```powershell
+$o = "/home/dev/work/outputs/comfy/$(Get-Date -f yyyy-MM-dd)"
+$char = "RAW photo of a woman in her early 30s, shoulder-length wavy auburn hair, green eyes, light freckles, fitted olive-green bomber jacket over a white t-shirt, dark blue jeans, white sneakers, natural skin texture, 50mm, soft daylight"
+dev ai gen image "$char, head and shoulders portrait, facing the camera, plain light grey background" --model realvis --size 896x1152 --seed 100 --name charref
+$poses = "standing with hands on hips", "walking towards the camera", "jumping with both arms raised"
+$i = 1; foreach ($p in $poses) {
+  dev ai gen image "wide full body photo of a person $p, entire body from head to feet in frame, space around the figure, plain studio background" --model zimage --size 896x1152 --seed 200 --name "posesrc$i"
+  dev ai gen image "$char, full body, head to feet in frame, $p, city park background" --model realvis --face "$o/charref_00001_.png" --pose "$o/posesrc${i}_00001_.png" --fix-faces --fix-hands --hires --seed 300 --size 896x1152 --name "char-pose$i"
+  $i++ }
+dev share
+```
+What we learned:
+- **The skeleton decides the framing.** If the pose source has no head (or feet) in frame, the result has none either.
+  Always ask for "entire body from head to feet in frame" and check `<name>_pose_*.png` first when a result looks wrong.
+- **Unusual poses** (sitting cross-legged, lying, crouching, upside-down) need `--pose-strength 0.8-0.9`; at the default
+  0.65 SDXL produced a broken, upside-down figure for "sitting cross-legged". A different `--seed` also helps.
+- **Clothes stay consistent only through the text**: FaceID keeps the face, the description keeps the outfit - repeat
+  it word for word. Same seed for all images keeps lighting and style close.
+- **Small faces** (full body at 896x1152) need `--fix-faces`; likeness weak -> `--face-weight 0.75` (above ~0.8 faces
+  get gaunt); pose too stiff -> `--pose-strength 0.55`.
+- Hands are much better with `--fix-hands` but not guaranteed in complex poses - keep the `_base_` original to compare.
+- Alternative for very consistent outfits: `ai gen edit "the same woman, same face, hair and outfit, now <pose>; change
+  the pose and background" --image <reference>` (FLUX 3 sees the whole reference; no face/hand repair).
+
 ## Adding a model, LoRA, checkpoint or node
 Pick the lightest step that does what you need.
 

@@ -49,4 +49,7 @@ The user asks for a picture, illustration, concept art, texture, reference image
 - `--face` only with faces of fictional characters or of people who agreed; never to put a real person into sexual or
   degrading images. If FaceID reports no face found, ask for a clearer front-facing face image.
 - With `--pose`, a `<name>_pose_*.png` (the detected skeleton) is saved too - check it when the pose looks wrong.
+- Same character in several poses: follow the recipe in the comfyui module README (reference portrait, pose sources
+  with "entire body from head to feet in frame", identical character text + same seed, `--pose-strength 0.8-0.9` for
+  sitting/lying/crouching poses).
 - Sizes are multiples of 64; 1024x1024, 1152x896 and 896x1152 work best for SDXL.

@@ -730,6 +730,25 @@ def write_record(files, info):
     return path
 
 
+HELP = """ai gen - images, edits and short videos on the local GPU (one job at a time; the chat model is unloaded meanwhile)
+
+  ai gen image "prompt" [--name N] [--model M] [--size WxH] [--seed S]   make an image (default model: zimage)
+      --style art          artwork/illustration instead of photo defaults      --negative "..."  what to avoid ("" = nothing)
+      --pose IMG           copy a body pose (SDXL models, anima)               --pose-strength 0.3-1.0
+      --face IMG           keep a face (SDXL models)                           --face-weight 0.3-1.2
+      --fix-faces --fix-hands  redraw faces/hands (SDXL)   --hires  detailed 2x copy (SDXL)   --upscale  fast 2x copy
+      --checkpoint NAME    any SDXL file in D:\\AI\\models\\comfy\\checkpoints
+  ai gen edit "what to change" --image IMG [--image REF]   change an image by instruction (FLUX 3)
+  ai gen video "prompt" [--frames 33]                      Wan 2.2 clip (33 frames ~ 1.4 s, up to 121)
+  ai gen models                                            which image models are ready
+  ai gen schema                                            save ComfyUI node definitions (for the CI check)
+
+  Reference images must be inside ~/work (e.g. ~/work/inputs). Results: ~/work/outputs/comfy/<date>/ (+ a .json record);
+  from Windows: dev share. All options: ai gen image --help
+
+Models (--model):"""
+
+
 def main():
     """!
     @brief Command-line entry point. @return 0 on success, 1 on failure.
@@ -739,6 +758,8 @@ def main():
         return dump_schema(os.path.join(OUTPUT, "schema.json"))
     if sys.argv[1:2] == ["models"]:              # ai gen models: which image models are ready
         return models_report()
+    if not sys.argv[1:] or sys.argv[1] in ("help", "-h", "--help") or sys.argv[2:3] == ["help"]:   # "image --help": all options
+        print(HELP); models_report(); return 0
     ap.add_argument("kind", choices=["image", "video", "edit"], help="edit = change an image by instruction (FLUX 3)")
     ap.add_argument("prompt", help="what to make; for edit: what to change")
     ap.add_argument("--image", metavar="IMAGE", action="append", default=[],

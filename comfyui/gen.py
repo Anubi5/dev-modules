@@ -5,14 +5,15 @@
 
 Steps: take the GPU lock (waits if another ai gen runs) -> make sure ComfyUI runs and wait while it runs someone
 else's job -> unload the chat models and confirm none is loaded (stops if one is) -> queue a fixed, reviewed
-workflow (only prompt, seed, size, length and name are filled in; sizes/steps/frames limited) -> wait with a timeout
+workflow (only prompt, seed, size, length, name, strengths and reference images are filled in; limits apply) -> wait with a timeout
 (cancels only this job) -> free ComfyUI's GPU memory unless another job is active -> release the lock.
 Known limit: a chat request made during a job reloads the chat model; finish or avoid chatting meanwhile. The chat model loads again by
 itself on the next request. Outputs land in COMFY_OUTPUT/<YYYY-MM-DD>/<name>_NNNNN.<ext>; the name is reduced to
 [a-z0-9-], so it can never point outside that folder.
 
 Usage:
-  gen.py image "prompt" [--name N] [--negative T] [--seed S] [--steps N] [--size WxH] [--upscale]
+  gen.py image "prompt" [--name N] [--negative T] [--seed S] [--steps N] [--size WxH] [--upscale] [--hires]
+               [--pose IMG [--pose-strength F]] [--face IMG [--face-weight F]] [--fix-faces] [--fix-hands]
   gen.py video "prompt" [--name N] [--negative T] [--seed S] [--steps N] [--frames N]
 Prints the output file paths (one per line, after "OUTPUT"); exit code 0 on success.
 """
@@ -79,6 +80,40 @@ def api(path, body=None, timeout=30, base=None):
         return {}
 
 
+IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+WORK = os.path.realpath(os.path.expanduser("~/work"))
+
+
+def check_input(path):
+    """!
+    @brief A reference image must be a picture inside ~/work (the agent workspace), at most 30 MB.
+    @param path  Path given on the command line.  @return The real path, or exits with a message.
+    """
+    real = os.path.realpath(os.path.expanduser(path))
+    if not (real.startswith(WORK + os.sep) and os.path.isfile(real)):
+        sys.exit(f"{path}: must be an existing file inside ~/work (put it in ~/work/inputs/)")
+    if os.path.splitext(real)[1].lower() not in IMAGE_TYPES or os.path.getsize(real) > 30 << 20:
+        sys.exit(f"{path}: must be a .png/.jpg/.webp image of at most 30 MB")
+    return real
+
+
+def upload(src):
+    """!
+    @brief Hands a reference image to ComfyUI as a temporary input (POST /upload/image, type temp; cleared on restart).
+    @param src  Checked file path.  @return The image name for LoadImage ("gen/<id>.png [temp]").
+    """
+    ext = os.path.splitext(src)[1].lower()
+    name, bnd = f"{uuid.uuid4().hex}{ext}", uuid.uuid4().hex
+    parts = [f'--{bnd}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode()
+             for k, v in (("type", "temp"), ("subfolder", "gen"), ("overwrite", "true"))]
+    parts.append(f'--{bnd}\r\nContent-Disposition: form-data; name="image"; filename="{name}"\r\n'
+                 f'Content-Type: {IMAGE_TYPES[ext]}\r\n\r\n'.encode() + open(src, "rb").read() + b"\r\n")
+    req = urllib.request.Request(URL + "/upload/image", b"".join(parts) + f"--{bnd}--\r\n".encode(),
+                                 {"Content-Type": f"multipart/form-data; boundary={bnd}"})
+    r = json.loads(urllib.request.urlopen(req, timeout=60).read())
+    return f"{r.get('subfolder') + '/' if r.get('subfolder') else ''}{r['name']} [temp]"
+
+
 def slug(name):
     """!
     @brief Makes a safe file name part: lower case, [a-z0-9-] only, at most 40 characters.
@@ -88,12 +123,33 @@ def slug(name):
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:40] or "untitled"
 
 
-def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix):
+POSE_CN = "controlnet-union-sdxl-promax.safetensors"
+FACE_DET, HAND_DET = "bbox/face_yolov8m.pt", "bbox/hand_yolov8s.pt"
+
+
+def detailer(image, model, pos, neg, detector, seed, denoise):
+    """! @brief FaceDetailer inputs (Impact Pack) that redraw what the detector finds. @return inputs dict """
+    return {"image": image, "model": model, "clip": ["4", 1], "vae": ["4", 2], "guide_size": 512, "guide_size_for": True,
+            "max_size": 1024, "seed": seed, "steps": 20, "cfg": 5.0, "sampler_name": "euler", "scheduler": "normal",
+            "positive": pos, "negative": neg, "denoise": denoise, "feather": 5, "noise_mask": True, "force_inpaint": True,
+            "bbox_threshold": 0.5, "bbox_dilation": 10, "bbox_crop_factor": 3.0, "sam_detection_hint": "center-1",
+            "sam_dilation": 0, "sam_threshold": 0.93, "sam_bbox_expansion": 0, "sam_mask_hint_threshold": 0.7,
+            "sam_mask_hint_use_negative": "False", "drop_size": 10, "bbox_detector": detector, "wildcard": "", "cycle": 1,
+            "inpaint_model": False, "noise_mask_feather": 20, "tiled_encode": False, "tiled_decode": False}
+
+
+def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix, pose=None, face=None, fix_faces=False,
+         fix_hands=False, hires=False, pose_strength=0.65, face_weight=0.8):
     """!
-    @brief SDXL text-to-image workflow (optionally 4x-UltraSharp upscale, saved at 2x).
+    @brief SDXL text-to-image workflow with optional pose control, a face to keep, face/hand repair and upscaling.
     @param prompt    What to draw.  @param negative  What to avoid.  @param seed  Random seed.
     @param steps     Sampling steps.  @param width  Image width.  @param height  Image height.
-    @param upscale   Also save an upscaled copy.  @param prefix  Output prefix "<date>/<name>".
+    @param upscale   Also save a fast 2x copy (4x-UltraSharp).  @param prefix  Output prefix "<date>/<name>".
+    @param pose      Uploaded image name: its body pose (DWPose skeleton) steers the picture (union ControlNet).
+    @param face      Uploaded image name: this face is kept (IPAdapter FaceID Plus v2, needs InsightFace).
+    @param fix_faces Redraw detected faces (FaceDetailer).  @param fix_hands  Redraw detected hands.
+    @param hires     Also save a detailed 2x copy (Ultimate SD Upscale: tiles redrawn).
+    @param pose_strength  How strictly the pose is followed (0.3-1.0).  @param face_weight  How strongly the face is kept.
     @return Workflow in ComfyUI API format.
     """
     wf = {
@@ -101,18 +157,64 @@ def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix):
         "5": {"class_type": "EmptyLatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
         "6": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 1], "text": prompt}},
         "7": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 1], "text": negative}},
-        "3": {"class_type": "KSampler", "inputs": {"seed": seed, "steps": steps, "cfg": 7.0, "sampler_name": "euler",
-              "scheduler": "normal", "denoise": 1.0, "model": ["4", 0], "positive": ["6", 0],
-              "negative": ["7", 0], "latent_image": ["5", 0]}},
-        "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
-        "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix, "images": ["8", 0]}},
     }
+    model, pos, neg = ["4", 0], ["6", 0], ["7", 0]
+    if face:
+        wf.update({
+            "20": {"class_type": "IPAdapterUnifiedLoaderFaceID", "inputs": {"model": model, "preset": "FACEID PLUS V2",
+                   "lora_strength": 0.6, "provider": "CUDA"}},
+            "21": {"class_type": "LoadImage", "inputs": {"image": face}},
+            "22": {"class_type": "IPAdapterFaceID", "inputs": {"model": ["20", 0], "ipadapter": ["20", 1], "image": ["21", 0],
+                   "weight": face_weight, "weight_faceidv2": 1.0, "weight_type": "linear", "combine_embeds": "concat",
+                   "start_at": 0.0, "end_at": 1.0, "embeds_scaling": "V only"}},
+        })
+        model = ["22", 0]
+    cpos, cneg = pos, neg
+    if pose:
+        wf.update({
+            "30": {"class_type": "LoadImage", "inputs": {"image": pose}},
+            "31": {"class_type": "DWPreprocessor", "inputs": {"image": ["30", 0], "detect_hand": "enable", "detect_body": "enable",
+                   "detect_face": "enable", "resolution": 1024, "bbox_detector": "yolox_l.onnx",
+                   "pose_estimator": "dw-ll_ucoco_384.onnx", "scale_stick_for_xinsr_cn": "enable"}},
+            "32": {"class_type": "ControlNetLoader", "inputs": {"control_net_name": POSE_CN}},
+            "33": {"class_type": "SetUnionControlNetType", "inputs": {"control_net": ["32", 0], "type": "openpose"}},
+            "34": {"class_type": "ControlNetApplyAdvanced", "inputs": {"positive": pos, "negative": neg, "control_net": ["33", 0],
+                   "image": ["31", 0], "strength": pose_strength, "start_percent": 0.0, "end_percent": 0.75, "vae": ["4", 2]}},
+            "35": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_pose", "images": ["31", 0]}},
+        })
+        cpos, cneg = ["34", 0], ["34", 1]
+    wf.update({
+        "3": {"class_type": "KSampler", "inputs": {"seed": seed, "steps": steps, "cfg": 7.0, "sampler_name": "euler",
+              "scheduler": "normal", "denoise": 1.0, "model": model, "positive": cpos, "negative": cneg, "latent_image": ["5", 0]}},
+        "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
+    })
+    image = ["8", 0]
+    if fix_faces:   # repairs use the plain prompts (no pose steering on the crops) and the face-keeping model
+        wf["40"] = {"class_type": "UltralyticsDetectorProvider", "inputs": {"model_name": FACE_DET}}
+        wf["41"] = {"class_type": "FaceDetailer", "inputs": detailer(image, model, pos, neg, ["40", 0], seed, 0.35)}
+        image = ["41", 0]
+    if fix_hands:
+        wf["42"] = {"class_type": "UltralyticsDetectorProvider", "inputs": {"model_name": HAND_DET}}
+        wf["43"] = {"class_type": "FaceDetailer", "inputs": detailer(image, model, pos, neg, ["42", 0], seed, 0.45)}
+        image = ["43", 0]
+    wf["9"] = {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix, "images": image}}
+    if upscale or hires:
+        wf["10"] = {"class_type": "UpscaleModelLoader", "inputs": {"model_name": "4x-UltraSharp.safetensors"}}
     if upscale:
         wf.update({
-            "10": {"class_type": "UpscaleModelLoader", "inputs": {"model_name": "4x-UltraSharp.safetensors"}},
-            "11": {"class_type": "ImageUpscaleWithModel", "inputs": {"upscale_model": ["10", 0], "image": ["8", 0]}},
+            "11": {"class_type": "ImageUpscaleWithModel", "inputs": {"upscale_model": ["10", 0], "image": image}},
             "12": {"class_type": "ImageScaleBy", "inputs": {"image": ["11", 0], "upscale_method": "lanczos", "scale_by": 0.5}},
             "13": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_upscaled", "images": ["12", 0]}},
+        })
+    if hires:
+        wf.update({
+            "50": {"class_type": "UltimateSDUpscale", "inputs": {"image": image, "model": model, "positive": pos, "negative": neg,
+                   "vae": ["4", 2], "upscale_by": 2.0, "seed": seed, "steps": 20, "cfg": 5.0, "sampler_name": "euler",
+                   "scheduler": "normal", "denoise": 0.25, "upscale_model": ["10", 0], "mode_type": "Linear", "tile_width": 1024,
+                   "tile_height": 1024, "mask_blur": 12, "tile_padding": 48, "seam_fix_mode": "None", "seam_fix_denoise": 1.0,
+                   "seam_fix_width": 64, "seam_fix_mask_blur": 8, "seam_fix_padding": 16, "force_uniform_tiles": True,
+                   "tiled_decode": False, "batch_size": 1}},
+            "51": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_hires", "images": ["50", 0]}},
         })
     return wf
 
@@ -290,7 +392,7 @@ def run_job(wf, timeout, log=print):
             files = [os.path.join(OUTPUT, f.get("subfolder", ""), f["filename"]) for o in h.get("outputs", {}).values()
                      for k in ("images", "gifs", "videos") for f in o.get(k, []) if f.get("type") == "output"]
             err = " ".join(m[1].get("exception_message", "")[:400] for m in st.get("messages", []) if m[0] == "execution_error")
-            ok = st.get("status_str") == "success" and bool(files) and all(os.path.exists(f) and os.path.getsize(f) > 10000 for f in files)
+            ok = st.get("status_str") == "success" and bool(files) and all(os.path.exists(f) and os.path.getsize(f) > 2000 for f in files)
             log(f"{'done' if ok else 'failed'} in {time.time()-t0:.0f} s, peak GPU memory {mon.peak/1024:.1f} GB")
             return ok, files, err
         cancel(pid, log)
@@ -299,11 +401,11 @@ def run_job(wf, timeout, log=print):
         mon.go = False
 
 
-def generate(wf, timeout, wait=600, log=print):
+def generate(wf, timeout, wait=600, log=print, uploads=None):
     """!
     @brief The whole hand-off around one job, under the GPU lock.
     @param wf       Workflow.  @param timeout  Job time limit (s).  @param wait  How long to wait for the lock / a busy ComfyUI (s).
-    @param log      Progress printer.
+    @param log      Progress printer.  @param uploads  [(node id, image path)]: reference images, handed over once ComfyUI runs.
     @return (ok, output paths, error text).
     """
     with open(LOCK, "w") as lock:
@@ -318,6 +420,12 @@ def generate(wf, timeout, wait=600, log=print):
         err = prepare(log, max(0, wait - (time.time() - t0)))
         if err:
             return False, [], err
+        try:
+            for node, src in uploads or []:
+                wf[node]["inputs"]["image"] = upload(src)
+        except Exception as e:
+            release(log)
+            return False, [], f"could not hand the reference image to ComfyUI: {e}"
         try:
             return run_job(wf, timeout, log)
         finally:
@@ -336,7 +444,14 @@ def main():
     ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--steps", type=int, default=None)
     ap.add_argument("--size", default="1024x1024", help="image size WxH (multiples of 64)")
-    ap.add_argument("--upscale", action="store_true", help="image: also save a 2x upscaled copy")
+    ap.add_argument("--upscale", action="store_true", help="image: also save a fast 2x copy (4x-UltraSharp)")
+    ap.add_argument("--hires", action="store_true", help="image: also save a detailed 2x copy (tiles redrawn, slower)")
+    ap.add_argument("--pose", metavar="IMAGE", help="image: copy the body pose from this picture (in ~/work)")
+    ap.add_argument("--pose-strength", type=float, default=0.65, help="how strictly to follow the pose, 0.3-1.0")
+    ap.add_argument("--face", metavar="IMAGE", help="image: keep this face (in ~/work; one clear face)")
+    ap.add_argument("--face-weight", type=float, default=0.8, help="how strongly to keep the face, 0.3-1.2")
+    ap.add_argument("--fix-faces", action="store_true", help="image: redraw faces in more detail")
+    ap.add_argument("--fix-hands", action="store_true", help="image: redraw hands in more detail")
     ap.add_argument("--frames", type=int, default=33, help="video length, 4n+1 (33 ~ 1.4 s, 121 ~ 5 s)")
     ap.add_argument("--timeout", type=int, default=None, help="seconds (default 900 image, 3600 video)")
     a = ap.parse_args()
@@ -359,12 +474,21 @@ def main():
         w, h = (int(v) // 64 * 64 for v in m.groups())
         if not (512 <= w <= MAX_SIDE and 512 <= h <= MAX_SIDE):
             sys.exit(f"--size: each side must be 512-{MAX_SIDE}")
-        wf, limit = sdxl(a.prompt, a.negative, seed, a.steps or 25, w, h, a.upscale, prefix), a.timeout or 900
+        if not (0.3 <= a.pose_strength <= 1.0 and 0.3 <= a.face_weight <= 1.2):
+            sys.exit("--pose-strength must be 0.3-1.0 and --face-weight 0.3-1.2")
+        uploads = [(n, check_input(f)) for n, f in (("30", a.pose), ("21", a.face)) if f]
+        wf = sdxl(a.prompt, a.negative, seed, a.steps or 25, w, h, a.upscale, prefix, pose="pending" if a.pose else None,
+                  face="pending" if a.face else None, fix_faces=a.fix_faces, fix_hands=a.fix_hands, hires=a.hires,
+                  pose_strength=a.pose_strength, face_weight=a.face_weight)
+        limit = a.timeout or (1800 if a.hires or a.fix_hands or a.fix_faces else 900)
     else:
         frames = max(5, (a.frames - 1) // 4 * 4 + 1)
+        if a.pose or a.face or a.fix_faces or a.fix_hands or a.hires:
+            sys.exit("--pose/--face/--fix-faces/--fix-hands/--hires are for images")
+        uploads = []
         wf, limit = wan(a.prompt, a.negative, seed, a.steps or 20, frames, prefix), a.timeout or 3600
     log = lambda s: print(f"  {s}", flush=True)
-    ok, files, err = generate(wf, limit, log=log)
+    ok, files, err = generate(wf, limit, log=log, uploads=uploads)
     if err:
         print(f"  error: {err}")
     print(f"OUTPUT (seed {seed})" if ok else "FAILED")

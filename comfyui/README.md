@@ -11,7 +11,15 @@ it unloads the chat model through the model-serving contract, runs one fixed wor
   file that changes later is moved aside (`.quarantined`) instead of being used.
 - Model files already in D:\AI\models\comfy are used read-only; missing ones download into `$MOD/models`.
 - Your saved workflows and settings: `~/work/comfyui/` (kept on removal). Results: `~/work/outputs/comfy/<date>/`.
-- `test.sh --full` = SDXL image + upscale and a Wan video through `ai gen`.
+- `test.sh --full` = SDXL image + upscale, a Wan video, and a pose + face + face/hand repair + tiled-upscale job, all through `ai gen`.
+
+## From the command line (and for agents: skill `gpu-generate`)
+```
+ai gen image "a knight in a cafe" --name knight --pose ~/work/inputs/pose.png --face ~/work/inputs/face.png \
+    --fix-faces --fix-hands --hires          # optional: --pose-strength 0.65 --face-weight 0.8 --size 896x1152
+```
+Same GPU hand-off as always (chat model unloaded, one job at a time). Reference images must be inside `~/work`.
+Saves `<name>_*.png`, plus `<name>_pose_*.png` (the detected skeleton) and `<name>_hires_*.png` (detailed 2x).
 
 ## Control, faces, repair, upscaling (in the ComfyUI page)
 | Want | Nodes (double-click the canvas, type the name) | Model files (models.txt) |

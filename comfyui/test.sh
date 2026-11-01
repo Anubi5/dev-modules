@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-## @brief Quick: ComfyUI answers, the custom nodes loaded and the model files exist; --full: SDXL + upscale and a Wan video through ai gen.
+## @brief Quick: ComfyUI answers, the custom nodes loaded and the model files exist; --full: SDXL + upscale, a Wan video, and pose + face + repair + tiled upscale through ai gen.
 set -uo pipefail
 systemctl --user start comfyui
 for _ in $(seq 90); do curl -sf -m 3 http://127.0.0.1:8188/system_stats >/dev/null && break; sleep 2; done

@@ -69,6 +69,8 @@ def main():
         p = gen.profile(name)
         ups = [("30", portrait)] if name == "anima" and portrait else []
         ok, files, err = gen.generate(build(p), 1200, log=log, uploads=ups)
+        if name == "flux3" and not gen.EXPANDED["ok"]:
+            ok, err = False, (err + "; " if err else "") + "prompt expansion did not work (see CHECK above)"
         print(f"  {label}: {'OK' if ok else 'FAILED'}  {', '.join(files) or '-'}{'  error: ' + err if err else ''}")
         results.append(ok)
     if ready("flux3") and portrait:
@@ -76,6 +78,8 @@ def main():
         cap = gen.expand_prompt("put this woman in a yellow raincoat on a rainy city street, keep her face", "edit", images=[portrait], log=log)
         ok, files, err = gen.generate(gen.flux3(cap, 8, p["steps"], 1024, 1024, f"{day}/selftest-flux3-edit", p, refs=["pending"]),
                                       1200, log=log, uploads=[("200", portrait)])
+        if not gen.EXPANDED["ok"]:
+            ok, err = False, (err + "; " if err else "") + "prompt expansion did not work (see CHECK above)"
         print(f"  FLUX 3 edit (reference image): {'OK' if ok else 'FAILED'}  {', '.join(files) or '-'}{'  error: ' + err if err else ''}")
         results.append(ok)
     return 0 if all(results) else 1

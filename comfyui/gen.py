@@ -358,6 +358,31 @@ def zimage(prompt, seed, steps, width, height, prefix, prof, upscale=False):
     return _finish(wf, prof, seed, steps, ["7", 0], ["4", 0], ["5", 0], ["6", 0], prefix, upscale)
 
 
+EXPANDED = {"ok": None}                      # did the last expand_prompt() really expand? (tests check it)
+
+
+def model_server_up(log, wait=120):
+    """!
+    @brief Makes sure the chat-model server (model-serving contract, port LLM_PORT) answers; starts its user service
+           (any module unit named in MODEL_SERVICE, default llama-swap) if it does not. @return True when it answers.
+    """
+    def up():
+        try:
+            api("/v1/models", timeout=5, base=LLM); return True
+        except Exception:
+            return False
+    if up():
+        return True
+    unit = env("MODEL_SERVICE", "llama-swap")
+    log(f"starting the chat-model server ({unit})")
+    subprocess.run(["systemctl", "--user", "start", unit], stderr=subprocess.DEVNULL)
+    for _ in range(wait // 3):
+        if up():
+            return True
+        time.sleep(3)
+    return False
+
+
 def expand_prompt(request, kind, width=1024, height=1024, images=(), log=print):
     """!
     @brief FLUX 3 needs a full scene caption: the local chat model (model-serving contract, OpenAI API) expands the
@@ -375,12 +400,16 @@ def expand_prompt(request, kind, width=1024, height=1024, images=(), log=print):
     body = {"model": PROFILES.get("expander", "qwen3.5-9b"), "temperature": 0.7, "max_tokens": 1200,
             "chat_template_kwargs": {"enable_thinking": False},
             "messages": [{"role": "system", "content": sysmsg}, {"role": "user", "content": content}]}
+    EXPANDED["ok"] = False
     try:
+        if not model_server_up(log):
+            raise RuntimeError("the chat-model server did not start (ai logs llama-swap)")
         log("expanding the request into a full caption (local chat model)")
         out = api("/v1/chat/completions", body, timeout=300, base=LLM)["choices"][0]["message"]["content"]
         out = re.sub(r"(?s)<think>.*?</think>", "", out).strip().strip('"')
         if len(out) < 20:
             raise ValueError("empty answer")
+        EXPANDED["ok"] = True
         return out
     except Exception as e:
         log(f"CHECK prompt expansion failed ({str(e)[:120]}) - using the request as typed (results will be plainer)")

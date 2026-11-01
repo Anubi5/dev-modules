@@ -1,4 +1,41 @@
 {
+ "AnimaLLLiteApply": {
+  "end_percent": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "image": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  },
+  "mask": {
+   "part": "optional",
+   "type": "MASK",
+   "values": null
+  },
+  "model": {
+   "part": "required",
+   "type": "MODEL",
+   "values": null
+  },
+  "model_patch": {
+   "part": "required",
+   "type": "MODEL_PATCH",
+   "values": null
+  },
+  "start_percent": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "strength": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  }
+ },
  "CLIPLoader": {
   "clip_name": {
    "part": "required",
@@ -68,6 +105,13 @@
   "ckpt_name": {
    "part": "required",
    "type": "COMBO",
+   "values": null
+  }
+ },
+ "ConditioningZeroOut": {
+  "conditioning": {
+   "part": "required",
+   "type": "CONDITIONING",
    "values": null
   }
  },
@@ -174,7 +218,41 @@
    ]
   }
  },
+ "EmptyFlux2LatentImage": {
+  "batch_size": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "height": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "width": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  }
+ },
  "EmptyLatentImage": {
+  "batch_size": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "height": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "width": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  }
+ },
+ "EmptySD3LatentImage": {
   "batch_size": {
    "part": "required",
    "type": "INT",
@@ -755,6 +833,33 @@
    "values": null
   }
  },
+ "ModelPatchLoader": {
+  "name": {
+   "part": "required",
+   "type": "COMBO",
+   "values": null
+  }
+ },
+ "ModelSamplingAuraFlow": {
+  "model": {
+   "part": "required",
+   "type": "MODEL",
+   "values": null
+  },
+  "sampling": {
+   "part": "optional",
+   "type": "COMBO",
+   "values": [
+    "flow",
+    "img_to_img_velocity"
+   ]
+  },
+  "shift": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  }
+ },
  "ModelSamplingSD3": {
   "model": {
    "part": "required",
@@ -764,6 +869,36 @@
   "shift": {
    "part": "required",
    "type": "FLOAT",
+   "values": null
+  }
+ },
+ "ReferenceMultiLatent": {
+  "images": {
+   "part": "optional",
+   "type": "COMFY_AUTOGROW_V3",
+   "values": null
+  },
+  "negative": {
+   "part": "optional",
+   "type": "CONDITIONING",
+   "values": null
+  },
+  "positive": {
+   "part": "required",
+   "type": "CONDITIONING",
+   "values": null
+  },
+  "resolution": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "keep resolution",
+    "resize"
+   ]
+  },
+  "vae": {
+   "part": "optional",
+   "type": "VAE",
    "values": null
   }
  },
@@ -834,6 +969,23 @@
     "segment",
     "tile",
     "repaint"
+   ]
+  }
+ },
+ "UNETLoader": {
+  "unet_name": {
+   "part": "required",
+   "type": "COMBO",
+   "values": null
+  },
+  "weight_dtype": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "default",
+    "fp8_e4m3fn",
+    "fp8_e4m3fn_fast",
+    "fp8_e5m2"
    ]
   }
  },

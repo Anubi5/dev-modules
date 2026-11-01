@@ -9,12 +9,15 @@ description: Generate an image (SDXL; optionally in a given pose, with a given f
 The user asks for a picture, illustration, concept art, texture, reference image or short video clip.
 
 ## Procedure
-1. Write a concrete prompt: subject, setting, style, lighting, camera. Add a negative prompt only if needed.
+1. Write a concrete prompt: subject, setting, style, lighting, camera. Add a negative prompt only if needed (the default
+   one already removes the plastic "AI" look). For photos, describe it like a photographer: "RAW photo", lens (35mm,
+   50mm, 85mm), real light (window light, overcast, golden hour), "natural skin texture", "film grain"; keep colours
+   plausible - words like "vibrant", "hyperdetailed", "masterpiece" make images look more artificial, not less.
 2. Pick a short name for the result (it becomes the file name), e.g. `castle-concept`.
 3. Run ONE command and wait for it to finish (the GPU is shared; the chat model is unloaded meanwhile):
    - image: `ai gen image "<prompt>" --name <name> [--size 1024x1024] [--seed N]` plus, when asked for:
      - `--pose <image>`: copy the body pose from a picture (photo, sketch, Blender render). `--pose-strength 0.3-1.0` (0.65).
-     - `--face <image>`: keep the face from a picture with ONE clear face. `--face-weight 0.3-1.2` (0.8).
+     - `--face <image>`: keep the face from a picture with ONE clear face. `--face-weight 0.3-1.2` (0.65; above ~0.8 faces get gaunt and distorted).
      - `--fix-faces` / `--fix-hands`: redraw faces / hands in more detail (use for people, especially full-body shots).
      - `--hires`: also save a detailed 2x copy (slow); `--upscale`: a fast 2x copy.
      Reference images must be inside `~/work` (usually `~/work/inputs/`) as .png/.jpg/.webp.

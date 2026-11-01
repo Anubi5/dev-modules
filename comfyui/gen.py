@@ -123,6 +123,10 @@ def slug(name):
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:40] or "untitled"
 
 
+CKPT = "RealVisXL_V5.0_fp16.safetensors"   # photoreal SDXL fine-tune (base SDXL looks waxy); any SDXL checkpoint works here
+SAMPLER, SCHEDULER, CFG = "dpmpp_sde", "karras", 4.5   # RealVisXL's recommendation; CFG above ~6 gives the oversaturated "AI" look
+NEGATIVE = ("cartoon, painting, illustration, 3d render, cgi, plastic skin, airbrushed, smooth skin, doll, oversaturated, "
+            "bad hands, bad anatomy, deformed, face asymmetry, eyes asymmetry, deformed eyes, blurry, low quality, watermark, text")
 POSE_CN = "controlnet-union-sdxl-promax.safetensors"
 FACE_DET, HAND_DET = "bbox/face_yolov8m.pt", "bbox/hand_yolov8s.pt"
 
@@ -130,7 +134,7 @@ FACE_DET, HAND_DET = "bbox/face_yolov8m.pt", "bbox/hand_yolov8s.pt"
 def detailer(image, model, pos, neg, detector, seed, denoise):
     """! @brief FaceDetailer inputs (Impact Pack) that redraw what the detector finds. @return inputs dict """
     return {"image": image, "model": model, "clip": ["4", 1], "vae": ["4", 2], "guide_size": 512, "guide_size_for": True,
-            "max_size": 1024, "seed": seed, "steps": 20, "cfg": 5.0, "sampler_name": "euler", "scheduler": "normal",
+            "max_size": 1024, "seed": seed, "steps": 20, "cfg": CFG, "sampler_name": SAMPLER, "scheduler": SCHEDULER,
             "positive": pos, "negative": neg, "denoise": denoise, "feather": 5, "noise_mask": True, "force_inpaint": True,
             "bbox_threshold": 0.5, "bbox_dilation": 10, "bbox_crop_factor": 3.0, "sam_detection_hint": "center-1",
             "sam_dilation": 0, "sam_threshold": 0.93, "sam_bbox_expansion": 0, "sam_mask_hint_threshold": 0.7,
@@ -139,7 +143,7 @@ def detailer(image, model, pos, neg, detector, seed, denoise):
 
 
 def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix, pose=None, face=None, fix_faces=False,
-         fix_hands=False, hires=False, pose_strength=0.65, face_weight=0.8):
+         fix_hands=False, hires=False, pose_strength=0.65, face_weight=0.65):
     """!
     @brief SDXL text-to-image workflow with optional pose control, a face to keep, face/hand repair and upscaling.
     @param prompt    What to draw.  @param negative  What to avoid.  @param seed  Random seed.
@@ -153,7 +157,7 @@ def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix, pose=Non
     @return Workflow in ComfyUI API format.
     """
     wf = {
-        "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "sd_xl_base_1.0.safetensors"}},
+        "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": CKPT}},
         "5": {"class_type": "EmptyLatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
         "6": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 1], "text": prompt}},
         "7": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 1], "text": negative}},
@@ -184,8 +188,8 @@ def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix, pose=Non
         })
         cpos, cneg = ["34", 0], ["34", 1]
     wf.update({
-        "3": {"class_type": "KSampler", "inputs": {"seed": seed, "steps": steps, "cfg": 7.0, "sampler_name": "euler",
-              "scheduler": "normal", "denoise": 1.0, "model": model, "positive": cpos, "negative": cneg, "latent_image": ["5", 0]}},
+        "3": {"class_type": "KSampler", "inputs": {"seed": seed, "steps": steps, "cfg": CFG, "sampler_name": SAMPLER,
+              "scheduler": SCHEDULER, "denoise": 1.0, "model": model, "positive": cpos, "negative": cneg, "latent_image": ["5", 0]}},
         "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
     })
     image = ["8", 0]
@@ -209,8 +213,8 @@ def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix, pose=Non
     if hires:
         wf.update({
             "50": {"class_type": "UltimateSDUpscale", "inputs": {"image": image, "model": model, "positive": pos, "negative": neg,
-                   "vae": ["4", 2], "upscale_by": 2.0, "seed": seed, "steps": 20, "cfg": 5.0, "sampler_name": "euler",
-                   "scheduler": "normal", "denoise": 0.25, "upscale_model": ["10", 0], "mode_type": "Linear", "tile_width": 1024,
+                   "vae": ["4", 2], "upscale_by": 2.0, "seed": seed, "steps": 20, "cfg": CFG, "sampler_name": SAMPLER,
+                   "scheduler": SCHEDULER, "denoise": 0.2, "upscale_model": ["10", 0], "mode_type": "Linear", "tile_width": 1024,
                    "tile_height": 1024, "mask_blur": 12, "tile_padding": 48, "seam_fix_mode": "None", "seam_fix_denoise": 1.0,
                    "seam_fix_width": 64, "seam_fix_mask_blur": 8, "seam_fix_padding": 16, "force_uniform_tiles": True,
                    "tiled_decode": False, "batch_size": 1}},
@@ -440,7 +444,7 @@ def main():
     ap.add_argument("kind", choices=["image", "video"])
     ap.add_argument("prompt")
     ap.add_argument("--name", default="", help="short name for the output files (default: from the prompt)")
-    ap.add_argument("--negative", default="blurry, low quality, watermark, distorted")
+    ap.add_argument("--negative", default=None, help="what to avoid (default: a realism-focused list; video: blurry, distorted)")
     ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--steps", type=int, default=None)
     ap.add_argument("--size", default="1024x1024", help="image size WxH (multiples of 64)")
@@ -449,7 +453,7 @@ def main():
     ap.add_argument("--pose", metavar="IMAGE", help="image: copy the body pose from this picture (in ~/work)")
     ap.add_argument("--pose-strength", type=float, default=0.65, help="how strictly to follow the pose, 0.3-1.0")
     ap.add_argument("--face", metavar="IMAGE", help="image: keep this face (in ~/work; one clear face)")
-    ap.add_argument("--face-weight", type=float, default=0.8, help="how strongly to keep the face, 0.3-1.2")
+    ap.add_argument("--face-weight", type=float, default=0.65, help="how strongly to keep the face, 0.3-1.2 (high values distort it)")
     ap.add_argument("--fix-faces", action="store_true", help="image: redraw faces in more detail")
     ap.add_argument("--fix-hands", action="store_true", help="image: redraw hands in more detail")
     ap.add_argument("--frames", type=int, default=33, help="video length, 4n+1 (33 ~ 1.4 s, 121 ~ 5 s)")
@@ -477,7 +481,7 @@ def main():
         if not (0.3 <= a.pose_strength <= 1.0 and 0.3 <= a.face_weight <= 1.2):
             sys.exit("--pose-strength must be 0.3-1.0 and --face-weight 0.3-1.2")
         uploads = [(n, check_input(f)) for n, f in (("30", a.pose), ("21", a.face)) if f]
-        wf = sdxl(a.prompt, a.negative, seed, a.steps or 25, w, h, a.upscale, prefix, pose="pending" if a.pose else None,
+        wf = sdxl(a.prompt, a.negative or NEGATIVE, seed, a.steps or 30, w, h, a.upscale, prefix, pose="pending" if a.pose else None,
                   face="pending" if a.face else None, fix_faces=a.fix_faces, fix_hands=a.fix_hands, hires=a.hires,
                   pose_strength=a.pose_strength, face_weight=a.face_weight)
         limit = a.timeout or (1800 if a.hires or a.fix_hands or a.fix_faces else 900)
@@ -486,7 +490,7 @@ def main():
         if a.pose or a.face or a.fix_faces or a.fix_hands or a.hires:
             sys.exit("--pose/--face/--fix-faces/--fix-hands/--hires are for images")
         uploads = []
-        wf, limit = wan(a.prompt, a.negative, seed, a.steps or 20, frames, prefix), a.timeout or 3600
+        wf, limit = wan(a.prompt, a.negative or "static, blurry, distorted, low quality, watermark", seed, a.steps or 20, frames, prefix), a.timeout or 3600
     log = lambda s: print(f"  {s}", flush=True)
     ok, files, err = generate(wf, limit, log=log, uploads=uploads)
     if err:

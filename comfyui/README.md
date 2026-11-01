@@ -1,5 +1,5 @@
 # comfyui (image and video generation)
-[ComfyUI](https://github.com/comfyanonymous/ComfyUI) with SDXL + 4x-UltraSharp and Wan 2.2 5B video (GGUF).
+[ComfyUI](https://github.com/comfyanonymous/ComfyUI) with SDXL (photoreal RealVisXL V5.0 for `ai gen`, DPM++ SDE Karras, CFG 4.5) + 4x-UltraSharp and Wan 2.2 5B video (GGUF).
 Page: http://127.0.0.1:8188 (`dev comfy`). Agents use `ai gen image|video "prompt"` (skill `gpu-generate`):
 it unloads the chat model through the model-serving contract, runs one fixed workflow, frees the GPU.
 
@@ -26,7 +26,7 @@ Saves `<name>_*.png`, plus `<name>_pose_*.png` (the detected skeleton) and `<nam
 |---|---|---|
 | Pose from a photo, skeleton or Blender render | `DWPose Estimator` (bbox `yolox_l.onnx`, pose `dw-ll_ucoco_384.onnx` - already installed) → `Apply ControlNet` (strength ~0.65, end ~0.75) | `controlnet-union-sdxl-promax` (one ControlNet for pose, depth, canny, lineart) |
 | Depth / layout | `Depth Anything` or `MiDaS` preprocessor → same ControlNet | same |
-| Same face across images | `IPAdapter FaceID` (weight ~0.8) with a face reference; lighter: `IPAdapter Advanced` + `ip-adapter-plus-face_sdxl` | FaceID Plus v2 + its LoRA, plus-face, CLIP-ViT-H |
+| Same face across images | `IPAdapter FaceID` (weight ~0.65; higher distorts the face) with a face reference; lighter: `IPAdapter Advanced` + `ip-adapter-plus-face_sdxl` | FaceID Plus v2 + its LoRA, plus-face, CLIP-ViT-H |
 | Fix faces / hands | `FaceDetailer` with `UltralyticsDetectorProvider` (`bbox/face_yolov8m.pt`, `bbox/hand_yolov8s.pt`), denoise ~0.3 | face/hand detectors |
 | Big sharp output | `Ultimate SD Upscale` (upscale 2x, tile 768/1024, denoise ~0.2) with 4x-UltraSharp | already there |
 

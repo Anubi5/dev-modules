@@ -1,3 +1,5 @@
 #!/usr/bin/env bash
-## @brief Called by "ai free": ComfyUI unloads its models.
-curl -s -m 20 -o /dev/null -X POST http://127.0.0.1:8188/free -H "Content-Type: application/json" -d '{"unload_models":true,"free_memory":true}' && echo "  ComfyUI memory freed" || true
+## @brief Called by "ai free": ComfyUI unloads its models. Exit 1 only if ComfyUI runs and refuses.
+curl -s -m 5 -o /dev/null http://127.0.0.1:8188/ || exit 0       # not running: nothing to free
+curl -sf -m 20 -o /dev/null -X POST http://127.0.0.1:8188/free -H "Content-Type: application/json" \
+  -d '{"unload_models":true,"free_memory":true}' && echo "  ComfyUI memory freed" || { echo "  CHECK ComfyUI did not free its memory"; exit 1; }

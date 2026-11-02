@@ -3,6 +3,11 @@ Description=ComfyUI (127.0.0.1:8188)
 
 [Service]
 WorkingDirectory=%h/.local/share/modules/comfyui/app/ComfyUI
-ExecStart=%h/.local/share/modules/comfyui/app/ComfyUI/.venv/bin/python main.py --listen 127.0.0.1 --port 8188 --offline --output-directory %h/work/outputs/comfy --input-directory %h/work/inputs --temp-directory %h/work/scratch/comfy --user-directory %h/work/comfyui
+# --disable-pinned-memory: model weights are loaded the normal way instead of ComfyUI's native reader, whose reads of
+# the models on D: (WSL's Windows-file bridge) fail now and then mid-job ("HostBuffer.read_file_slice failed").
+# memtest.py compares both settings; a one-off override goes in ~/.config/comfyui/override.env (COMFY_MEM=...).
+Environment=COMFY_MEM=--disable-pinned-memory
+EnvironmentFile=-%h/.config/comfyui/override.env
+ExecStart=%h/.local/share/modules/comfyui/app/ComfyUI/.venv/bin/python main.py --listen 127.0.0.1 --port 8188 --offline --output-directory %h/work/outputs/comfy --input-directory %h/work/inputs --temp-directory %h/work/scratch/comfy --user-directory %h/work/comfyui $COMFY_MEM
 Restart=on-failure
 RestartSec=5

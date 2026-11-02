@@ -19,6 +19,10 @@ it unloads the chat model through the model-serving contract, runs one fixed wor
 - `ai gen schema` saves ComfyUI's node definitions (`~/work/outputs/comfy/schema.json`); committed as `schema.json`, the
   GitHub check validates every workflow variant against it (`check_workflows.py`) without a GPU.
 - Your saved workflows and settings: `~/work/comfyui/` (kept on removal). Results: `~/work/outputs/comfy/<date>/`.
+- Memory: ComfyUI runs with `--disable-pinned-memory` - its native reader failed now and then reading model files on D:
+  through WSL's Windows-file bridge mid-job ("HostBuffer.read_file_slice failed", 2 Nov 2026). `python3 memtest.py [n]`
+  compares both settings on the job that failed (failures and times); `~/.config/comfyui/override.env` can set
+  `COMFY_MEM=` (empty = ComfyUI's default) for a test. Lasting fix to consider: models on a Linux disk file on D:.
 - `test.sh --full` = SDXL image + upscale, a Wan video, a pose + face + face/hand repair + tiled-upscale job, the newer
   models, and `ai gen pose` (photo + skeleton) with an image made from that skeleton, all through `ai gen`.
 

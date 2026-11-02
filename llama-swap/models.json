@@ -136,7 +136,8 @@
       "mmproj": true,
       "vision": true,
       "args": "-c 8192",
-      "ttl": 120
+      "ttl": 120,
+      "vision_only": true
     }
   ]
 }

@@ -5,7 +5,7 @@
 
 Models flagged 'speed_test_only' (autocomplete models) only get the speed test.
 Models flagged 'long_prompt_test' in models.json also get a ~12K-token prompt (agents are prompt-heavy);
-models flagged 'vision' must name the colour of a red test image.
+models flagged 'vision' must name the colour of a red test image ('vision_only': only that test).
 Models flagged 'embedding' get a search test instead (a related sentence must be closer than an unrelated one).
 Models flagged 'candidate' (being evaluated) are reported like the others but never fail the run.
 Exit code 1 if a configured model is missing, any model errors or gives a wrong answer (vision included), or nothing was tested.
@@ -131,6 +131,8 @@ def run(models, specs):
                 add(f"| {m} | search | ERROR | - | {str(e)[:60]} |")
             continue
         tests = [t for t in TESTS if t[0] == "speed"] if spec.get("speed_test_only") else TESTS   # e.g. autocomplete models
+        if spec.get("vision_only"):                     # image-checking models: only the image test means anything
+            tests = []
         for name, prompt, check in tests:
             try:
                 d, wall = chat(m, prompt)

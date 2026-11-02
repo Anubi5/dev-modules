@@ -10,7 +10,7 @@ jobs:
       - name: Python syntax
         run: python3 -m py_compile $(git ls-files '*.py')
       - name: Every module has README.md, install.sh and test.sh
-        run: for d in */; do [ "$d" = .github/ ] && continue; for f in README.md install.sh test.sh; do [ -f "$d$f" ] || { echo "missing $d$f"; exit 1; }; done; done
+        run: for d in */; do [ "$d" = .github/ ] || [ "$d" = _tests/ ] && continue; for f in README.md install.sh test.sh; do [ -f "$d$f" ] || { echo "missing $d$f"; exit 1; }; done; done
       - name: Custom nodes are pinned to a commit
         run: |
           grep -vE '^\s*(#|$)' comfyui/nodes.txt | awk 'NF < 2 || $2 !~ /^[0-9a-f]{40}$/ {print "not pinned " $0; bad=1} END {exit bad}'
@@ -22,4 +22,4 @@ jobs:
       - name: ai gen workflows match the pinned ComfyUI node definitions
         run: python3 comfyui/check_workflows.py
       - name: Model files (copies, conflicts, moves)
-        run: bash tests/models_test.sh
+        run: bash _tests/models_test.sh

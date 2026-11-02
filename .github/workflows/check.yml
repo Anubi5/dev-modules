@@ -21,3 +21,5 @@ jobs:
           ! grep -q "undefined name" pf.txt
       - name: ai gen workflows match the pinned ComfyUI node definitions
         run: python3 comfyui/check_workflows.py
+      - name: Model files (copies, conflicts, moves)
+        run: bash tests/models_test.sh

@@ -166,8 +166,8 @@ def main():
         old = os.path.join(old_root, folder, name) if old_root else None
         if old and os.path.exists(old) and not os.path.exists(on_d) and rw:
             move_to_d(old, os.path.join(rw, folder, name), on_d, own, sha)
-        if old and os.path.exists(old) and os.path.exists(on_d) and os.path.getsize(old) == os.path.getsize(on_d):
-            if sha256(old) == sha256(on_d):                   # size alone is no proof: compare the content
+        if old and os.path.exists(old) and os.path.exists(on_d):   # two copies: same content (hash) or a conflict
+            if os.path.getsize(old) == os.path.getsize(on_d) and sha256(old) == sha256(on_d):
                 os.remove(old); print(f"  {folder}/{name}: removed the duplicate inside the distro (same file on D:)")
             else:                                             # which one is right is unknown: stop, don't guess
                 print(f"  CHECK {folder}/{name}: the copy inside the distro differs from the one on D: - both kept. "

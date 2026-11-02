@@ -126,6 +126,8 @@ def place(rel, ro, rw, legacy, repo=None, local=False):
            D: is writable, else keep using it for now. Missing -> download straight to D: (needs D: writable).
            local=True (models.json "local_copy"): D: keeps the original, and a copy inside the distro is loaded -
            for a model that reads its file while it runs (MoE experts in RAM), which is much slower from D:.
+           Rule for local copies: D: is the authority - a local copy that differs in size is replaced from D:.
+           Two copies of a NON-local model must be identical (SHA-256); otherwise the model fails (no guessing).
     @param rel     "<id>/<file in repo>".  @param ro  Read-only D: root (/models/llm).
     @param rw      Writable D: root (/models-rw/llm) or None.  @param legacy  In-distro root ($MOD/models).
     @param repo    Repository to download from; None = offline check only.  @param local  Keep a copy in the distro.
@@ -137,7 +139,7 @@ def place(rel, ro, rw, legacy, repo=None, local=False):
     if local and have_old and (same_file(old, on_d) or (not have_d and not rw)):
         return old
     if have_d:
-        if not local and same_file(old, on_d):
+        if not local and os.path.exists(old):             # two copies: same content (hash) or a conflict
             if same_content(old, on_d):
                 os.remove(old); print(f"  {os.path.basename(rel)}: removed the duplicate inside the distro (same file on D:)")
             else:                                         # which one is right is unknown: fail this model, don't guess

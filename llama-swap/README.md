@@ -23,8 +23,8 @@ unloads when idle. Chat page: http://127.0.0.1:8080/upstream/qwen3.5-9b/ (`dev c
 Candidates appear in the bench report as "(candidate)" and never fail `dev test`; they are compared with the 35B on the
 Hermes evaluation before one replaces it (`AGENT_MODEL` in sandbox.env).
 
-## Checking images: `look` (vision-check model)
-`look <image> "<question>" [--expect WORD]` asks WeVisOne-VL 2B (Tencent, Apache 2.0, ~2.6 GB with its vision part)
+## Checking images: `img-ask` (vision-check model)
+`img-ask <image> "<question>" [--expect WORD]` asks WeVisOne-VL 2B (Tencent, Apache 2.0, ~2.6 GB with its vision part)
 what an image shows: "Is there a red cube?", "How many people?", "Is the text readable?". Agents use it next to
 `img-check` (pixel numbers) to prove a render shows what was asked. `--expect yes` exits 3 when the answer
 does not contain the word. The model loads in seconds and unloads after 2 idle minutes.

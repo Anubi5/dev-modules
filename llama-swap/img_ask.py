@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """!
-@file look.py
-@brief "look <image> "<question>"": asks the local vision-check model (WeVisOne-VL 2B behind llama-swap) about an
+@file img_ask.py
+@brief "img-ask <image> "<question>"": asks the local vision-check model (WeVisOne-VL 2B behind llama-swap) about an
        image and prints its short answer. Agents use it to check renders and images by what they show, not only by
        pixel numbers (img-check). Exit 0 = answered, 1 = could not ask (server, model or file problem), 2 = usage.
-       --expect WORD: exit 3 when the answer does not contain WORD (e.g. look render.png "Is there a cube?" --expect yes).
+       --expect WORD: exit 3 when the answer does not contain WORD (e.g. img-ask render.png "Is there a cube?" --expect yes).
 """
 import base64
 import json
@@ -47,21 +47,21 @@ def main(argv):
     if "--expect" in argv:
         i = argv.index("--expect")
         if i + 1 >= len(argv):
-            print('usage: look <image> "<question>" [--expect WORD]'); return 2
+            print('usage: img-ask <image> "<question>" [--expect WORD]'); return 2
         expect = argv[i + 1].lower()
         argv = argv[:i] + argv[i + 2:]
     if len(argv) != 2:
-        print('usage: look <image> "<question>" [--expect WORD]'); return 2
+        print('usage: img-ask <image> "<question>" [--expect WORD]'); return 2
     image, question = argv
     if not os.path.isfile(image):
-        print(f"look: no such file: {image}"); return 1
+        print(f"img-ask: no such file: {image}"); return 1
     try:
         answer = ask(image, question)
     except Exception as e:
-        print(f"look: could not ask the vision-check model ({e}) - is llama-swap running? (ai start llama-swap)"); return 1
-    print(f"look: {os.path.basename(image)}: {question} -> {answer}")
+        print(f"img-ask: could not ask the vision-check model ({e}) - is llama-swap running? (ai start llama-swap)"); return 1
+    print(f"img-ask: {os.path.basename(image)}: {question} -> {answer}")
     if expect is not None and expect not in answer.lower():
-        print(f"look: expected '{expect}' in the answer - NOT confirmed"); return 3
+        print(f"img-ask: expected '{expect}' in the answer - NOT confirmed"); return 3
     return 0
 
 

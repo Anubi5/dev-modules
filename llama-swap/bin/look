@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-## @brief "look <image> \"<question>\" [--expect WORD]": asks the local vision-check model what an image shows.
-exec python3 ~/.local/share/modules/llama-swap/look.py "$@"

@@ -2,7 +2,8 @@
 """!
 @file comfy_test.py
 @brief End-to-end ComfyUI test through the GPU hand-off (gen.py): SDXL image + 4x upscale, a short Wan 2.2 video, then
-       the control features on a generated portrait: its pose and face reused, faces/hands repaired, detailed upscale.
+       the control features on a generated portrait: its pose and face reused, faces/hands repaired, detailed upscale;
+       ai gen pose (photo + skeleton from a description) and an image made from that saved skeleton.
 
 Uses the same fixed workflows, lock, unload/free and output folder as "ai gen", so it tests exactly what Hermes uses.
 Outputs go to COMFY_OUTPUT/<date>/selftest-*. Exit code 0 only if every job produced its files there.
@@ -82,6 +83,20 @@ def main():
             ok, err = False, (err + "; " if err else "") + "prompt expansion did not work (see CHECK above)"
         print(f"  FLUX 3 edit (reference image): {'OK' if ok else 'FAILED'}  {', '.join(files) or '-'}{'  error: ' + err if err else ''}")
         results.append(ok)
+    # ai gen pose: a pose from a description (photo + skeleton), then that skeleton reused directly with --pose
+    ok, files, err = gen.generate(gen.pose_wf("seen from behind, standing, both hands on the hips", 21, 896, 1152,
+                                              f"{day}/selftest-posegen"), 900, log=log)
+    skel = next((f for f in files if gen.is_skeleton(f)), None)
+    print(f"  pose from a description (photo + skeleton): {'OK' if ok and skel and len(files) == 2 else 'FAILED'}  "
+          f"{', '.join(files) or '-'}{'  error: ' + err if err else ''}")
+    results.append(ok and bool(skel) and len(files) == 2)
+    if skel:
+        wf = gen.use_skeleton(gen.sdxl("RAW photo of a man in a grey suit seen from behind, hands on his hips, city rooftop, 50mm",
+                                       gen.NEGATIVE, 22, 30, 896, 1152, False, f"{day}/selftest-skeleton", pose="pending"))
+        ok, files, err = gen.generate(wf, 900, log=log, uploads=[("30", skel)])
+        print(f"  image from a saved skeleton (--pose skeleton): {'OK' if ok and files else 'FAILED'}  {', '.join(files) or '-'}"
+              f"{'  error: ' + err if err else ''}")
+        results.append(ok and len(files) == 1)
     return 0 if all(results) else 1
 
 

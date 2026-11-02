@@ -40,6 +40,9 @@ The user asks for a picture, illustration, concept art, texture, reference image
      `--model fibo2` (Fibo 2.0, 4 steps, non-commercial licence) is the second edit model: refer to the pictures as
      <image_1>, <image_2> and describe the FINAL state of what changes - do not write "keep X unchanged" (it then
      redraws everything and invents props). If one edit model gets a pose or detail wrong, try the other.
+   - pose: `ai gen pose "<the pose>" --name <name>` or `ai gen pose --from <photo> --name <name>`: a pose for
+     ControlNet - saves a plain full-body photo of a person in that pose and its skeleton picture (`<name>_pose_...`).
+     Use either with `ai gen image ... --pose <file>` (a skeleton file is used as it is).
    - video: `ai gen video "<prompt>" --name <name> [--frames 33]`  (33 frames ~ 1.4 s, ~2-6 min; 121 ~ 5 s)
 4. The lines after `OUTPUT` are the file paths (in `~/work/outputs/comfy/<date>/`); `record:` is a .json with every
    setting used. Report the files and the seed. With repair/upscale options, `<name>_base_*` is the untouched original -

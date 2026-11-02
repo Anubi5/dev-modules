@@ -227,9 +227,7 @@ def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix, pose=Non
     if pose:
         wf.update({
             "30": {"class_type": "LoadImage", "inputs": {"image": pose}},
-            "31": {"class_type": "DWPreprocessor", "inputs": {"image": ["30", 0], "detect_hand": "enable", "detect_body": "enable",
-                   "detect_face": "enable", "resolution": 1024, "bbox_detector": "yolox_l.onnx",
-                   "pose_estimator": "dw-ll_ucoco_384.onnx", "scale_stick_for_xinsr_cn": "enable"}},
+            "31": _dwpose(["30", 0], "enable"),
             "32": {"class_type": "ControlNetLoader", "inputs": {"control_net_name": POSE_CN}},
             "33": {"class_type": "SetUnionControlNetType", "inputs": {"control_net": ["32", 0], "type": "openpose"}},
             "34": {"class_type": "ControlNetApplyAdvanced", "inputs": {"positive": pos, "negative": neg, "control_net": ["33", 0],
@@ -335,9 +333,7 @@ def anima(prompt, negative, seed, steps, width, height, prefix, prof, pose=None,
     if pose:
         wf.update({
             "30": {"class_type": "LoadImage", "inputs": {"image": pose}},
-            "31": {"class_type": "DWPreprocessor", "inputs": {"image": ["30", 0], "detect_hand": "enable", "detect_body": "enable",
-                   "detect_face": "enable", "resolution": 1024, "bbox_detector": "yolox_l.onnx",
-                   "pose_estimator": "dw-ll_ucoco_384.onnx", "scale_stick_for_xinsr_cn": "disable"}},
+            "31": _dwpose(["30", 0]),
             "32": {"class_type": "ModelPatchLoader", "inputs": {"name": prof["pose_patch"]}},
             "33": {"class_type": "AnimaLLLiteApply", "inputs": {"model": model, "model_patch": ["32", 0], "image": ["31", 0],
                    "strength": pose_strength, "start_percent": 0.0, "end_percent": 1.0}},
@@ -390,6 +386,55 @@ def fibo2(prompt, seed, steps, width, height, prefix, prof, refs=(), upscale=Fal
         enc[f"images.image_{i + 1}"] = [f"2{i}0", 0]
     wf["4"] = {"class_type": "TextEncodeFibo2", "inputs": enc}
     return _finish(wf, prof, seed, steps, ["1", 0], ["4", 0], ["4", 1], ["4", 2], prefix, upscale)
+
+
+POSE_PROMPT = ("wide full body photo of a person {d}, entire body from head to feet in frame, space around the figure, "
+               "plain light grey studio background, even soft light")
+
+
+def _dwpose(image, scale_stick="disable"):
+    """! @brief DWPose skeleton node (body, hands, face) for an image link. """
+    return {"class_type": "DWPreprocessor", "inputs": {"image": image, "detect_hand": "enable", "detect_body": "enable",
+            "detect_face": "enable", "resolution": 1024, "bbox_detector": "yolox_l.onnx",
+            "pose_estimator": "dw-ll_ucoco_384.onnx", "scale_stick_for_xinsr_cn": scale_stick}}
+
+
+def pose_wf(description, seed, width, height, prefix, src=None):
+    """!
+    @brief A pose for ControlNet: from a description, Z-Image makes a plain full-body photo of a person in that pose and
+           DWPose turns it into a skeleton; from a photo (src), only the skeleton is made. Saves "<name>" (the photo,
+           the best input for --pose) and "<name>_pose" (the skeleton picture).
+    @param src  Uploaded photo name, or None to generate one from the description.
+    @return Workflow in ComfyUI API format.
+    """
+    if src:
+        return {"30": {"class_type": "LoadImage", "inputs": {"image": src}}, "31": _dwpose(["30", 0]),
+                "35": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_pose", "images": ["31", 0]}}}
+    p = profile("zimage")
+    wf = zimage(POSE_PROMPT.format(d=description), seed, p["steps"], width, height, prefix, p)
+    wf.update({"31": _dwpose(["9", 0]),
+               "35": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_pose", "images": ["31", 0]}}})
+    return wf
+
+
+def use_skeleton(wf):
+    """!
+    @brief The --pose picture is already a skeleton (from ai gen pose or another tool): skip DWPose and feed it
+           straight to the pose control (and do not save it again). @return the workflow, changed in place
+    """
+    if "31" in wf and wf["31"]["class_type"] == "DWPreprocessor":
+        del wf["31"]
+        wf.pop("35", None)
+        for node in wf.values():
+            for k, v in node["inputs"].items():
+                if v == ["31", 0]:
+                    node["inputs"][k] = ["30", 0]
+    return wf
+
+
+def is_skeleton(path, flag=False):
+    """! @brief True for a skeleton picture: --pose-skeleton given, or a "<name>_pose_00001_.png" file from ai gen. """
+    return flag or re.search(r"_pose_\d+_\.png$", os.path.basename(path)) is not None
 
 
 EXPANDED = {"ok": None}                      # did the last expand_prompt() really expand? (tests check it)
@@ -706,6 +751,12 @@ def all_workflows():
         elif p["arch"] == "fibo2":
             for refs, up in itertools.product([(), ("a",), ("a", "b")], [False, True]):
                 yield fibo2("x", 1, p["steps"], 1024, 1024, "t", p, refs=refs, upscale=up)
+    yield pose_wf("x", 1, 896, 1152, "t")
+    yield pose_wf("", 1, 896, 1152, "t", src="a")
+    yield use_skeleton(sdxl("x", "y", 1, 30, 1024, 1024, False, "t", pose="p", prof=profile(PROFILES.get("default_sdxl", "realvis"))))
+    anima_name = next((n for n, q in PROFILES["models"].items() if q["arch"] == "anima"), None)
+    if anima_name:
+        yield use_skeleton(anima("x", "y", 1, 30, 1024, 1024, "t", profile(anima_name), pose="p"))
     yield wan("x", "y", 1, 20, 33, "t")
 
 
@@ -777,6 +828,9 @@ HELP = """ai gen - images, edits and short videos on the local GPU (one job at a
       --fix-faces --fix-hands  redraw faces/hands (SDXL)   --hires  detailed 2x copy (SDXL)   --upscale  fast 2x copy
       --checkpoint NAME    any SDXL file in D:\\AI\\models\\comfy\\checkpoints
   ai gen edit "what to change" --image IMG [--image REF]   change an image by instruction (FLUX 3; --model fibo2 = Fibo 2.0)
+  ai gen pose "description" | --from PHOTO                 a pose for ControlNet: "<name>" (plain full-body photo,
+                                                           best for --pose) + "<name>_pose" (the skeleton picture)
+      --pose-skeleton      (image) the --pose picture is already a skeleton (files named *_pose_*.png are detected)
   ai gen video "prompt" [--frames 33]                      Wan 2.2 clip (33 frames ~ 1.4 s, up to 121)
   ai gen models                                            which image models are ready
   ai gen schema                                            save ComfyUI node definitions (for the CI check)
@@ -798,8 +852,11 @@ def main():
         return models_report()
     if not sys.argv[1:] or sys.argv[1] in ("help", "-h", "--help") or sys.argv[2:3] == ["help"]:   # "image --help": all options
         print(HELP); models_report(); return 0
-    ap.add_argument("kind", choices=["image", "video", "edit"], help="edit = change an image by instruction (FLUX 3)")
-    ap.add_argument("prompt", help="what to make; for edit: what to change")
+    ap.add_argument("kind", choices=["image", "video", "edit", "pose"],
+                    help="edit = change an image by instruction; pose = a ControlNet pose (photo + skeleton)")
+    ap.add_argument("prompt", nargs="?", default="", help="what to make; for edit: what to change; for pose: the pose")
+    ap.add_argument("--from", dest="src", metavar="PHOTO", help="pose: make the skeleton from this photo (in ~/work)")
+    ap.add_argument("--pose-skeleton", action="store_true", help="image: the --pose picture is already a skeleton")
     ap.add_argument("--image", metavar="IMAGE", action="append", default=[],
                     help="edit: the image to change (in ~/work); repeat for extra references (up to 4)")
     ap.add_argument("--no-expand", action="store_true", help="FLUX 3: use the prompt as typed (no caption expansion)")
@@ -809,7 +866,7 @@ def main():
     ap.add_argument("--negative", default=None, help='what to avoid (default: per model and style; "" = nothing)')
     ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--steps", type=int, default=None)
-    ap.add_argument("--size", default="1024x1024", help="image size WxH (multiples of 64)")
+    ap.add_argument("--size", default=None, help="image size WxH (multiples of 64; default 1024x1024, pose 896x1152)")
     ap.add_argument("--upscale", action="store_true", help="image: also save a fast 2x copy (4x-UltraSharp)")
     ap.add_argument("--hires", action="store_true", help="image: also save a detailed 2x copy (tiles redrawn, slower)")
     ap.add_argument("--pose", metavar="IMAGE", help="image: copy the body pose from this picture (in ~/work)")
@@ -829,12 +886,32 @@ def main():
         sys.exit(f"--timeout must be 60-{MAX_TIMEOUT} s")
     if a.kind == "video" and not 5 <= a.frames <= MAX_FRAMES:
         sys.exit(f"--frames must be 5-{MAX_FRAMES}")
+    if not a.prompt.strip() and not (a.kind == "pose" and a.src):
+        sys.exit(f'ai gen {a.kind} needs a prompt, e.g. ai gen {a.kind} "..."' + (" (or --from PHOTO)" if a.kind == "pose" else ""))
+    if a.src and a.kind != "pose":
+        sys.exit("--from is for ai gen pose (use --pose to copy a pose into an image)")
+    a.size = a.size or ("896x1152" if a.kind == "pose" else "1024x1024")
     os.makedirs(OUTPUT, exist_ok=True)
     if shutil.disk_usage(OUTPUT).free < MIN_FREE:
         sys.exit(f"less than {MIN_FREE >> 30} GB free in {OUTPUT}")
     seed = a.seed if a.seed is not None else random.randint(1, 2**31)
-    prefix = f"{datetime.date.today():%Y-%m-%d}/{slug(a.name or ' '.join(a.prompt.split()[:6]))}"
-    if a.kind in ("image", "edit"):
+    prefix = f"{datetime.date.today():%Y-%m-%d}/{slug(a.name or ' '.join(a.prompt.split()[:6]) or 'pose')}"
+    if a.kind == "pose":
+        m = re.fullmatch(r"(\d{3,4})x(\d{3,4})", a.size)
+        if not m:
+            sys.exit("--size must look like 896x1152")
+        w, h = (int(v) // 64 * 64 for v in m.groups())
+        if not (512 <= w <= MAX_SIDE and 512 <= h <= MAX_SIDE):
+            sys.exit(f"--size: each side must be 512-{MAX_SIDE}")
+        if a.pose or a.face or a.fix_faces or a.fix_hands or a.hires or a.checkpoint or a.model or a.image:
+            sys.exit("ai gen pose takes a description or --from PHOTO, plus --name/--seed/--size")
+        uploads = [("30", check_input(a.src))] if a.src else []
+        wf = pose_wf(a.prompt, seed, w, h, prefix, src="pending" if a.src else None)
+        info = {"kind": "pose", "prompt": a.prompt or None, "full_prompt": None if a.src else POSE_PROMPT.format(d=a.prompt),
+                "from": a.src, "seed": None if a.src else seed, "model": None if a.src else "zimage", "size": f"{w}x{h}",
+                "use": "ai gen image \"...\" --pose <the photo, or the _pose skeleton>"}
+        limit = a.timeout or 900
+    elif a.kind in ("image", "edit"):
         m = re.fullmatch(r"(\d{3,4})x(\d{3,4})", a.size)
         if not m:
             sys.exit("--size must look like 1024x1024")
@@ -872,10 +949,14 @@ def main():
             wf = sdxl(prompt, neg, seed, steps, w, h, a.upscale, prefix, pose="pending" if a.pose else None,
                       face="pending" if a.face else None, fix_faces=a.fix_faces, fix_hands=a.fix_hands, hires=a.hires,
                       pose_strength=pose_strength, face_weight=a.face_weight, prof=prof)
+            if a.pose and is_skeleton(a.pose, a.pose_skeleton):
+                use_skeleton(wf)
         elif arch == "anima":
             uploads = [("30", check_input(a.pose))] if a.pose else []
             wf = anima(prompt, neg, seed, steps, w, h, prefix, prof, pose="pending" if a.pose else None,
                        pose_strength=pose_strength, upscale=a.upscale)
+            if a.pose and is_skeleton(a.pose, a.pose_skeleton):
+                use_skeleton(wf)
         elif arch == "zimage":
             uploads, neg = [], ""                           # CFG 1: no negative prompt
             wf = zimage(prompt, seed, steps, w, h, prefix, prof, upscale=a.upscale)
@@ -904,7 +985,7 @@ def main():
         limit = a.timeout or (1800 if a.hires or a.fix_hands or a.fix_faces or arch in ("flux3", "fibo2", "moss") else 900)
     else:
         frames = max(5, (a.frames - 1) // 4 * 4 + 1)
-        if a.pose or a.face or a.fix_faces or a.fix_hands or a.hires or a.checkpoint or a.model or a.image:
+        if a.pose_skeleton or a.pose or a.face or a.fix_faces or a.fix_hands or a.hires or a.checkpoint or a.model or a.image:
             sys.exit("--pose/--face/--fix-faces/--fix-hands/--hires/--checkpoint/--model/--image are for images")
         uploads = []
         neg = a.negative if a.negative is not None else "static, blurry, distorted, low quality, watermark"

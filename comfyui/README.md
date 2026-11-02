@@ -19,7 +19,8 @@ it unloads the chat model through the model-serving contract, runs one fixed wor
 - `ai gen schema` saves ComfyUI's node definitions (`~/work/outputs/comfy/schema.json`); committed as `schema.json`, the
   GitHub check validates every workflow variant against it (`check_workflows.py`) without a GPU.
 - Your saved workflows and settings: `~/work/comfyui/` (kept on removal). Results: `~/work/outputs/comfy/<date>/`.
-- `test.sh --full` = SDXL image + upscale, a Wan video, and a pose + face + face/hand repair + tiled-upscale job, all through `ai gen`.
+- `test.sh --full` = SDXL image + upscale, a Wan video, a pose + face + face/hand repair + tiled-upscale job, the newer
+  models, and `ai gen pose` (photo + skeleton) with an image made from that skeleton, all through `ai gen`.
 
 ## Image models (`profiles.json`, `ai gen models` shows which are ready)
 | `--model` | For | Notes |
@@ -44,7 +45,8 @@ Settings come from each model's official template or card; tune them in `profile
 Best current route: SDXL (`realvis`) with `--face` + `--pose` + `--fix-faces --fix-hands` + `--hires`, about 3 min per image;
 FLUX 3 with two references for poses SDXL gets wrong (see the end of this section).
 1. **Character reference**: one clear, front-facing head-and-shoulders portrait of the character (`--model realvis`).
-2. **Pose sources**: any person in each pose, e.g. Z-Image (fast). Only the skeleton is used, never the look.
+2. **Pose sources**: any person in each pose: `ai gen pose "<pose>"` makes a plain full-body photo plus its skeleton
+   (`<name>_pose_...png`); either works with `--pose`. Only the skeleton is used, never the look.
 3. **Final images**: the *same* character description (exact clothes, hair, eyes), the same `--seed`, plus
    `--face <reference> --pose <source> --fix-faces --fix-hands --hires`.
 ```powershell
@@ -53,7 +55,7 @@ $char = "RAW photo of a woman in her early 30s, shoulder-length wavy auburn hair
 dev ai gen image "$char, head and shoulders portrait, facing the camera, plain light grey background" --model realvis --size 896x1152 --seed 100 --name charref
 $poses = "standing with hands on hips", "walking towards the camera", "jumping with both arms raised"
 $i = 1; foreach ($p in $poses) {
-  dev ai gen image "wide full body photo of a person $p, entire body from head to feet in frame, space around the figure, plain studio background" --model zimage --size 896x1152 --seed 200 --name "posesrc$i"
+  dev ai gen pose "$p" --seed 200 --name "posesrc$i"
   dev ai gen image "$char, full body, head to feet in frame, $p, city park background" --model realvis --face "$o/charref_00001_.png" --pose "$o/posesrc${i}_00001_.png" --fix-faces --fix-hands --hires --seed 300 --size 896x1152 --name "char-pose$i"
   $i++ }
 dev share

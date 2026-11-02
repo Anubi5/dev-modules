@@ -89,6 +89,21 @@ def same_file(a, b):
     return os.path.exists(a) and os.path.exists(b) and os.path.getsize(a) == os.path.getsize(b) > 0
 
 
+def same_content(a, b):
+    """! @brief True only if both files have the same SHA-256 (used before deleting a copy - size alone is not proof). """
+    if not same_file(a, b):
+        return False
+    import hashlib
+
+    def h(p):
+        d = hashlib.sha256()
+        with open(p, "rb") as f:
+            for block in iter(lambda: f.read(1 << 22), b""):
+                d.update(block)
+        return d.hexdigest()
+    return h(a) == h(b)
+
+
 def move_to_d(src, dst, keep=False):
     """!
     @brief Moves an older in-distro copy to D: (copy, size check, then delete the in-distro copy unless keep).
@@ -121,8 +136,11 @@ def place(rel, ro, rw, legacy, repo=None, local=False):
     if local and have_old and (same_file(old, on_d) or (not have_d and not rw)):
         return old
     if have_d:
-        if same_file(old, on_d) and not local:
-            os.remove(old); print(f"  {os.path.basename(rel)}: removed the duplicate inside the distro (same file on D:)")
+        if not local and same_file(old, on_d):
+            if same_content(old, on_d):
+                os.remove(old); print(f"  {os.path.basename(rel)}: removed the duplicate inside the distro (same file on D:)")
+            else:
+                print(f"  CHECK {os.path.basename(rel)}: the copy inside the distro differs from D: - both kept, D: is used")
         if not local:
             return on_d
     elif have_old:

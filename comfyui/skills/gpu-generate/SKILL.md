@@ -40,6 +40,9 @@ The user asks for a picture, illustration, concept art, texture, reference image
 4. The lines after `OUTPUT` are the file paths (in `~/work/outputs/comfy/<date>/`); `record:` is a .json with every
    setting used. Report the files and the seed. With repair/upscale options, `<name>_base_*` is the untouched original -
    offer it if the repaired one looks worse.
+   Before you report success, check the result: the file exists and is not tiny (a few KB = blank), and - if your
+   vision tool works - look at it and compare with the request (subject, pose, text, number of people, hands).
+   Say honestly what is off instead of only listing the file.
 5. If the result belongs to a project, copy it into `~/work/projects/<project>/output/`.
 
 ## Rules
@@ -49,7 +52,7 @@ The user asks for a picture, illustration, concept art, texture, reference image
 - `--face` only with faces of fictional characters or of people who agreed; never to put a real person into sexual or
   degrading images. If FaceID reports no face found, ask for a clearer front-facing face image.
 - With `--pose`, a `<name>_pose_*.png` (the detected skeleton) is saved too - check it when the pose looks wrong.
-- Same character in several poses: follow the recipe in the comfyui module README (reference portrait, pose sources
-  with "entire body from head to feet in frame", identical character text + same seed, `--pose-strength 0.8-0.9` for
-  sitting/lying/crouching poses).
+- Same character in several poses: follow the recipe in the comfyui module README (reference portrait, full-body pose
+  sources with "entire body from head to feet in frame", identical character text + same seed; sitting, lying and
+  crossed limbs go through the FLUX 3 two-reference route described there).
 - Sizes are multiples of 64; 1024x1024, 1152x896 and 896x1152 work best for SDXL.

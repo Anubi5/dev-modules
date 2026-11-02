@@ -167,7 +167,10 @@ def main():
         if old and os.path.exists(old) and not os.path.exists(on_d) and rw:
             move_to_d(old, os.path.join(rw, folder, name), on_d, own, sha)
         if old and os.path.exists(old) and os.path.exists(on_d) and os.path.getsize(old) == os.path.getsize(on_d):
-            os.remove(old); print(f"  {folder}/{name}: removed the duplicate inside the distro (same file on D:)")
+            if sha256(old) == sha256(on_d):                   # size alone is no proof: compare the content
+                os.remove(old); print(f"  {folder}/{name}: removed the duplicate inside the distro (same file on D:)")
+            else:
+                print(f"  CHECK {folder}/{name}: the copy inside the distro differs from D: - both kept")
         have = [p for p in (on_d, old) if p and os.path.exists(p)]
         if have:
             print(f"  {folder}/{name}: present{'' if have[0] == on_d else ' (still inside the distro - run dev mod update comfyui from Windows to move it to D:)'}", flush=True)

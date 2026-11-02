@@ -99,7 +99,7 @@ def move_to_d(src, dst, key, own, pinned):
     with open(src, "rb") as i, open(dst + ".part", "wb") as o:
         for block in iter(lambda: i.read(1 << 20), b""):
             o.write(block); h.update(block)
-    if (want and h.hexdigest() != want) or os.path.getsize(dst + ".part") != os.path.getsize(src):
+    if (want and h.hexdigest() != want) or sha256(dst + ".part") != h.hexdigest():   # read back from D: and compare
         os.remove(dst + ".part")
         print(f"  CHECK {os.path.basename(src)}: the copy on D: does not match - left inside the distro")
         return False
@@ -169,8 +169,12 @@ def main():
         if old and os.path.exists(old) and os.path.exists(on_d) and os.path.getsize(old) == os.path.getsize(on_d):
             if sha256(old) == sha256(on_d):                   # size alone is no proof: compare the content
                 os.remove(old); print(f"  {folder}/{name}: removed the duplicate inside the distro (same file on D:)")
-            else:
-                print(f"  CHECK {folder}/{name}: the copy inside the distro differs from D: - both kept")
+            else:                                             # which one is right is unknown: stop, don't guess
+                print(f"  CHECK {folder}/{name}: the copy inside the distro differs from the one on D: - both kept. "
+                      f"Delete the wrong one (D:\\AI\\models\\comfy\\{folder.replace('/', chr(92))}\\{name} or {old}), "
+                      f"then run dev mod update comfyui again.")
+                failed += 1
+                continue
         have = [p for p in (on_d, old) if p and os.path.exists(p)]
         if have:
             print(f"  {folder}/{name}: present{'' if have[0] == on_d else ' (still inside the distro - run dev mod update comfyui from Windows to move it to D:)'}", flush=True)

@@ -106,14 +106,15 @@ def same_content(a, b):
 
 def move_to_d(src, dst, keep=False):
     """!
-    @brief Moves an older in-distro copy to D: (copy, size check, then delete the in-distro copy unless keep).
+    @brief Moves an older in-distro copy to D: - copy, then compare the SHA-256 of the copy on D: with the original,
+           then delete the in-distro copy (unless keep).
     @param src  File inside the distro.  @param dst  Path under the writable D: mount.  @param keep  Keep src.
     """
     keep or print(f"  {os.path.basename(src)}: moving to D: ({os.path.getsize(src) >> 20} MB)")
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     shutil.copyfile(src, dst + ".part")
-    if os.path.getsize(dst + ".part") != os.path.getsize(src):
-        os.remove(dst + ".part"); raise RuntimeError(f"copy of {os.path.basename(src)} to D: is incomplete")
+    if not same_content(src, dst + ".part"):
+        os.remove(dst + ".part"); raise RuntimeError(f"copy of {os.path.basename(src)} to D: does not match - original kept")
     os.replace(dst + ".part", dst)
     keep or os.remove(src)
 
@@ -139,8 +140,9 @@ def place(rel, ro, rw, legacy, repo=None, local=False):
         if not local and same_file(old, on_d):
             if same_content(old, on_d):
                 os.remove(old); print(f"  {os.path.basename(rel)}: removed the duplicate inside the distro (same file on D:)")
-            else:
-                print(f"  CHECK {os.path.basename(rel)}: the copy inside the distro differs from D: - both kept, D: is used")
+            else:                                         # which one is right is unknown: fail this model, don't guess
+                raise RuntimeError(f"{os.path.basename(rel)}: the copy inside the distro ({old}) differs from the one on D: "
+                                   f"- both kept; delete the wrong one, then run dev mod update llama-swap again")
         if not local:
             return on_d
     elif have_old:
@@ -226,8 +228,10 @@ def chat_models(specs, state, ro, rw=None):
                         json.dump(manifest, open(manifest_path, "w"), indent=2)
                         print(f"  {os.path.basename(entry['file'])}: ready ({old.get('repo')}, {len(entry['files'])} part(s))")
                         continue
-                except RuntimeError:
-                    pass                                  # a recorded file is gone: look it up again below
+                except RuntimeError as e:
+                    if "is missing" not in str(e):
+                        raise                             # e.g. two different copies: report, don't look further
+                    # a recorded file is gone: look it up again below
             repo = find_repo(spec)
             if not repo:
                 print("  no matching repo found"); failed += 1; continue

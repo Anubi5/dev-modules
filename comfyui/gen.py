@@ -913,8 +913,10 @@ def main():
                 "steps": a.steps or 20, "frames": frames}
     log = lambda s: print(f"  {s}", flush=True)
     ok, files, err = generate(wf, limit, log=log, uploads=uploads)
-    if not ok and not files and re.search(r"read_file_slice|HostBuffer|deserializ|Unable to load|out of memory", err or "", re.I):
-        log(f"model loading failed ({err[:80]}) - retrying once")      # seen once right after the chat model unloaded
+    if not ok and re.search(r"read_file_slice|HostBuffer|deserializ|Unable to load|out of memory", err or "", re.I):
+        # model file read from D: failed (seen right after the chat model unloaded, and mid-job after a pose preview
+        # was already saved - so earlier files do not mean the job got past loading): retry the whole job once
+        log(f"model loading failed ({err[:80]}) - retrying once")
         ok, files, err = generate(wf, limit, log=log, uploads=uploads)
     if err:
         print(f"  error: {err}")

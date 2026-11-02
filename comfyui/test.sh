@@ -30,5 +30,11 @@ done < "$MOD/models.txt"
 echo "  image models:"; python3 "$MOD/gen.py" models || miss=1     # every model in profiles.json: ready / optional / MISSING
 [ $miss = 0 ] || exit 1
 echo "  ComfyUI up, custom nodes loaded, all model files present"
+# img-check (agents quote it to prove a result): a flat image must be called BLANK, a real one must pass
+V=$MOD/app/ComfyUI/.venv/bin/python; t=$(mktemp -d)
+"$V" -c "from PIL import Image, ImageDraw; Image.new('RGB',(64,64),(60,60,60)).save('$t/flat.png'); i=Image.new('RGB',(64,64),(60,60,60)); ImageDraw.Draw(i).rectangle((16,16,48,48),fill=(200,30,30)); i.save('$t/cube.png')"
+"$MOD/bin/img-check" "$t/flat.png" | grep -q BLANK && "$MOD/bin/img-check" "$t/cube.png" | grep -q "red" \
+  && echo "  img-check: flat image -> BLANK, red square -> red" || { echo "img-check does not work"; rm -rf "$t"; exit 1; }
+rm -rf "$t"
 [ "${1:-}" = --full ] && { cd "$MOD" && exec python3 comfy_test.py; }
 exit 0

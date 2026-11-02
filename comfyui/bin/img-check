@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+## @brief "img-check <image>...": size, contrast, main colours, BLANK verdict (uses ComfyUI's Python: Pillow + numpy).
+exec ~/.local/share/modules/comfyui/app/ComfyUI/.venv/bin/python ~/.local/share/modules/comfyui/img_check.py "$@"

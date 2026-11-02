@@ -36,7 +36,8 @@ uv tool run --from "$MCP_SRC" blender-mcp --help >/dev/null || { echo "  CHECK M
 
 say "Hermes Blender plugin (official, catalog pin)"
 if command -v hermes >/dev/null; then
-  hermes plugins list 2>/dev/null | grep -qw blender || hermes plugins install blender </dev/null || echo "  CHECK hermes plugins install blender failed"
+  pl=$(hermes plugins list 2>/dev/null || true)          # (no pipe into grep -q: with pipefail that can misfire)
+  [[ "$pl" == *" blender "* ]] || hermes plugins install blender </dev/null || echo "  CHECK hermes plugins install blender failed"
   hermes plugins enable blender </dev/null >/dev/null 2>&1 || true
   hermes plugins list 2>/dev/null | grep -w blender | head -1
 fi

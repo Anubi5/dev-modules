@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-## @brief Quick real check (exit 0 = works); --full for the slow one.
+## @brief Quick real check (exit 0 = works); --full for the slow one. Replace the line below: CI rejects a test
+##        that only says "true".
 set -euo pipefail
-# example: "$MOD/app/venv/bin/<tool>" --version
-true
+true   # e.g. "$MOD/app/venv/bin/<tool>" --version

@@ -8,7 +8,6 @@
 """
 import base64
 import json
-import mimetypes
 import os
 import sys
 import urllib.request
@@ -25,12 +24,29 @@ def port():
     return "8080"
 
 
+IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+WORK = os.path.realpath(os.path.expanduser("~/work"))
+
+
+def check_image(path):
+    """!
+    @brief Same rule as ai gen: a picture inside ~/work (after following links), .png/.jpg/.webp, at most 30 MB.
+    @return (real path, None) or (None, reason).
+    """
+    real = os.path.realpath(os.path.expanduser(path))
+    if not (real.startswith(WORK + os.sep) and os.path.isfile(real)):
+        return None, f"{path}: must be an existing file inside ~/work"
+    if os.path.splitext(real)[1].lower() not in IMAGE_TYPES or os.path.getsize(real) > 30 << 20:
+        return None, f"{path}: must be a .png/.jpg/.webp image of at most 30 MB"
+    return real, None
+
+
 def ask(image, question, model="vision-check", timeout=300):
     """!
     @brief Sends one image and question to the model server.
     @return The answer text.
     """
-    mime = mimetypes.guess_type(image)[0] or "image/png"
+    mime = IMAGE_TYPES[os.path.splitext(image)[1].lower()]
     data = base64.b64encode(open(image, "rb").read()).decode()
     body = json.dumps({"model": model, "max_tokens": 200, "temperature": 0,
                        "messages": [{"role": "user", "content": [
@@ -53,8 +69,9 @@ def main(argv):
     if len(argv) != 2:
         print('usage: img-ask <image> "<question>" [--expect WORD]'); return 2
     image, question = argv
-    if not os.path.isfile(image):
-        print(f"img-ask: no such file: {image}"); return 1
+    image, why = check_image(image)
+    if why:
+        print(f"img-ask: {why}"); return 1
     try:
         answer = ask(image, question)
     except Exception as e:

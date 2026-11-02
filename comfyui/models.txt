@@ -1,4 +1,5 @@
-# ComfyUI model files: <huggingface repo> <file or path in the repo> <ComfyUI folder> [save as]
+# ComfyUI model files: <huggingface repo> <file or path in the repo> <ComfyUI folder> [save as] [sha256:<hex>]
+# Files in formats that can run code when loaded (.bin .pt .pth .ckpt .pkl) must carry a sha256 (CI checks it).
 # Files live in D:\AI\models\comfy (= /models/comfy, read-only); missing ones are downloaded there by dev mod add|update (Windows).
 stabilityai/stable-diffusion-xl-base-1.0 sd_xl_base_1.0.safetensors checkpoints
 # Photoreal SDXL fine-tune used by ai gen (openrail++); works with every SDXL ControlNet / IPAdapter / detailer here
@@ -14,11 +15,11 @@ xinsir/controlnet-union-sdxl-1.0 diffusion_pytorch_model_promax.safetensors cont
 # Consistent faces: IPAdapter (face reference image) + FaceID Plus v2 (stronger, uses InsightFace) + the CLIP vision encoder
 h94/IP-Adapter models/image_encoder/model.safetensors clip_vision CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors
 h94/IP-Adapter sdxl_models/ip-adapter-plus-face_sdxl_vit-h.safetensors ipadapter
-h94/IP-Adapter-FaceID ip-adapter-faceid-plusv2_sdxl.bin ipadapter
+h94/IP-Adapter-FaceID ip-adapter-faceid-plusv2_sdxl.bin ipadapter sha256:c6945d82b543700cc3ccbb98d363b837e9c596281607857c74b713a876daf5fb
 h94/IP-Adapter-FaceID ip-adapter-faceid-plusv2_sdxl_lora.safetensors loras
 # Face / hand repair (FaceDetailer): detectors
-Bingsu/adetailer face_yolov8m.pt ultralytics/bbox
-Bingsu/adetailer hand_yolov8s.pt ultralytics/bbox
+Bingsu/adetailer face_yolov8m.pt ultralytics/bbox sha256:717923c19b3f4bbf5250b728f1fa6b2cb72a33aed1d236ea9caf0e21ad943e5f
+Bingsu/adetailer hand_yolov8s.pt ultralytics/bbox sha256:70b540063fbc385736d8258970744a4afbc4cbf7932134bae3b24cdadeadec06
 # --- FLUX 3 Image Klein (distilled, INT8) - general images + ai edit. Gated on Hugging Face (FLUX Kommunity License,
 #     non-commercial): accept it at huggingface.co/black-forest-labs/flux-3-image-klein-comfy and put the 3 files into
 #     D:\AI\models\comfy\{diffusion_models,text_encoders,vae}; they are checked against these checksums.

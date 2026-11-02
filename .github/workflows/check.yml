@@ -23,3 +23,5 @@ jobs:
         run: python3 comfyui/check_workflows.py
       - name: Model files (copies, conflicts, moves)
         run: bash _tests/models_test.sh
+      - name: Module contract (real tests, checksums for code-carrying model files)
+        run: bash _tests/contract_check.sh

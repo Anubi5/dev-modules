@@ -3,15 +3,19 @@
 set -euo pipefail
 cd "$MOD"; A=$MOD/app; mkdir -p "$A/bin" "$MOD/models"
 export PATH=/usr/local/cuda/bin:$PATH
-if ! "$A/bin/llama-server" --version >/dev/null 2>&1; then   # missing, or moved binaries that no longer start
-  echo "  building llama.cpp with CUDA - 15-30 min, no output meanwhile"
-  [ -d "$A/src/llama.cpp" ] || git clone --depth 1 https://github.com/ggml-org/llama.cpp "$A/src/llama.cpp"
+LLAMA_CPP_TAG=b12040        # pinned llama.cpp release (2 Nov 2026: EmbeddingGemma 2, LFM2.5, Nemotron 3.5 Bolt + vision); raise deliberately
+if ! "$A/bin/llama-server" --version >/dev/null 2>&1 \
+   || [ "$(cat "$A/llama.cpp.tag" 2>/dev/null)" != "$LLAMA_CPP_TAG" ]; then   # missing, broken, or a new pinned release
+  echo "  building llama.cpp $LLAMA_CPP_TAG with CUDA - 15-30 min, no output meanwhile"
+  rm -rf "$A/src/llama.cpp"
+  git clone -q --depth 1 --branch "$LLAMA_CPP_TAG" https://github.com/ggml-org/llama.cpp "$A/src/llama.cpp"
   cmake -S "$A/src/llama.cpp" -B "$A/src/llama.cpp/build" -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCH:-89}" \
         -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release >/dev/null   # static: no library paths that break when moved
   cmake --build "$A/src/llama.cpp/build" -j "$(nproc)" --target llama-server llama-bench >/dev/null
   rm -f "$A"/bin/lib*.so*                                       # old shared-library build
   cp -a "$A/src/llama.cpp/build/bin/llama-server" "$A/src/llama.cpp/build/bin/llama-bench" "$A/bin/"
   rm -rf "$A/src/llama.cpp/build"
+  echo "$LLAMA_CPP_TAG" > "$A/llama.cpp.tag"
 fi
 "$A/bin/llama-server" --version >/dev/null 2>&1 || { echo "llama-server does not start:"; "$A/bin/llama-server" --version 2>&1 | tail -5; exit 1; }
 if [ ! -x "$A/bin/llama-swap" ]; then

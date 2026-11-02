@@ -972,6 +972,48 @@
    ]
   }
  },
+ "TextEncodeFibo2": {
+  "batch_size": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "clip": {
+   "part": "required",
+   "type": "CLIP",
+   "values": null
+  },
+  "height": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "images": {
+   "part": "optional",
+   "type": "COMFY_AUTOGROW_V3",
+   "values": null
+  },
+  "negative_prompt": {
+   "part": "required",
+   "type": "STRING",
+   "values": null
+  },
+  "prompt": {
+   "part": "required",
+   "type": "STRING",
+   "values": null
+  },
+  "vae": {
+   "part": "optional",
+   "type": "VAE",
+   "values": null
+  },
+  "width": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  }
+ },
  "UNETLoader": {
   "unet_name": {
    "part": "required",

@@ -18,6 +18,7 @@ tiled-upscale UltimateSDUpscale
 flux3-edit ReferenceMultiLatent
 anima-pose AnimaLLLiteApply
 zimage ModelSamplingAuraFlow
+fibo2-edit TextEncodeFibo2
 LIST
 PY=$MOD/app/ComfyUI/.venv/bin/python
 "$PY" -c 'import insightface' 2>/dev/null || echo "  (FaceID unavailable: InsightFace not installed - plain IPAdapter face works)"

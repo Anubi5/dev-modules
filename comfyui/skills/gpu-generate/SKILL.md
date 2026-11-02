@@ -23,7 +23,8 @@ The user asks for a picture, illustration, concept art, texture, reference image
      - Which model (leave `--model` out unless there is a reason; defaults were picked by a side-by-side test):
        plain photo/scene/product -> default (zimage); with --pose/--face/--fix-*/--hires -> juggernaut automatically
        (`--model realvis` for close-up portraits with --face); text in the image, posters, complex multi-part scenes
-       -> `--model flux3`; anime/illustration -> `--model anima` (`--style art` for other artwork).
+       -> `--model flux3` (or `--model moss` for posters/signs/infographics with exact wording); anime/illustration
+       -> `--model anima` (`--style art` for other artwork).
      - `--model <name>` (each brings its own tuned settings; `ai gen models` shows which are ready):
        realvis = photoreal portraits; the SDXL family (realvis, juggernaut, sdxl-base) is the only one with `--face`/`--fix-*`/`--hires`; juggernaut = natural
        documentary photos; sdxl-base = general/artistic; flux3 = follows long prompts, renders text, best composition
@@ -36,6 +37,9 @@ The user asks for a picture, illustration, concept art, texture, reference image
      an existing picture by instruction (recolour, replace, remove, restyle, put the person from image 1 into scene 2).
      Describe the change; everything else stays. To change the setting, say so explicitly
      ("change the background completely") - otherwise FLUX 3 keeps the original scene. The output is a new file - the original is never touched.
+     `--model fibo2` (Fibo 2.0, 4 steps, non-commercial licence) is the second edit model: refer to the pictures as
+     <image_1>, <image_2> and describe the FINAL state of what changes - do not write "keep X unchanged" (it then
+     redraws everything and invents props). If one edit model gets a pose or detail wrong, try the other.
    - video: `ai gen video "<prompt>" --name <name> [--frames 33]`  (33 frames ~ 1.4 s, ~2-6 min; 121 ~ 5 s)
 4. The lines after `OUTPUT` are the file paths (in `~/work/outputs/comfy/<date>/`); `record:` is a .json with every
    setting used. Report the files and the seed. With repair/upscale options, `<name>_base_*` is the untouched original -

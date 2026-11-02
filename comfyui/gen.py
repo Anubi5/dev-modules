@@ -360,6 +360,38 @@ def zimage(prompt, seed, steps, width, height, prefix, prof, upscale=False):
     return _finish(wf, prof, seed, steps, ["7", 0], ["4", 0], ["5", 0], ["6", 0], prefix, upscale)
 
 
+def moss(prompt, negative, seed, steps, width, height, prefix, prof, upscale=False):
+    """!
+    @brief MOSS-Image text-to-image (OpenMOSS; Comfy template image_moss_image_t2i: 25 steps, CFG 2.5, er_sde, simple,
+           Qwen3.5-9B text encoder, FLUX.2 small VAE). Good at legible text in images.
+    @return Workflow in ComfyUI API format.
+    """
+    wf = _loaders(prof, "moss_image")
+    wf.update({"4": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": prompt}},
+               "5": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": negative}},
+               "6": {"class_type": "EmptyFlux2LatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}}})
+    return _finish(wf, prof, seed, steps, ["1", 0], ["4", 0], ["5", 0], ["6", 0], prefix, upscale)
+
+
+def fibo2(prompt, seed, steps, width, height, prefix, prof, refs=(), upscale=False):
+    """!
+    @brief Fibo 2.0 (Bria) text-to-image, or editing with up to 4 reference images (Comfy template
+           image_fibo2_edit_turbo_pe: TextEncodeFibo2 makes both conditionings and the latent; empty negative = the
+           null caption it was trained with). With references the result size is Fibo's trained bucket for the
+           first image (about 1 MP); without, width x height.
+    @param refs  Uploaded image names (<image_1>, <image_2> ... in the instruction).
+    @return Workflow in ComfyUI API format.
+    """
+    wf = _loaders(prof, "fibo2")
+    enc = {"clip": ["2", 0], "prompt": prompt, "negative_prompt": "", "vae": ["3", 0],
+           "width": 0 if refs else width, "height": 0 if refs else height, "batch_size": 1}
+    for i, name in enumerate(refs):
+        wf[f"2{i}0"] = {"class_type": "LoadImage", "inputs": {"image": name}}
+        enc[f"images.image_{i + 1}"] = [f"2{i}0", 0]
+    wf["4"] = {"class_type": "TextEncodeFibo2", "inputs": enc}
+    return _finish(wf, prof, seed, steps, ["1", 0], ["4", 0], ["4", 1], ["4", 2], prefix, upscale)
+
+
 EXPANDED = {"ok": None}                      # did the last expand_prompt() really expand? (tests check it)
 
 
@@ -668,6 +700,12 @@ def all_workflows():
         elif p["arch"] == "flux3":
             for refs, up in itertools.product([(), ("a",), ("a", "b")], [False, True]):
                 yield flux3("x", 1, p["steps"], 1024, 1024, "t", p, refs=refs, upscale=up)
+        elif p["arch"] == "moss":
+            for up in (False, True):
+                yield moss("x", "y", 1, p["steps"], 1024, 1024, "t", p, upscale=up)
+        elif p["arch"] == "fibo2":
+            for refs, up in itertools.product([(), ("a",), ("a", "b")], [False, True]):
+                yield fibo2("x", 1, p["steps"], 1024, 1024, "t", p, refs=refs, upscale=up)
     yield wan("x", "y", 1, 20, 33, "t")
 
 
@@ -738,7 +776,7 @@ HELP = """ai gen - images, edits and short videos on the local GPU (one job at a
       --face IMG           keep a face (SDXL models)                           --face-weight 0.3-1.2
       --fix-faces --fix-hands  redraw faces/hands (SDXL)   --hires  detailed 2x copy (SDXL)   --upscale  fast 2x copy
       --checkpoint NAME    any SDXL file in D:\\AI\\models\\comfy\\checkpoints
-  ai gen edit "what to change" --image IMG [--image REF]   change an image by instruction (FLUX 3)
+  ai gen edit "what to change" --image IMG [--image REF]   change an image by instruction (FLUX 3; --model fibo2 = Fibo 2.0)
   ai gen video "prompt" [--frames 33]                      Wan 2.2 clip (33 frames ~ 1.4 s, up to 121)
   ai gen models                                            which image models are ready
   ai gen schema                                            save ComfyUI node definitions (for the CI check)
@@ -818,8 +856,8 @@ def main():
         if [o for o in used if o not in allowed]:
             sys.exit(f"--model {prof['name']} ({arch}) does not support --{', --'.join(o.replace('_', '-') for o in used if o not in allowed)}"
                      " - those work with the SDXL models (realvis, juggernaut, sdxl-base)" + (" and --pose with anima" if arch != "anima" else ""))
-        if a.kind == "edit" and arch != "flux3":
-            sys.exit("edit needs a FLUX 3 model (--model flux3)")
+        if a.kind == "edit" and arch not in ("flux3", "fibo2"):
+            sys.exit("edit needs a FLUX 3 or Fibo 2.0 model (--model flux3 | fibo2)")
         if a.image and a.kind != "edit":
             sys.exit("--image is for edit")
         pose_strength = a.pose_strength if a.pose_strength is not None else prof.get("pose_strength", 0.65)
@@ -847,6 +885,13 @@ def main():
                 prompt = expand_prompt(a.prompt, "edit" if refs else "t2i", w, h, refs, log=log0)
             uploads, neg = [(f"2{i}0", f) for i, f in enumerate(refs)], ""
             wf = flux3(prompt, seed, steps, w, h, prefix, prof, refs=["pending"] * len(refs), upscale=a.upscale)
+        elif arch == "moss":
+            uploads = []
+            wf = moss(prompt, neg, seed, steps, w, h, prefix, prof, upscale=a.upscale)
+        elif arch == "fibo2":
+            refs = [check_input(f) for f in a.image]
+            uploads, neg = [(f"2{i}0", f) for i, f in enumerate(refs)], ""
+            wf = fibo2(prompt, seed, steps, w, h, prefix, prof, refs=["pending"] * len(refs), upscale=a.upscale)
         else:
             sys.exit(f"--model {prof['name']}: architecture {arch} is not wired into ai gen")
         info = {"kind": a.kind, "prompt": a.prompt, "expanded_prompt": prompt if prompt != a.prompt else None,
@@ -856,7 +901,7 @@ def main():
                 "options": {k: getattr(a, k) for k in ("upscale", "hires", "fix_faces", "fix_hands")},
                 "pose": a.pose and {"file": a.pose, "strength": pose_strength},
                 "face": a.face and {"file": a.face, "weight": a.face_weight}, "images": a.image or None}
-        limit = a.timeout or (1800 if a.hires or a.fix_hands or a.fix_faces or arch == "flux3" else 900)
+        limit = a.timeout or (1800 if a.hires or a.fix_hands or a.fix_faces or arch in ("flux3", "fibo2", "moss") else 900)
     else:
         frames = max(5, (a.frames - 1) // 4 * 4 + 1)
         if a.pose or a.face or a.fix_faces or a.fix_hands or a.hires or a.checkpoint or a.model or a.image:

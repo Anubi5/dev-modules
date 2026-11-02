@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+## @brief The ilspy command: .NET / Unity decompiler (ilspycmd) from the module folder with its own .NET runtime.
+M=~/.local/share/modules/reverse-tools/app
+[ -x "$M/ilspy/ilspycmd" ] || { echo "  ILSpy is not installed yet - ask an agent (skill reverse-tools) to install it." >&2; exit 1; }
+export DOTNET_ROOT=$M/dotnet DOTNET_ROLL_FORWARD=Major DOTNET_CLI_TELEMETRY_OPTOUT=1 PATH=$M/dotnet:$PATH
+exec "$M/ilspy/ilspycmd" "$@"

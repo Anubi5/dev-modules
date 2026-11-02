@@ -84,6 +84,59 @@
       "args": "-c 8192",
       "ttl": 300,
       "speed_test_only": true
+    },
+    {
+      "id": "embed-gemma2",
+      "name": "EmbeddingGemma 2 (search: text embeddings)",
+      "repo": "ggml-org/embeddinggemma-2-GGUF",
+      "quant": [
+        "Q8_0"
+      ],
+      "mmproj": false,
+      "embedding": true,
+      "args": "--embeddings -c 2048 -b 2048 -ub 2048",
+      "ttl": 600
+    },
+    {
+      "id": "lfm2.5-24b",
+      "name": "LFM2.5 24B-A2B (candidate: agent tool use)",
+      "repo": "LiquidAI/LFM2.5-24B-A2B-GGUF",
+      "quant": [
+        "Q4_K_M"
+      ],
+      "mmproj": false,
+      "fit": true,
+      "candidate": true,
+      "args": "-c 65536 -ctk q8_0 -ctv q8_0",
+      "ttl": 300,
+      "long_prompt_test": true
+    },
+    {
+      "id": "nemotron-bolt",
+      "name": "Nemotron 3.5 Bolt 74B-A9B 2-bit (candidate: agent with vision)",
+      "repo": "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-GGUF",
+      "quant": [
+        "24GB"
+      ],
+      "mmproj": true,
+      "vision": true,
+      "fit": true,
+      "candidate": true,
+      "args": "-c 32768 -ctk q8_0 -ctv q8_0",
+      "ttl": 300,
+      "long_prompt_test": true
+    },
+    {
+      "id": "vision-check",
+      "name": "WeVisOne-VL 2B (checks images: what is there, how many, which colour)",
+      "repo": "mradermacher/WeVisOne-VL-2B-GGUF",
+      "quant": [
+        "Q8_0"
+      ],
+      "mmproj": true,
+      "vision": true,
+      "args": "-c 8192",
+      "ttl": 120
     }
   ]
 }

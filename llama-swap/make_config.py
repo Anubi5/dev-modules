@@ -6,6 +6,7 @@
 Every chat model that was downloaded gets an entry; nothing is preloaded (llama-swap loads a model on
 first use and unloads it after 'ttl' idle seconds). '{moe}' in a model's args is replaced by the tuned
 expert-offload value from $MOD/moe.conf (written by tune_moe.py), or by the model's 'moe_default'.
+'fit': true lets llama.cpp place layers and experts between GPU and RAM itself (--fit on) instead of all on the GPU.
 
 Usage: make_config.py [--config $MOD/models.json]   ($MOD = this module's folder)
 """
@@ -35,13 +36,14 @@ def build(cfg, files):
     @param files  Parsed $MOD/models/models.json (id -> {file, mmproj}).
     @return YAML as a string.
     """
-    server = f"{AI}/app/bin/llama-server --host 127.0.0.1 --port ${{PORT}} --jinja -ngl 99"
+    server = f"{AI}/app/bin/llama-server --host 127.0.0.1 --port ${{PORT}} --jinja"
     lines = ["healthCheckTimeout: 600", "logLevel: info", "models:"]
     for spec in cfg["chat"]:
         if spec["id"] not in files:
             continue
         local = files[spec["id"]]
-        cmd = f"{server} -m {local['file']} {spec.get('args', '').replace('{moe}', moe_value(spec))}"
+        place = "--fit on" if spec.get("fit") else "-ngl 99"   # fit: llama.cpp splits GPU/RAM itself (untuned models)
+        cmd = f"{server} {place} -m {local['file']} {spec.get('args', '').replace('{moe}', moe_value(spec))}"
         if spec.get("vision") and local.get("mmproj"):
             cmd += f" --mmproj {local['mmproj']}"
         lines += [f'  "{spec["id"]}":', f'    name: "{spec["name"]}"', f"    cmd: {cmd}", f"    ttl: {spec.get('ttl', 300)}"]

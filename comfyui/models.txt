@@ -37,3 +37,13 @@ Comfy-Org/Anima-LLLite model_patches/anima-lllite-lineart-1.safetensors model_pa
 Comfy-Org/Z-Image-Turbo split_files/diffusion_models/z_image_turbo_int8_convrot.safetensors diffusion_models sha256:be517ebd47c912a5626a588e1aeea43e6be4a43c0cdcd2b48a2a780d9f358635
 Comfy-Org/Z-Image-Turbo split_files/text_encoders/qwen_3_4b_fp8_mixed.safetensors text_encoders sha256:72450b19758172c5a7273cf7de729d1c17e7f434a104a00167624cba94f68f15
 Comfy-Org/Z-Image-Turbo split_files/vae/ae.safetensors vae sha256:afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38
+# --- MOSS-Image SFT (OpenMOSS, Apache 2.0) - legible text in images (posters, signs, infographics); INT8 model + 4-bit
+#     Qwen3.5-9B text encoder (Comfy template image_moss_image_t2i). ai gen image --model moss
+Comfy-Org/MOSS-Image diffusion_models/moss_image_sft_int8_convrot.safetensors diffusion_models sha256:b4d1475bc7eeffd7b809e82ea13a1fba1fb85c4e18365af3813722faa5c0fe4f
+Comfy-Org/MOSS-Image text_encoders/qwen3.5_9b_w4a8_gptq.safetensors text_encoders sha256:4cc6a1543ad2061806da46f35f90cadb4801dcba246c44782cf42ec0feb6407c
+Comfy-Org/MOSS-Image vae/flux2-vae_small.safetensors vae sha256:d8d52ba036475f5fb07c8b435e176d3d97ebfa82f0d1a1c317f9cc1e25bd013b
+# --- Fibo 2.0 Edit Turbo (Bria; weights CC BY-NC 4.0, non-commercial) - edits with up to 4 reference images, 4 steps.
+#     ai gen edit --model fibo2. Text encoder and VAE are the same files FLUX 3 uses (same checksums).
+Comfy-Org/Fibo-2.0 diffusion_models/fibo2_edit_turbo_int8_convrot.safetensors diffusion_models sha256:1f6fa7c499191f405467123f655f11762661eaa5bd479d1da8f161398ef72c3b
+Comfy-Org/Fibo-2.0 text_encoders/qwen3vl_4b_int8_convrot.safetensors text_encoders sha256:32de113cbf8282b02cbff0794b637b9d6676da09314a1db5a30bcea9bf4ee01c
+Comfy-Org/Fibo-2.0 vae/flux2-vae.safetensors vae sha256:868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3

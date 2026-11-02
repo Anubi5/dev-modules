@@ -30,6 +30,13 @@ it unloads the chat model through the model-serving contract, runs one fixed wor
 | `sdxl-base` | general / artistic | SDXL, same tools |
 | `flux3` | long prompts, text in images, layout; `ai gen edit` | optional (gated download, see models.txt); caption expanded by the local chat model with BFL's instructions (`prompts/`) |
 | `anima`, `anima-turbo` | anime / illustration | `--pose` via Anima LLLite; non-commercial weights |
+| `moss` | posters, signs, infographics: legible text, 1-2 MP | MOSS-Image SFT, Apache 2.0; INT8 + 4-bit text encoder (Comfy template settings). New 2 Nov 2026 - not yet in the side-by-side test |
+| `fibo2` | `ai gen edit --model fibo2`: edits with up to 4 references, 4 steps; also text-to-image | Fibo 2.0 Edit Turbo, **CC BY-NC 4.0 (non-commercial)**; about 1 MP. Describe the final state of what changes - writing "keep X unchanged" makes it redraw the whole frame. New 2 Nov 2026 - test against the FLUX 3 pose route |
+
+Not added yet: **Kandinsky 6.0** (open video with audio). It runs only through its own extension (registry packages
+`kandinsky6`, `kandinsky6-sr`) with a "download models" button, and needs two large text encoders (Qwen3.5-9B bf16 and
+Qwen2.5-VL-7B). Native ComfyUI support is under review (ComfyUI PR #16825); we add it once that is in a ComfyUI
+release, so it uses the normal pinned-commit and checksum route like every other model here.
 
 Settings come from each model's official template or card; tune them in `profiles.json`.
 

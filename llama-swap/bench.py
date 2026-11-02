@@ -6,6 +6,8 @@
 Models flagged 'speed_test_only' (autocomplete models) only get the speed test.
 Models flagged 'long_prompt_test' in models.json also get a ~12K-token prompt (agents are prompt-heavy);
 models flagged 'vision' must name the colour of a red test image.
+Models flagged 'embedding' get a search test instead (a related sentence must be closer than an unrelated one).
+Models flagged 'candidate' (being evaluated) are reported like the others but never fail the run.
 Exit code 1 if a configured model is missing, any model errors or gives a wrong answer (vision included), or nothing was tested.
 
 Usage: bench.py [model-id ...]   (no ids = all models)
@@ -68,6 +70,24 @@ def chat(model, content, max_tokens=400, timeout=900):
         return json.load(r), time.time() - t0
 
 
+def embed(model, texts, timeout=300):
+    """!
+    @brief Embeds texts with an embedding model behind llama-swap (OpenAI-style /v1/embeddings).
+    @return (list of vectors, wall-clock seconds).
+    """
+    body = json.dumps({"model": model, "input": texts}).encode()
+    t0 = time.time()
+    req = urllib.request.Request(f"{API}/v1/embeddings", body, {"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return [d["embedding"] for d in sorted(json.load(r)["data"], key=lambda d: d["index"])], time.time() - t0
+
+
+def cosine(a, b):
+    """! @brief Cosine similarity of two vectors. """
+    dot = sum(x * y for x, y in zip(a, b))
+    return dot / ((sum(x * x for x in a) ** 0.5) * (sum(y * y for y in b) ** 0.5) or 1)
+
+
 def red_png():
     """!
     @brief Builds a 64x64 solid red PNG without extra libraries.
@@ -89,12 +109,27 @@ def run(models, specs):
     """
     rows = ["| Model | Test | Pass | Tokens/s | Seconds (incl. load) |", "| --- | --- | --- | --- | --- |"]
 
+    cand = {"on": False}
+
     def add(row):
+        if cand["on"]:                                   # candidates: marked, never fail the run
+            row = row.replace(" |", " (candidate) |", 1)
         rows.append(row)
         print(row, flush=True)
 
     for m in models:
         spec = specs.get(m, {})
+        cand["on"] = bool(spec.get("candidate"))
+        if spec.get("embedding"):
+            try:
+                q, near, far = "How do I render a Blender scene to a PNG file?", \
+                    "Save the rendered Blender image as a PNG picture.", "The recipe needs two eggs and a cup of flour."
+                v, wall = embed(m, [q, near, far])
+                ok = cosine(v[0], v[1]) > cosine(v[0], v[2])
+                add(f"| {m} | search (related closer than unrelated, {len(v[0])} dims) | {'yes' if ok else 'NO'} | - | {wall:.1f} |")
+            except Exception as e:
+                add(f"| {m} | search | ERROR | - | {str(e)[:60]} |")
+            continue
         tests = [t for t in TESTS if t[0] == "speed"] if spec.get("speed_test_only") else TESTS   # e.g. autocomplete models
         for name, prompt, check in tests:
             try:
@@ -137,7 +172,7 @@ def main():
     open(OUT, "w").write(f"# Local AI benchmark {datetime.datetime.now():%Y-%m-%d %H:%M}\n\n" + "\n".join(rows) + "\n")
     print(f"\nReport: {OUT}")
     tested = len(rows) - 2   # minus the table header
-    sys.exit(1 if tested == 0 or any("| ERROR |" in r or "| NO |" in r for r in rows) else 0)
+    sys.exit(1 if tested == 0 or any(("| ERROR |" in r or "| NO |" in r) and "(candidate) |" not in r for r in rows) else 0)
 
 
 if __name__ == "__main__":

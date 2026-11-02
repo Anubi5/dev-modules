@@ -1,6 +1,6 @@
 ---
 name: reverse-tools
-description: Install and use REA (reverse-engineering MCP + CLI) with Ghidra and other free tools, in your own folders without root, when the user wants to inspect, decompile or learn reverse engineering of a file.
+description: Install and use REA (reverse-engineering MCP + CLI) with Ghidra, ILSpy (.NET/Unity) and other free tools, in your own folders without root, when the user wants to inspect, decompile or learn reverse engineering of a file.
 ---
 
 # Reverse-engineering tools (on request)
@@ -19,11 +19,17 @@ Do not change `~/.bashrc`, the global npm prefix or anything outside `$M`. The `
 4. Ghidra: REA needs the exact release named in REA's docs (`rea doctor` says which). Get the official
    `ghidra_<version>_PUBLIC_*.zip` from github.com/NationalSecurityAgency/ghidra releases and unpack to `$M/` (as `$M/ghidra`).
 5. Optional extras as needed, also into `$M`: jadx (github.com/skylot/jadx releases, zip), rizin (official static Linux x86_64 release).
+   ILSpy for .NET programs and Unity games (C# DLLs such as `Assembly-CSharp.dll`; Ghidra handles these poorly):
+   `curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$M/dotnet-install.sh" && bash "$M/dotnet-install.sh" --channel LTS --install-dir "$M/dotnet"`,
+   then `DOTNET_ROOT="$M/dotnet" "$M/dotnet/dotnet" tool install ilspycmd --tool-path "$M/ilspy"`.
+   Write the installed version (`ilspy --version`) into `$M/VERSIONS.txt`. The `ilspy` command (already linked) uses `$M`.
 6. Run `rea doctor` (the `rea` command sets `JAVA_HOME=$M/jdk-21` and `GHIDRA_INSTALL_DIR=$M/ghidra` itself); it must pass.
 7. Registering REA with agents (`rea setup`) changes agent configs: tell the user to run it themselves in `dev shell`.
 
 ## Use
 - Work in `~/work/projects/<name>/`: copy the target to `original/` (never modify it), results in `output/`, notes in `README.md`.
+- .NET / Unity: `ilspy -p -o output/src original/<file>.dll` writes a C# project you can read; for Unity games the
+  game code is in `<Game>_Data/Managed/Assembly-CSharp.dll`.
 - Prefer static analysis (reads files only). Before anything that RUNS the target, tell the user and ask them to run
   `dev net off` first.
 - Report findings with the evidence REA returns; say plainly what is uncertain.

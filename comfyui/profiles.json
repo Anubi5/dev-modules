@@ -121,6 +121,36 @@
       "about": "Anima Turbo: fast drafts (8-12 steps, CFG 1)",
       "licence": "CircleStone Labs non-commercial (weights); outputs usable",
       "source": "huggingface.co/circlestone-labs/Anima (Turbo: CFG 1, 8-12 steps)"
+    },
+    "moss": {
+      "arch": "moss",
+      "file": "moss_image_sft_int8_convrot.safetensors",
+      "text_encoder": "qwen3.5_9b_w4a8_gptq.safetensors",
+      "vae": "flux2-vae_small.safetensors",
+      "sampler": "er_sde",
+      "scheduler": "simple",
+      "cfg": 2.5,
+      "steps": 25,
+      "negative": {
+        "photo": "nsfw, worst quality, bad anatomy, watermark, jpeg artifact",
+        "art": "nsfw, worst quality, bad anatomy, watermark, jpeg artifact"
+      },
+      "about": "MOSS-Image SFT: legible text in images (posters, signs, infographics), 1-2 MP",
+      "licence": "Apache 2.0",
+      "source": "huggingface.co/Comfy-Org/MOSS-Image + Comfy template image_moss_image_t2i (25 steps, CFG 2.5, er_sde, simple)"
+    },
+    "fibo2": {
+      "arch": "fibo2",
+      "file": "fibo2_edit_turbo_int8_convrot.safetensors",
+      "text_encoder": "qwen3vl_4b_int8_convrot.safetensors",
+      "vae": "flux2-vae.safetensors",
+      "sampler": "euler",
+      "scheduler": "simple",
+      "cfg": 1.0,
+      "steps": 4,
+      "about": "Fibo 2.0 Edit Turbo: edits with up to 4 references (ai gen edit --model fibo2), also text-to-image; about 1 MP",
+      "licence": "CC BY-NC 4.0 (non-commercial unless you have a Bria agreement)",
+      "source": "huggingface.co/Comfy-Org/Fibo-2.0 + Comfy template image_fibo2_edit_turbo_pe (4 steps, CFG 1, euler, simple, empty negative)"
     }
   },
   "edit_model": "flux3",

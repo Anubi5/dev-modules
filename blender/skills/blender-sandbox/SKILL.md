@@ -19,7 +19,9 @@ Everything they need is already installed and pinned here - do not download or i
 2. **Look after each change**: take a window screenshot or a viewport render and check it against the request
    (is the object in view, the right colour, the right size?). Fix what you see before going on.
 3. Save `.blend`, `.glb`/`.fbx` and final renders into `~/work/projects/<name>/output/`.
-4. Before you report done: run `img-check <final image>` and quote its line; say honestly if something is off.
+4. Before you report done: run `img-check <final image>` (pixels: not blank, colours) and
+   `img-ask <final image> "<is what was asked visible?>"` (a vision model says what it sees), quote both lines, and
+   `ls -l` the saved files. Say honestly if something is off.
 
 ## Rules
 - One heavy GPU job at a time: run `ai free` before long Cycles renders.

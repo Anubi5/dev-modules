@@ -1,6 +1,6 @@
 ---
 name: blender
-description: Create, edit or render 3D scenes and models headless with Blender Python scripts (blender -b).
+description: Read this BEFORE any Blender work - create, edit or render 3D scenes headless (blender -b). Has the camera aiming that works, the right save calls, and the img-check step that proves a render is not empty.
 ---
 
 # Blender (headless)

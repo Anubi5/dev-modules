@@ -1,6 +1,6 @@
 ---
 name: gpu-generate
-description: Generate or edit an image (SDXL photoreal with pose/face/repair, FLUX 3, Z-Image, Anima for anime/illustration) or a short video (Wan 2.2) on the local GPU with "ai gen"; it frees the GPU from the chat model first and gives it back afterwards.
+description: Read this BEFORE making any image or video - generate or edit images (photoreal, FLUX 3 edits, anime) or short videos on the local GPU with "ai gen". Has model choice, the multi-pose recipe and the img-check step that proves the result.
 ---
 
 # GPU generate

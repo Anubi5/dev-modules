@@ -3,6 +3,7 @@
 ## @details Renders (-b/--background) take the shared GPU lock (/tmp/ai-gpu.lock, same as ai gen) and free the GPU first.
 B=~/.local/share/modules/blender/app/current/blender
 case " $* " in
+  *" --command blender_mcp "*) ;;                                   # the long-running MCP bridge: no GPU lock
   *" -b "*|*" --background "*)
     exec 9>/tmp/ai-gpu.lock
     flock -n 9 || { echo "  waiting for another GPU job (ai gen / blender) to finish..." >&2; flock 9; }

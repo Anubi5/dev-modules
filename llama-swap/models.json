@@ -57,7 +57,7 @@
         "IQ4_XS"
       ],
       "mmproj": true,
-      "vision": false,
+      "vision": true,
       "args": "--n-cpu-moe {moe} -c 65536 -ctk q8_0 -ctv q8_0",
       "ttl": 300,
       "long_prompt_test": true,

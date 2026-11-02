@@ -48,7 +48,9 @@ def main():
         txt = json.dumps(r.get("result", r))[:160]
         good = "result" in r and not r["result"].get("isError")
         print(f"  scene read (get_objects_summary): {'OK' if good else 'FAILED'} {txt}"); ok &= good
-        shot = next((t for t in tools if "screenshot" in t), None)
+        shot = "get_screenshot_of_window_as_image" if "get_screenshot_of_window_as_image" in tools else None   # no arguments needed
+        if not shot:
+            print("  screenshot: FAILED (get_screenshot_of_window_as_image not offered)"); ok = False
         if shot:
             r = call("tools/call", {"name": shot, "arguments": {}})
             res = r.get("result", {})

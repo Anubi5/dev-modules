@@ -59,7 +59,8 @@ say "model files (models.txt) - each download shows its progress"
   "$MOD/models" "$MOD/models"
 say "helper models (pose detection, InsightFace faces)"
 # helper models the nodes would fetch on first use - fetched now, so everything works with the internet off
-.venv/bin/python "$MOD/fetch_models.py" "$MOD/helpers.txt" /nonexistent "$C" "$C"; rm -rf "$C/_dl"
+# files live inside ComfyUI ($C is both where they are looked for and where a missing one is downloaded to)
+.venv/bin/python "$MOD/fetch_models.py" "$MOD/helpers.txt" "$C" "$C" "$C"; rm -rf "$C/_dl"
 I=$C/models/insightface/models/buffalo_l
 if [ ! -f "$I/w600k_r50.onnx" ]; then
   mkdir -p "$I"; curl -sfL -o "$A/buffalo_l.zip" https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip \

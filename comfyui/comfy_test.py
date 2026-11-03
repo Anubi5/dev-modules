@@ -97,6 +97,15 @@ def main():
         print(f"  image from a saved skeleton (--pose skeleton): {'OK' if ok and files else 'FAILED'}  {', '.join(files) or '-'}"
               f"{'  error: ' + err if err else ''}")
         results.append(ok and len(files) == 1)
+    # --lora: an SDXL LoRA chained into an SDXL job (the FaceID LoRA that is always installed, at low strength - this
+    # proves LoRA loading works; a style LoRA of your own goes the same way)
+    lo = gen.find_loras(["ip-adapter-faceid-plusv2_sdxl_lora:0.3"])
+    wf = gen.apply_loras(gen.sdxl("RAW photo of a red vintage car on a coastal road, 35mm", gen.NEGATIVE, 23, 30, 1024, 1024, False,
+                                  f"{day}/selftest-lora", prof=gen.profile(gen.PROFILES.get("default_sdxl", "realvis"))), lo, "sdxl")
+    ok, files, err = gen.generate(wf, 900, log=log)
+    print(f"  SDXL image with a LoRA (--lora): {'OK' if ok and files else 'FAILED'}  {', '.join(files) or '-'}"
+          f"{'  error: ' + err if err else ''}")
+    results.append(ok and len(files) == 1)
     return 0 if all(results) else 1
 
 

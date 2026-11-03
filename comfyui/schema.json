@@ -833,6 +833,33 @@
    "values": null
   }
  },
+ "LoraLoader": {
+  "clip": {
+   "part": "required",
+   "type": "CLIP",
+   "values": null
+  },
+  "lora_name": {
+   "part": "required",
+   "type": "COMBO",
+   "values": null
+  },
+  "model": {
+   "part": "required",
+   "type": "MODEL",
+   "values": null
+  },
+  "strength_clip": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "strength_model": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  }
+ },
  "ModelPatchLoader": {
   "name": {
    "part": "required",

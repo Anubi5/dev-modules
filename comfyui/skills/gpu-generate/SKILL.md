@@ -30,6 +30,8 @@ The user asks for a picture, illustration, concept art, texture, reference image
        documentary photos; sdxl-base = general/artistic; flux3 = follows long prompts, renders text, best composition
        (prompt is expanded automatically; optional - may not be installed); zimage = fast photoreal (8 steps);
        anima = anime/illustration (danbooru-style tags or plain text, `--pose` works); anima-turbo = fast anime drafts.
+     - `--lora <part of a name>[:0.8]`: a LoRA the owner put into D:\AI\models\comfy\loras (style, character, detail);
+       up to 4, only with the model family it was made for. `ai gen image --lora x` with a wrong name lists what is there.
      - `--style art` for illustration, concept art, paintings, textures (the default `photo` style pushes away from art).
      - `--negative ""` means no negative prompt at all.
      Reference images must be inside `~/work` (usually `~/work/inputs/`) as .png/.jpg/.webp.

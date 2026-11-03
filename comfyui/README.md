@@ -24,7 +24,8 @@ it unloads the chat model through the model-serving contract, runs one fixed wor
   compares both settings on the job that failed (failures and times); `~/.config/comfyui/override.env` can set
   `COMFY_MEM=` (empty = ComfyUI's default) for a test. Lasting fix to consider: models on a Linux disk file on D:.
 - `test.sh --full` = SDXL image + upscale, a Wan video, a pose + face + face/hand repair + tiled-upscale job, the newer
-  models, and `ai gen pose` (photo + skeleton) with an image made from that skeleton, all through `ai gen`.
+  models, `ai gen pose` (photo + skeleton) with an image made from that skeleton, and an image with `--lora`, all
+  through `ai gen`.
 
 ## Image models (`profiles.json`, `ai gen models` shows which are ready)
 | `--model` | For | Notes |
@@ -101,9 +102,11 @@ in the ComfyUI page (or restart it: `dev ai stop comfyui`, `dev comfy`):
 | ControlNet / Anima LLLite patch | `controlnet\` / `model_patches\` |
 
 It appears in the matching loader node at once. An SDXL checkpoint also works with ai gen right away:
-`ai gen image "..." --checkpoint <part of its name>` (checked to be SDXL). LoRAs can only be used in the ComfyUI page
-for now - ai gen has no `--lora` yet (on the to-do list). Prefer `.safetensors`; a `.pt`/`.ckpt` file can run code
-when loaded.
+`ai gen image "..." --checkpoint <part of its name>` (checked to be SDXL). A LoRA works at once with
+`ai gen image "..." --lora <part of its name>[:strength]` (strength -2..2, default 1; up to 4 `--lora`; also with
+`ai gen edit`). Use LoRAs made for the model you pick (SDXL LoRA with juggernaut/realvis, FLUX LoRA with flux3, an
+Anima LoRA with anima ...); a mismatched one is ignored by ComfyUI or spoils the image. Prefer `.safetensors`; a
+`.pt`/`.ckpt` file can run code when loaded.
 
 **2. Keep it, with a checksum (fetched on every PC).** Add a line to `models.txt`, push, `dev mod update comfyui`:
 ```

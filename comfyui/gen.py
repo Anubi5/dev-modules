@@ -170,6 +170,66 @@ def find_checkpoint(name):
     return profile(known[0]) if known else dict(profile(), file=hit[0], name=hit[0])
 
 
+LORA_DIRS = [os.path.join(env("MODELS_MOUNT", "/models"), "comfy", "loras"),
+             os.path.expanduser("~/.local/share/modules/comfyui/models/loras")]
+MAX_LORAS = 4
+
+
+def find_loras(specs):
+    """!
+    @brief --lora NAME[:STRENGTH]: LoRA files by (part of) their name in D:\\AI\\models\\comfy\\loras, strength -2..2
+           (default 1.0). @param specs  The --lora values.  @return [(file name, strength)], or exits with what is there.
+    """
+    if len(specs) > MAX_LORAS:
+        sys.exit(f"--lora: at most {MAX_LORAS}")
+    found = sorted({os.path.relpath(os.path.join(r, f), d) for d in LORA_DIRS if os.path.isdir(d)
+                    for r, _, fs in os.walk(d) for f in fs if f.endswith((".safetensors", ".ckpt", ".pt"))})
+    out = []
+    for spec in specs:
+        name, _, st = spec.rpartition(":") if re.search(r":-?[\d.]+$", spec) else (spec, "", "")
+        try:
+            strength = float(st) if st else 1.0
+        except ValueError:
+            sys.exit(f"--lora {spec}: strength must be a number, e.g. {name}:0.8")
+        if not -2.0 <= strength <= 2.0:
+            sys.exit(f"--lora {spec}: strength must be -2 to 2")
+        exact = [f for f in found if os.path.basename(f).lower() in (name.lower(), name.lower() + ".safetensors")]
+        hit = exact or [f for f in found if name.lower() in f.lower()]
+        if len(hit) != 1:
+            sys.exit(f"--lora {name}: {'ambiguous: ' + ', '.join(hit) if hit else 'not found'}. Available: "
+                     f"{', '.join(found) or 'none'} (put LoRA files into D:\\AI\\models\\comfy\\loras)")
+        out.append((hit[0], strength))
+    return out
+
+
+def apply_loras(wf, loras, arch):
+    """!
+    @brief Chains LoRA loaders after the model loader: everything that used the base model and text encoder now uses the
+           LoRA'd ones (sampler, pose/face nodes, repairs, upscale). SDXL: checkpoint outputs "4"/0,1; the newer models:
+           "1" (model) and "2" (text encoder). @param loras  [(file, strength)]  @return the workflow, changed in place
+    """
+    if not loras:
+        return wf
+    model, clip = (["4", 0], ["4", 1]) if arch == "sdxl" else (["1", 0], ["2", 0])
+    base_model, base_clip = model, clip
+    ids = []
+    for i, (name, strength) in enumerate(loras):
+        nid = f"6{i}"
+        wf[nid] = {"class_type": "LoraLoader", "inputs": {"model": model, "clip": clip, "lora_name": name,
+                                                          "strength_model": strength, "strength_clip": strength}}
+        model, clip = [nid, 0], [nid, 1]
+        ids.append(nid)
+    for nid, node in wf.items():
+        if nid in ids:
+            continue
+        for k, v in node["inputs"].items():
+            if v == base_model:
+                node["inputs"][k] = model
+            elif v == base_clip:
+                node["inputs"][k] = clip
+    return wf
+
+
 POSE_CN = "controlnet-union-sdxl-promax.safetensors"
 FACE_DET, HAND_DET = "bbox/face_yolov8m.pt", "bbox/hand_yolov8s.pt"
 
@@ -751,6 +811,21 @@ def all_workflows():
         elif p["arch"] == "fibo2":
             for refs, up in itertools.product([(), ("a",), ("a", "b")], [False, True]):
                 yield fibo2("x", 1, p["steps"], 1024, 1024, "t", p, refs=refs, upscale=up)
+    for name in PROFILES["models"]:                    # every architecture with two LoRAs chained
+        p = profile(name)
+        if p["arch"] == "sdxl":
+            w = sdxl("x", "y", 1, p["steps"], 1024, 1024, True, "t", pose="p", face="f", fix_faces=True, hires=True, prof=p)
+        elif p["arch"] == "anima":
+            w = anima("x", "y", 1, p["steps"], 1024, 1024, "t", p, pose="p")
+        elif p["arch"] == "zimage":
+            w = zimage("x", 1, p["steps"], 1024, 1024, "t", p)
+        elif p["arch"] == "flux3":
+            w = flux3("x", 1, p["steps"], 1024, 1024, "t", p, refs=("a",))
+        elif p["arch"] == "moss":
+            w = moss("x", "y", 1, p["steps"], 1024, 1024, "t", p)
+        else:
+            w = fibo2("x", 1, p["steps"], 1024, 1024, "t", p, refs=("a",))
+        yield apply_loras(w, [("a.safetensors", 0.8), ("b.safetensors", -0.5)], p["arch"])
     yield pose_wf("x", 1, 896, 1152, "t")
     yield pose_wf("", 1, 896, 1152, "t", src="a")
     yield use_skeleton(sdxl("x", "y", 1, 30, 1024, 1024, False, "t", pose="p", prof=profile(PROFILES.get("default_sdxl", "realvis"))))
@@ -827,6 +902,8 @@ HELP = """ai gen - images, edits and short videos on the local GPU (one job at a
       --face IMG           keep a face (SDXL models)                           --face-weight 0.3-1.2
       --fix-faces --fix-hands  redraw faces/hands (SDXL)   --hires  detailed 2x copy (SDXL)   --upscale  fast 2x copy
       --checkpoint NAME    any SDXL file in D:\\AI\\models\\comfy\\checkpoints
+      --lora NAME[:0.8]    a LoRA from D:\\AI\\models\\comfy\\loras (part of its name; strength -2..2, default 1); up to 4
+                           - use LoRAs made for the model (SDXL LoRA with SDXL models, FLUX LoRA with flux3 ...)
   ai gen edit "what to change" --image IMG [--image REF]   change an image by instruction (FLUX 3; --model fibo2 = Fibo 2.0)
   ai gen pose "description" | --from PHOTO                 a pose for ControlNet: "<name>" (plain full-body photo,
                                                            best for --pose) + "<name>_pose" (the skeleton picture)
@@ -874,6 +951,8 @@ def main():
     ap.add_argument("--face", metavar="IMAGE", help="image: keep this face (in ~/work; one clear face)")
     ap.add_argument("--face-weight", type=float, default=0.65, help="how strongly to keep the face, 0.3-1.2 (high values distort it)")
     ap.add_argument("--checkpoint", metavar="NAME", help="image: any SDXL checkpoint file by (part of) its name")
+    ap.add_argument("--lora", metavar="NAME[:STRENGTH]", action="append", default=[],
+                    help="image/edit: a LoRA by (part of) its file name, strength -2..2 (default 1); repeat for up to 4")
     ap.add_argument("--fix-faces", action="store_true", help="image: redraw faces in more detail")
     ap.add_argument("--fix-hands", action="store_true", help="image: redraw hands in more detail")
     ap.add_argument("--frames", type=int, default=33, help="video length, 4n+1 (33 ~ 1.4 s, 121 ~ 5 s)")
@@ -903,7 +982,7 @@ def main():
         w, h = (int(v) // 64 * 64 for v in m.groups())
         if not (512 <= w <= MAX_SIDE and 512 <= h <= MAX_SIDE):
             sys.exit(f"--size: each side must be 512-{MAX_SIDE}")
-        if a.pose or a.face or a.fix_faces or a.fix_hands or a.hires or a.checkpoint or a.model or a.image:
+        if a.pose or a.face or a.fix_faces or a.fix_hands or a.hires or a.checkpoint or a.model or a.image or a.lora:
             sys.exit("ai gen pose takes a description or --from PHOTO, plus --name/--seed/--size")
         uploads = [("30", check_input(a.src))] if a.src else []
         wf = pose_wf(a.prompt, seed, w, h, prefix, src="pending" if a.src else None)
@@ -975,17 +1054,20 @@ def main():
             wf = fibo2(prompt, seed, steps, w, h, prefix, prof, refs=["pending"] * len(refs), upscale=a.upscale)
         else:
             sys.exit(f"--model {prof['name']}: architecture {arch} is not wired into ai gen")
+        loras = find_loras(a.lora)
+        apply_loras(wf, loras, arch)
         info = {"kind": a.kind, "prompt": a.prompt, "expanded_prompt": prompt if prompt != a.prompt else None,
                 "negative": neg, "seed": seed, "model": prof["name"], "arch": arch,
                 "model_file": prof["file"], "sampler": prof["sampler"], "scheduler": prof["scheduler"], "cfg": prof["cfg"],
                 "steps": steps, "size": f"{w}x{h}", "style": style,
                 "options": {k: getattr(a, k) for k in ("upscale", "hires", "fix_faces", "fix_hands")},
                 "pose": a.pose and {"file": a.pose, "strength": pose_strength},
-                "face": a.face and {"file": a.face, "weight": a.face_weight}, "images": a.image or None}
+                "face": a.face and {"file": a.face, "weight": a.face_weight}, "images": a.image or None,
+                "loras": [{"file": f, "strength": st} for f, st in loras] or None}
         limit = a.timeout or (1800 if a.hires or a.fix_hands or a.fix_faces or arch in ("flux3", "fibo2", "moss") else 900)
     else:
         frames = max(5, (a.frames - 1) // 4 * 4 + 1)
-        if a.pose_skeleton or a.pose or a.face or a.fix_faces or a.fix_hands or a.hires or a.checkpoint or a.model or a.image:
+        if a.lora or a.pose_skeleton or a.pose or a.face or a.fix_faces or a.fix_hands or a.hires or a.checkpoint or a.model or a.image:
             sys.exit("--pose/--face/--fix-faces/--fix-hands/--hires/--checkpoint/--model/--image are for images")
         uploads = []
         neg = a.negative if a.negative is not None else "static, blurry, distorted, low quality, watermark"

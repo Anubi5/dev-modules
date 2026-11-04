@@ -36,6 +36,146 @@
    "values": null
   }
  },
+ "ApplyTextureToMesh": {
+  "base_color": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  },
+  "mesh": {
+   "part": "required",
+   "type": "MESH",
+   "values": null
+  },
+  "metallic": {
+   "part": "optional",
+   "type": "IMAGE",
+   "values": null
+  },
+  "normal_map": {
+   "part": "optional",
+   "type": "IMAGE",
+   "values": null
+  },
+  "occlusion": {
+   "part": "optional",
+   "type": "IMAGE",
+   "values": null
+  },
+  "roughness": {
+   "part": "optional",
+   "type": "IMAGE",
+   "values": null
+  }
+ },
+ "BakeAmbientOcclusion": {
+  "bias": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "high_poly": {
+   "part": "required",
+   "type": "MESH",
+   "values": null
+  },
+  "low_poly": {
+   "part": "required",
+   "type": "MESH",
+   "values": null
+  },
+  "max_distance": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "resolution": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "samples": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "strength": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  }
+ },
+ "BakeNormalMapFromMesh": {
+  "cage_distance": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "high_poly": {
+   "part": "required",
+   "type": "MESH",
+   "values": null
+  },
+  "ignore_backfaces": {
+   "part": "required",
+   "type": "BOOLEAN",
+   "values": null
+  },
+  "low_poly": {
+   "part": "required",
+   "type": "MESH",
+   "values": null
+  },
+  "resolution": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  }
+ },
+ "BakeTextureFromVoxel": {
+  "mesh": {
+   "part": "required",
+   "type": "MESH",
+   "values": null
+  },
+  "reference_mesh": {
+   "part": "optional",
+   "type": "MESH",
+   "values": null
+  },
+  "texture_size": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "voxel_colors": {
+   "part": "required",
+   "type": "VOXEL",
+   "values": null
+  }
+ },
+ "CFGOverride": {
+  "cfg": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "end_percent": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "model": {
+   "part": "required",
+   "type": "MODEL",
+   "values": null
+  },
+  "start_percent": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  }
+ },
  "CLIPLoader": {
   "clip_name": {
    "part": "required",
@@ -101,10 +241,34 @@
    "values": null
   }
  },
+ "CLIPVisionLoader": {
+  "clip_name": {
+   "part": "required",
+   "type": "COMBO",
+   "values": null
+  }
+ },
  "CheckpointLoaderSimple": {
   "ckpt_name": {
    "part": "required",
    "type": "COMBO",
+   "values": null
+  }
+ },
+ "ComfySwitchNode": {
+  "on_false": {
+   "part": "optional",
+   "type": "COMFY_MATCHTYPE_V3",
+   "values": null
+  },
+  "on_true": {
+   "part": "optional",
+   "type": "COMFY_MATCHTYPE_V3",
+   "values": null
+  },
+  "switch": {
+   "part": "required",
+   "type": "BOOLEAN",
    "values": null
   }
  },
@@ -218,6 +382,26 @@
    ]
   }
  },
+ "DecimateMesh": {
+  "mesh": {
+   "part": "required",
+   "type": "MESH",
+   "values": null
+  },
+  "placement_mode": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "midpoint",
+    "qem"
+   ]
+  },
+  "target_face_count": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  }
+ },
  "EmptyFlux2LatentImage": {
   "batch_size": {
    "part": "required",
@@ -264,6 +448,13 @@
    "values": null
   },
   "width": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  }
+ },
+ "EmptyTrellis2LatentStructure": {
+  "batch_size": {
    "part": "required",
    "type": "INT",
    "values": null
@@ -544,6 +735,13 @@
    "values": null
   }
  },
+ "GetMeshInfo": {
+  "mesh": {
+   "part": "required",
+   "type": "MESH",
+   "values": null
+  }
+ },
  "IPAdapterFaceID": {
   "attn_mask": {
    "part": "optional",
@@ -681,6 +879,43 @@
     "OpenVINO",
     "CoreML"
    ]
+  }
+ },
+ "ImageCropToMask": {
+  "background": {
+   "part": "required",
+   "type": "COLOR",
+   "values": null
+  },
+  "grow_mask": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "height": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "images": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  },
+  "masks": {
+   "part": "required",
+   "type": "MASK",
+   "values": null
+  },
+  "pad_factor": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "width": {
+   "part": "required",
+   "type": "INT",
+   "values": null
   }
  },
  "ImageScaleBy": {
@@ -826,8 +1061,22 @@
    "values": null
   }
  },
+ "LoadBackgroundRemovalModel": {
+  "bg_removal_name": {
+   "part": "required",
+   "type": "COMBO",
+   "values": null
+  }
+ },
  "LoadImage": {
   "image": {
+   "part": "required",
+   "type": "COMBO",
+   "values": null
+  }
+ },
+ "LoadMoGeModel": {
+  "model_name": {
    "part": "required",
    "type": "COMBO",
    "values": null
@@ -857,6 +1106,98 @@
   "strength_model": {
    "part": "required",
    "type": "FLOAT",
+   "values": null
+  }
+ },
+ "MaskPreview": {
+  "mask": {
+   "part": "required",
+   "type": "MASK",
+   "values": null
+  }
+ },
+ "MeshSmoothNormals": {
+  "crease_angle": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "mesh": {
+   "part": "required",
+   "type": "MESH",
+   "values": null
+  }
+ },
+ "MeshToFile3D": {
+  "mesh": {
+   "part": "required",
+   "type": "MESH",
+   "values": null
+  }
+ },
+ "MoGeGeometryToFOV": {
+  "axis": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "vertical",
+    "horizontal",
+    "diagonal"
+   ]
+  },
+  "moge_geometry": {
+   "part": "required",
+   "type": "MOGE_GEOMETRY",
+   "values": null
+  },
+  "unit": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "degrees",
+    "radians"
+   ]
+  }
+ },
+ "MoGeInference": {
+  "apply_mask": {
+   "part": "required",
+   "type": "BOOLEAN",
+   "values": null
+  },
+  "batch_size": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "force_projection": {
+   "part": "required",
+   "type": "BOOLEAN",
+   "values": null
+  },
+  "fov_x_degrees": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "image": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  },
+  "moge_model": {
+   "part": "required",
+   "type": "MOGE_MODEL",
+   "values": null
+  },
+  "refine_steps": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "resolution_level": {
+   "part": "required",
+   "type": "INT",
    "values": null
   }
  },
@@ -899,6 +1240,88 @@
    "values": null
   }
  },
+ "PaintMesh": {
+  "mesh": {
+   "part": "required",
+   "type": "MESH",
+   "values": null
+  },
+  "voxel_colors": {
+   "part": "required",
+   "type": "VOXEL",
+   "values": null
+  }
+ },
+ "Pixal3DConditioning": {
+  "camera_angle_x": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "clip_vision_model": {
+   "part": "required",
+   "type": "CLIP_VISION",
+   "values": null
+  },
+  "image": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  }
+ },
+ "Preview3DAdvanced": {
+  "camera_info": {
+   "part": "optional",
+   "type": "LOAD3D_CAMERA",
+   "values": null
+  },
+  "height": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "model_3d": {
+   "part": "required",
+   "type": "FILE_3D_GLB,FILE_3D_GLTF,FILE_3D_FBX,FILE_3D_OBJ,FILE_3D_STL,FILE_3D_USDZ,FILE_3D",
+   "values": null
+  },
+  "model_3d_info": {
+   "part": "optional",
+   "type": "LOAD3D_MODEL_INFO",
+   "values": null
+  },
+  "viewport_state": {
+   "part": "required",
+   "type": "LOAD_3D",
+   "values": null
+  },
+  "width": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  }
+ },
+ "PreviewImage": {
+  "images": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  }
+ },
+ "PrimitiveBoolean": {
+  "value": {
+   "part": "required",
+   "type": "BOOLEAN",
+   "values": null
+  }
+ },
+ "PrimitiveInt": {
+  "value": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  }
+ },
  "ReferenceMultiLatent": {
   "images": {
    "part": "optional",
@@ -926,6 +1349,130 @@
   "vae": {
    "part": "optional",
    "type": "VAE",
+   "values": null
+  }
+ },
+ "RemeshMesh": {
+  "band": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "drop_small_components": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "fix_poles": {
+   "part": "required",
+   "type": "BOOLEAN",
+   "values": null
+  },
+  "mesh": {
+   "part": "required",
+   "type": "MESH",
+   "values": null
+  },
+  "precluster_max_verts": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "project_back": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "resolution": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "sign_mode": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "udf",
+    "sdf",
+    "solid"
+   ]
+  },
+  "smooth_iters": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  }
+ },
+ "RemoveBackground": {
+  "bg_removal_model": {
+   "part": "required",
+   "type": "BACKGROUND_REMOVAL",
+   "values": null
+  },
+  "image": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  }
+ },
+ "RenderUVAtlas": {
+  "mesh": {
+   "part": "required",
+   "type": "MESH",
+   "values": null
+  },
+  "resolution": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  }
+ },
+ "RescaleCFG": {
+  "model": {
+   "part": "required",
+   "type": "MODEL",
+   "values": null
+  },
+  "multiplier": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  }
+ },
+ "Save3DAdvanced": {
+  "camera_info": {
+   "part": "optional",
+   "type": "LOAD3D_CAMERA",
+   "values": null
+  },
+  "filename_prefix": {
+   "part": "required",
+   "type": "STRING",
+   "values": null
+  },
+  "height": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "model_3d": {
+   "part": "required",
+   "type": "FILE_3D_GLB,FILE_3D_GLTF,FILE_3D_FBX,FILE_3D_OBJ,FILE_3D_STL,FILE_3D_USDZ,FILE_3D",
+   "values": null
+  },
+  "model_3d_info": {
+   "part": "optional",
+   "type": "LOAD3D_MODEL_INFO",
+   "values": null
+  },
+  "viewport_state": {
+   "part": "required",
+   "type": "LOAD_3D",
+   "values": null
+  },
+  "width": {
+   "part": "required",
+   "type": "INT",
    "values": null
   }
  },
@@ -1016,7 +1563,7 @@
    "values": null
   },
   "images": {
-   "part": "optional",
+   "part": "required",
    "type": "COMFY_AUTOGROW_V3",
    "values": null
   },
@@ -1038,6 +1585,79 @@
   "width": {
    "part": "required",
    "type": "INT",
+   "values": null
+  }
+ },
+ "Trellis2Conditioning": {
+  "clip_vision_model": {
+   "part": "required",
+   "type": "CLIP_VISION",
+   "values": null
+  },
+  "image": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  }
+ },
+ "Trellis2ShapeStage": {
+  "negative": {
+   "part": "required",
+   "type": "CONDITIONING",
+   "values": null
+  },
+  "positive": {
+   "part": "required",
+   "type": "CONDITIONING",
+   "values": null
+  },
+  "voxel": {
+   "part": "required",
+   "type": "VOXEL",
+   "values": null
+  }
+ },
+ "Trellis2TextureStage": {
+  "negative": {
+   "part": "required",
+   "type": "CONDITIONING",
+   "values": null
+  },
+  "positive": {
+   "part": "required",
+   "type": "CONDITIONING",
+   "values": null
+  },
+  "shape_latent": {
+   "part": "required",
+   "type": "LATENT",
+   "values": null
+  }
+ },
+ "Trellis2UpsampleStage": {
+  "negative": {
+   "part": "required",
+   "type": "CONDITIONING",
+   "values": null
+  },
+  "positive": {
+   "part": "required",
+   "type": "CONDITIONING",
+   "values": null
+  },
+  "shape_latent": {
+   "part": "required",
+   "type": "LATENT",
+   "values": null
+  },
+  "target_resolution": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "vae": {
+   "part": "required",
+   "type": "VAE",
    "values": null
   }
  },
@@ -1269,6 +1889,36 @@
    "values": null
   }
  },
+ "UnwrapMesh": {
+  "mesh": {
+   "part": "required",
+   "type": "MESH",
+   "values": null
+  },
+  "padding": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "resolution": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "segmenter": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "pec",
+    "adaptive"
+   ]
+  },
+  "weld_distance": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  }
+ },
  "UpscaleModelLoader": {
   "model_name": {
    "part": "required",
@@ -1292,6 +1942,75 @@
   "vae_name": {
    "part": "required",
    "type": "COMBO",
+   "values": null
+  }
+ },
+ "VaeDecodeShapeTrellis": {
+  "samples": {
+   "part": "required",
+   "type": "LATENT",
+   "values": null
+  },
+  "vae": {
+   "part": "required",
+   "type": "VAE",
+   "values": null
+  }
+ },
+ "VaeDecodeStructureTrellis2": {
+  "resolution": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "32",
+    "64"
+   ]
+  },
+  "samples": {
+   "part": "required",
+   "type": "LATENT",
+   "values": null
+  },
+  "vae": {
+   "part": "required",
+   "type": "VAE",
+   "values": null
+  }
+ },
+ "VaeDecodeTextureTrellis": {
+  "samples": {
+   "part": "required",
+   "type": "LATENT",
+   "values": null
+  },
+  "shape_subdivides": {
+   "part": "required",
+   "type": "SHAPE_SUBDIVIDES",
+   "values": null
+  },
+  "vae": {
+   "part": "required",
+   "type": "VAE",
+   "values": null
+  }
+ },
+ "VoxelToMesh": {
+  "algorithm": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "surface net",
+    "basic"
+   ]
+  },
+  "threshold": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "voxel": {
+   "part": "required",
+   "type": "VOXEL",
    "values": null
   }
  },

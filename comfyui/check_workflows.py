@@ -36,6 +36,8 @@ def check(wf, schema, label, unknown):
             elif k == base and spec[k]["values"] is not None and v not in spec[k]["values"]:
                 bad.append(f"{label}: {c}.{k} = {v!r} is not one of {spec[k]['values'][:8]}")
         for k, d in spec.items():
+            if d["type"] == "COMFY_AUTOGROW_V3":         # a growing list (images.image0 ...): zero entries is allowed
+                continue
             if d["part"] == "required" and k not in node["inputs"] and not any(i.startswith(k + ".") for i in node["inputs"]):
                 bad.append(f"{label}: {c} is missing required input {k}")
     return bad

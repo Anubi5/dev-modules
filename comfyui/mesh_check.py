@@ -25,6 +25,7 @@ stats = {"objects": len(meshes), "vertices": 0, "triangles": 0, "non_manifold_ed
 lo, hi = Vector((1e9,) * 3), Vector((-1e9,) * 3)
 for o in meshes:
     bm = bmesh.new(); bm.from_mesh(o.data); bm.transform(o.matrix_world)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-6)   # GLB splits vertices at texture seams: join them to measure
     stats["vertices"] += len(bm.verts)
     stats["triangles"] += sum(len(f.verts) - 2 for f in bm.faces)
     stats["non_manifold_edges"] += sum(1 for e in bm.edges if not e.is_manifold)

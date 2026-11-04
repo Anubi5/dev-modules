@@ -83,7 +83,45 @@ def self_tests():
             bad.append("self-test: the model-file preflight did not tell a missing file from a present one")
     finally:
         gen.api = api
-    bad += lora_rule_tests() + model_rule_tests() + recipe_tests()
+    bad += lora_rule_tests() + model_rule_tests() + recipe_tests() + outcome_tests()
+    return bad
+
+
+def outcome_tests():
+    """!
+    @brief Outcomes: a 3D model only counts as succeeded when every required check passed (Blender exit code, its result,
+           4 renders, img-check); a failed job without outputs still gets a record; rerun refuses a workflow that
+           does not match its record. @return list of problems
+    """
+    import tempfile
+    bad, good, mesh = [], {"valid": True, "triangles": 10}, {"ok": True}
+    cases = [(({"valid": False}, True, 0, mesh, 4, 0), "failed"), ((good, False), "check_skipped"),
+             ((good, True, 1, mesh, 4, 0), "check_failed"), ((good, True, 0, None, 4, 0), "check_failed"),
+             ((good, True, 0, {"ok": False}, 4, 0), "check_failed"), ((good, True, 0, mesh, 3, 0), "check_failed"),
+             ((good, True, 0, mesh, 4, 1), "check_failed"), ((good, True, 0, mesh, 4, 0), "succeeded")]
+    for args, want in cases:
+        if gen.check_status(*args) != want:
+            bad.append(f"self-test: 3D verdict {args[1:]} gave {gen.check_status(*args)}, needs {want}")
+    if [gen.EXIT[s] for s in ("succeeded", "failed", "check_failed", "check_skipped")] != [0, 1, 2, 3]:
+        bad.append("self-test: 3D exit codes changed")
+    saved = (gen.OUTPUT, gen.WORK, gen.assets.CACHE, gen.JOBS)
+    with tempfile.TemporaryDirectory() as d:
+        gen.OUTPUT, gen.WORK, gen.assets.CACHE, gen.JOBS = d, d, os.path.join(d, "c.json"), os.path.join(d, "jobs")
+        try:
+            wf = {"1": {"class_type": "SaveImage", "inputs": {"filename_prefix": "x"}}}
+            rec = gen.write_record([], {"kind": "image"}, wf, "failed", "boom", "2026-01-01/t", lambda t: None)
+            r = json.load(open(rec)) if rec else {}
+            if r.get("status") != "failed" or r.get("error") != "boom" or not os.path.exists(rec[:-5] + ".workflow.json"):
+                bad.append("self-test: a failed job without outputs got no proper record")
+            w = rec[:-5] + ".workflow.json"
+            json.dump({"1": {"class_type": "SaveImage", "inputs": {"filename_prefix": "changed"}}}, open(w, "w"))
+            try:
+                gen.rerun([w]); bad.append("self-test: rerun ran a workflow that no longer matches its record")
+            except SystemExit as e:
+                if "does not match" not in str(e):
+                    bad.append(f"self-test: rerun refused a changed workflow for the wrong reason: {e}")
+        finally:
+            gen.OUTPUT, gen.WORK, gen.assets.CACHE, gen.JOBS = saved
     return bad
 
 

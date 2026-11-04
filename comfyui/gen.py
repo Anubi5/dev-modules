@@ -980,6 +980,7 @@ def run_job(wf, timeout, log=print):
     """
     try:
         pid = JOB["pid"] = api("/prompt", {"prompt": wf, "client_id": str(uuid.uuid4())})["prompt_id"]
+        job_state("running", prompt_id=pid)
     except urllib.error.HTTPError as e:
         return False, [], "rejected by ComfyUI: " + e.read().decode()[:800]
     t0 = time.time(); mon = Peak(); mon.start()
@@ -1003,6 +1004,70 @@ def run_job(wf, timeout, log=print):
         mon.go = False
 
 
+JOBS = os.path.join(OUTPUT, "jobs")
+
+
+def job_state(state, **kv):
+    """!
+    @brief The job's own small file (~/work/outputs/comfy/jobs/<id>.json), written at every step - waiting, preparing,
+           running (with ComfyUI's prompt id), succeeded / failed / cancelled / interrupted / unknown - so a job whose
+           client died can still be traced and reconciled. @return the job dict
+    """
+    j = JOB.setdefault("ledger", {"id": f"{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"})
+    j.update(kv, state=state, at=datetime.datetime.now().isoformat(timespec="seconds"))
+    try:
+        os.makedirs(JOBS, exist_ok=True)
+        tmp = os.path.join(JOBS, j["id"] + ".tmp")
+        with open(tmp, "w") as f:
+            json.dump(j, f, indent=1)
+        os.replace(tmp, os.path.join(JOBS, j["id"] + ".json"))
+    except OSError:
+        pass
+    return j
+
+
+def wf_sha(wf):
+    """! @brief SHA-256 of a workflow as saved (canonical JSON). """
+    import hashlib
+    return hashlib.sha256(json.dumps(wf, indent=1).encode()).hexdigest()
+
+
+def input_hashes(wf, uploads=(), log=print):
+    """!
+    @brief SHA-256 of every model file the workflow names and every input picture - what a rerun must find unchanged.
+           Hashes are cached by path, size and time (the first record for a large model reads it once).
+    @return {name: sha256}
+    """
+    names = {v for n in wf.values() for v in n.get("inputs", {}).values()
+             if isinstance(v, str) and v.lower().endswith(MODEL_EXT)}
+    where = {f["name"]: f["path"] for f in assets.files() if f["name"] in names}
+    cache = assets._load(assets.CACHE)
+    if any(p not in cache and os.path.getsize(p) > 1 << 30 for p in where.values()):
+        log("recording model file hashes (once per model file, about a minute each; cached afterwards)")
+    out = {n: assets.sha256(p) for n, p in sorted(where.items())}
+    for _, src in uploads or ():
+        if src and os.path.exists(src):
+            out["input:" + os.path.basename(src)] = assets.sha256(src)
+    return out
+
+
+def chat_pause(log=print):
+    """! @brief Stops the chat-model server while the GPU is busy, so a chat request cannot load a model into a running
+           job (llama-swap does not take the GPU lock). @return True when it was running and is now paused """
+    if subprocess.run(["systemctl", "--user", "is-active", "-q", "llama-swap"]).returncode != 0:
+        return False
+    subprocess.run(["systemctl", "--user", "stop", "llama-swap"], stderr=subprocess.DEVNULL)
+    log("chat model server paused for the GPU job")
+    return True
+
+
+def chat_resume(paused, log=print):
+    """! @brief Starts the chat-model server again when chat_pause() stopped it. """
+    if paused:
+        subprocess.run(["systemctl", "--user", "start", "llama-swap"], stderr=subprocess.DEVNULL)
+        log("chat model server running again")
+
+
 def generate(wf, timeout, wait=600, log=print, uploads=None):
     """!
     @brief The whole hand-off around one job, under the GPU lock.
@@ -1010,6 +1075,8 @@ def generate(wf, timeout, wait=600, log=print, uploads=None):
     @param log      Progress printer.  @param uploads  [(node id, image path)]: reference images, handed over once ComfyUI runs.
     @return (ok, output paths, error text).
     """
+    JOB.pop("ledger", None)
+    job_state("waiting")
     with open(LOCK, "w") as lock:
         t0 = time.time()
         while True:
@@ -1017,21 +1084,36 @@ def generate(wf, timeout, wait=600, log=print, uploads=None):
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB); break
             except BlockingIOError:
                 if time.time() - t0 > wait:
+                    job_state("failed", error="GPU busy (lock held)")
                     return False, [], "GPU busy with another job (lock held) - try again later"
                 time.sleep(5)
+        job_state("preparing")
         err = prepare(log, max(0, wait - (time.time() - t0)), wf)
         if err:
+            job_state("failed", error=err)
             return False, [], err
+        paused = chat_pause(log)
         try:
             for node, src in uploads or []:
                 wf[node]["inputs"]["image"] = upload(src)
         except Exception as e:
-            release(log)
+            release(log); chat_resume(paused, log)
+            job_state("failed", error=f"upload: {e}")
             return False, [], f"could not hand the reference image to ComfyUI: {e}"
         try:
-            return run_job(wf, timeout, log)
+            ok, files, err = run_job(wf, timeout, log)
+            job_state("succeeded" if ok else "cancelled" if err.startswith("timeout") else "failed",
+                      error=err or None, outputs=files)
+            return ok, files, err
+        except KeyboardInterrupt:
+            job_state("interrupted", prompt_id=JOB.get("pid"))
+            raise
+        except Exception as e:                       # lost contact: ComfyUI may still be running it
+            job_state("unknown", prompt_id=JOB.get("pid"), error=f"{type(e).__name__}: {e}")
+            return False, [], f"lost contact with ComfyUI ({e}) - the job may still finish there (prompt {JOB.get('pid')})"
         finally:
             release(log, JOB.pop("pid", None))
+            chat_resume(paused, log)
 
 
 def all_workflows():
@@ -1121,16 +1203,33 @@ def dump_schema(path):
     return 0
 
 
-def write_record(files, info, wf=None):
+def write_record(files, info, wf=None, status="succeeded", error=None, prefix=None, log=print):
     """!
-    @brief Saves "<image>.json" next to the main output: what was asked, what was used, how long it took.
-    @param files  Output paths.  @param info  Request details.  @return Path of the record, or None.
+    @brief Saves "<output>.json" next to the main output for every outcome - succeeded, failed, check failed: what was
+           asked, what was used (with SHA-256 of every model file and input picture), the job id, how long it took.
+           A failed job without outputs is recorded as "<prefix>_failed_<job id>.json".
+    @param files  Output paths.  @param info  Request details.  @param wf  The workflow (saved beside it).
+    @param status  Outcome.  @param error  Error text.  @param prefix  "<date>/<name>" for a record without outputs.
+    @return Path of the record, or None.
     """
-    main = [f for f in files if not re.search(r"_(base|pose|hires|upscaled)_\d+_\.", os.path.basename(f))] or files[:1]
-    if not main:
+    main = [f for f in files if not re.search(r"_(base|pose|hires|upscaled|view_\w+)_?\d*_?\.", os.path.basename(f))] or files[:1]
+    job = JOB.get("ledger", {}).get("id", time.strftime("%Y%m%d-%H%M%S"))
+    if not main and not prefix:
         return None
-    rec = {"time": datetime.datetime.now().isoformat(timespec="seconds"), **info, "outputs": files,
-           "duration_s": JOB.get("secs"), "peak_gpu_gb": JOB.get("peak_gb")}
+    base = os.path.splitext(main[0])[0] if main else os.path.join(OUTPUT, f"{prefix}_failed_{job}")
+    os.makedirs(os.path.dirname(base), exist_ok=True)
+    rec = {"time": datetime.datetime.now().isoformat(timespec="seconds"), "status": status, "error": error or None,
+           "job": job, **info, "outputs": files, "duration_s": JOB.get("secs"), "peak_gpu_gb": JOB.get("peak_gb")}
+    try:
+        rec["comfyui_commit"] = subprocess.run(["git", "-C", os.path.join(os.path.dirname(os.path.abspath(__file__)), "app", "ComfyUI"),
+                                                "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip() or None
+    except OSError:
+        pass
+    if wf is not None:
+        try:
+            rec["inputs_sha256"] = input_hashes(wf, info.get("uploads"), log)
+        except OSError:
+            pass
     try:                                                  # module version and checked model hashes, when known
         rec["module"] = open(os.path.expanduser("~/.local/state/modules/comfyui/source")).read().strip()
         hashes = {l.split(" ", 3)[-1].strip(): l.split(" ", 1)[0]
@@ -1138,12 +1237,12 @@ def write_record(files, info, wf=None):
         rec["model_sha256"] = {os.path.basename(k): v for k, v in hashes.items() if os.path.basename(k) == info.get("model_file")}
     except OSError:
         pass
-    path = os.path.splitext(main[0])[0] + ".json"
+    path = base + ".json"
     if wf is not None:              # the exact ComfyUI workflow (API format) as it was run: ai gen rerun, or load it in the page
-        wpath = os.path.splitext(main[0])[0] + ".workflow.json"
+        wpath = base + ".workflow.json"
         with open(wpath, "w") as f:
             json.dump(wf, f, indent=1)
-        rec["workflow"] = os.path.basename(wpath)
+        rec["workflow"], rec["workflow_sha256"] = os.path.basename(wpath), wf_sha(wf)
     with open(path, "w") as f:
         json.dump(rec, f, indent=1)
     return path
@@ -1268,37 +1367,82 @@ def gen3d(a):
     glb = next((f for f in files if f.endswith(".glb")), None)
     info = {"kind": "3d", "model": name, "model_file": prof["file"], "image": a.image[0], "seed": seed, "quality": a.quality,
             **{k: vals[k] for k in ("faces", "resolution", "texture", "remove_background")}, "recipe": prof["workflow"]}
-    if ok and glb:
-        info["glb"] = glb_stats(glb)
-        ok = info["glb"].get("valid") and info["glb"]["triangles"] > 0
-        blender = shutil.which("blender")
-        if ok and blender:
-            log("checking the model in Blender (import, mesh, 4 renders)")
+    info["uploads"] = [[recipe["inputs"]["image"]["set"][0][0], src]]
+    status, extra = check_3d(glb, info, log) if ok and glb else ("failed", [])
+    files += extra
+    return report_3d(status, files, info, wf, err, prefix, seed, log)
+
+
+EXIT = {"succeeded": 0, "failed": 1, "check_failed": 2, "check_skipped": 3}
+
+
+def check_status(glb_info, blender_present, blender_rc=None, mesh=None, renders=0, imgcheck_rc=None):
+    """!
+    @brief The verdict on a generated 3D model from its required checks: a valid GLB with triangles; with Blender
+           installed, a successful Blender run whose result says ok, 4 renders, and img-check passing all of them.
+           Without Blender the model is usable but unchecked ("check_skipped"). @return status (see EXIT)
+    """
+    if not (glb_info.get("valid") and glb_info.get("triangles", 0) > 0):
+        return "failed"
+    if not blender_present:
+        return "check_skipped"
+    if blender_rc != 0 or not isinstance(mesh, dict) or not mesh.get("ok") or renders < 4 or imgcheck_rc != 0:
+        return "check_failed"
+    return "succeeded"
+
+
+def check_3d(glb, info, log=print):
+    """!
+    @brief Required checks of a 3D result: GLB header, then (Blender module) import, mesh measures, 4 renders and
+           img-check, with the chat-model server paused (the blender command takes the GPU lock itself).
+    @return (status, extra output files)
+    """
+    info["glb"] = glb_stats(glb)
+    blender, views, rc, mesh, chk_rc = shutil.which("blender"), [], None, None, None
+    if info["glb"].get("valid") and info["glb"].get("triangles") and blender:
+        log("checking the model in Blender (import, mesh, 4 renders)")
+        paused = chat_pause(log)
+        try:
             r = subprocess.run([blender, "-b", "--factory-startup", "--python-exit-code", "1", "--python",
                                 os.path.join(os.path.dirname(os.path.abspath(__file__)), "mesh_check.py"), "--",
                                 glb, os.path.splitext(glb)[0] + "_view"], capture_output=True, text=True, timeout=900)
+            rc = r.returncode
             line = next((l for l in r.stdout.splitlines() if l.startswith("MESH-CHECK ")), None)
-            info["blender"] = json.loads(line[11:]) if line else {"ok": False, "error": (r.stderr or r.stdout)[-300:]}
-            views = info["blender"].get("renders", [])
-            files += views
+            mesh = json.loads(line[11:]) if line else {"ok": False, "error": (r.stderr or r.stdout)[-300:]}
+        except (subprocess.TimeoutExpired, ValueError) as e:
+            mesh = {"ok": False, "error": str(e)[:300]}
+        finally:
+            chat_resume(paused, log)
+        views = [v for v in mesh.get("renders", []) if os.path.exists(v)]
+        if views:
             chk = subprocess.run([os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin", "img-check"), *views],
-                                 capture_output=True, text=True) if views else None
-            info["renders_check"] = chk.stdout.strip()[-600:] if chk else None
-            if chk and chk.returncode != 0:
-                log("warning: a render looks blank - see the record")
-        elif ok:
-            info["blender"] = "not installed (ai mod add blender for renders and mesh checks)"
-    rec = write_record(files, info, wf) if ok else None
-    print("OUTPUT (seed %d)" % seed if ok else f"FAILED {err}")
+                                 capture_output=True, text=True)
+            chk_rc, info["renders_check"] = chk.returncode, chk.stdout.strip()[-600:]
+        info["blender"] = mesh
+    elif not blender:
+        info["blender"] = "not installed (ai mod add blender for renders and mesh checks)"
+    return check_status(info["glb"], bool(blender), rc, mesh, len(views), chk_rc), views
+
+
+def report_3d(status, files, info, wf, err, prefix, seed, log=print):
+    """! @brief Record and summary for a 3D job; the exit code says whether the required checks passed. """
+    why = {"failed": err or "no valid model", "check_failed": "the model was made but a required check failed (see the record)",
+           "check_skipped": "the model was made but not checked (Blender module not installed)"}.get(status)
+    rec = write_record(files, info, wf, status, why, prefix, log)
+    print({"succeeded": f"OUTPUT (seed {seed})", "check_skipped": f"OUTPUT, NOT CHECKED (seed {seed})",
+           "check_failed": f"OUTPUT, CHECK FAILED (seed {seed})"}.get(status, f"FAILED {why}"))
     for f in files:
         print(f)
-    if ok:
+    if status != "failed":
         s = info["glb"]
+        b = info.get("blender") if isinstance(info.get("blender"), dict) else {}
         print(f"  model: {s['triangles']} triangles, {s['textures']} textures, {s['size_mb']} MB"
-              + (f"; Blender: {info['blender'].get('loose_parts')} parts, {info['blender'].get('non_manifold_edges')} open edges"
-                 if isinstance(info.get("blender"), dict) and info["blender"].get("ok") else ""))
+              + (f"; Blender: {b.get('loose_parts')} parts, {b.get('non_manifold_edges')} open edges" if b.get("ok") else ""))
+        if status == "check_failed":
+            print(f"  check failed: Blender {'ok' if b.get('ok') else b.get('error', 'failed')}; renders: {info.get('renders_check') or 'none'}")
+    if rec:
         print(f"  record: {rec}")
-    return 0 if ok else 1
+    return EXIT[status]
 
 
 def asset_cmd(argv):
@@ -1452,25 +1596,55 @@ def asset_cmd(argv):
 
 def rerun(argv):
     """!
-    @brief ai gen rerun FILE.workflow.json [--name N]: runs a saved workflow again exactly (same models, settings, seed),
-           through the same GPU hand-off and preflight. Reference images must still be in ComfyUI's input folder.
-    @return exit code
+    @brief ai gen rerun FILE.workflow.json [--name N] [--allow-drift]: runs a workflow ai gen saved again, exactly.
+           Only workflows with their record beside them and unchanged since (workflow SHA-256 in the record), made of
+           node types the pinned ComfyUI's schema lists; model files and input pictures must still have the hashes
+           recorded (--allow-drift runs anyway and records the difference). Input pictures are handed over again from
+           where the record says; a 3D job gets the same checks as the original. @return exit code
     """
     ap = argparse.ArgumentParser(prog="ai gen rerun")
-    ap.add_argument("workflow"); ap.add_argument("--name", default=""); ap.add_argument("--timeout", type=int, default=1800)
+    ap.add_argument("workflow"); ap.add_argument("--name", default=""); ap.add_argument("--timeout", type=int, default=2400)
+    ap.add_argument("--allow-drift", action="store_true", help="run even when a model file or input picture changed")
     a = ap.parse_args(argv)
     p = os.path.realpath(os.path.expanduser(a.workflow))
-    if not p.startswith(WORK + os.sep) or not p.endswith(".json"):
+    if not p.startswith(WORK + os.sep) or not p.endswith(".workflow.json"):
         sys.exit("ai gen rerun: a .workflow.json inside ~/work (e.g. ~/work/outputs/comfy/<date>/x_00001_.workflow.json)")
+    recp = p[: -len(".workflow.json")] + ".json"
+    try:
+        old = json.load(open(recp))
+    except (OSError, ValueError):
+        sys.exit(f"ai gen rerun: no record {os.path.basename(recp)} beside it - only workflows saved by ai gen can be rerun")
     wf = json.load(open(p))
+    if old.get("workflow") != os.path.basename(p) or old.get("workflow_sha256") != wf_sha(wf):
+        sys.exit("ai gen rerun: the workflow does not match its record (changed since, or saved before records had hashes)")
+    try:
+        known = set(json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "schema.json"))))
+    except (OSError, ValueError):
+        known = set()
+    odd = sorted({n["class_type"] for n in wf.values()} - known)
+    if odd:
+        sys.exit(f"ai gen rerun: node types ai gen does not use: {', '.join(odd)} - not run")
+    uploads = [(n, s) for n, s in old.get("uploads", [])]
+    log = lambda s: print(f"  {s}", flush=True)
+    now = input_hashes(wf, uploads, log)
+    drift = sorted(k for k in set(now) | set(old.get("inputs_sha256", {})) if now.get(k) != old.get("inputs_sha256", {}).get(k))
+    if drift and not a.allow_drift:
+        sys.exit(f"ai gen rerun: changed or missing since the original: {', '.join(drift)} (--allow-drift runs anyway)")
     day = datetime.date.today().isoformat()
     prefix = f"{day}/{slug(a.name) if a.name else 'rerun-' + slug(os.path.basename(p).split('_0')[0])}"
     for node in wf.values():                       # outputs go to today's folder under the new name, nothing else changes
         if node.get("class_type", "").startswith("Save") and "filename_prefix" in node.get("inputs", {}):
-            old = node["inputs"]["filename_prefix"]
-            node["inputs"]["filename_prefix"] = prefix + (old[old.rfind("_"):] if re.search(r"_(base|pose|hires|upscaled)$", old) else "")
-    ok, files, err = generate(wf, a.timeout, log=lambda t: print(f"  {t}", flush=True))
-    rec = write_record(files, {"kind": "rerun", "from_workflow": p}, wf) if ok else None
+            oldp = node["inputs"]["filename_prefix"]
+            node["inputs"]["filename_prefix"] = prefix + (oldp[oldp.rfind("_"):] if re.search(r"_(base|pose|hires|upscaled)$", oldp) else "")
+    ok, files, err = generate(wf, a.timeout, log=log, uploads=uploads)
+    info = {k: v for k, v in old.items() if k not in ("time", "status", "error", "job", "outputs", "duration_s", "peak_gpu_gb",
+                                                       "workflow", "workflow_sha256", "inputs_sha256", "glb", "blender", "renders_check")}
+    info.update(rerun_of=p, drift=drift or None)
+    if old.get("kind") == "3d":
+        glb = next((f for f in files if f.endswith(".glb")), None)
+        status, extra = check_3d(glb, info, log) if ok and glb else ("failed", [])
+        return report_3d(status, files + extra, info, wf, err, prefix, old.get("seed", 0), log)
+    rec = write_record(files, info, wf, "succeeded" if ok else "failed", err, prefix, log)
     print("OUTPUT" if ok else f"FAILED {err}")
     for f in files:
         print(f)
@@ -1656,7 +1830,8 @@ def main():
         ok, files, err = generate(wf, limit, log=log, uploads=uploads)
     if err:
         print(f"  error: {err}")
-    rec = write_record(files, info, wf) if ok else None
+    info["uploads"] = [[n, s] for n, s in uploads]
+    rec = write_record(files, info, wf, "succeeded" if ok else "failed", err, prefix)
     if ok and a.kind != "video" and info.get("loras"):       # ComfyUI's verdict: did it apply every LoRA layer?
         dropped = lora_keys_dropped(t_start)
         if dropped:

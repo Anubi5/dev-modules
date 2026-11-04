@@ -23,7 +23,11 @@ DATA = os.path.expanduser("~/work/comfyui")
 NOTES, TESTED = os.path.join(DATA, "notes.json"), os.path.join(DATA, "tested.json")
 CACHE = os.path.expanduser("~/.cache/ai-gen/hashes.json")    # path -> [size, mtime, sha256]; disposable
 NOTE_KEYS = {"trigger": str, "strength": float, "cfg": float, "negative": str, "base": str, "about": str, "source": str,
-             "sampler": str, "scheduler": str, "steps": int}   # sampler/scheduler/steps: checkpoints
+             "sampler": str, "scheduler": str, "steps": int, "arch": str, "text_encoder": str, "vae": str,
+             "shift": float, "edit_sampler": str, "style": str, "pose_strength": float}
+# the keys a note shares with a profiles.json entry: a note is a local profile (profiles.json = the shipped ones)
+PROFILE_KEYS = ("arch", "sampler", "scheduler", "steps", "cfg", "text_encoder", "vae", "shift", "edit_sampler", "style",
+                "pose_strength")
 MAX_HEADER = 100 << 20
 
 

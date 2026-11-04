@@ -101,6 +101,16 @@ at once (a file still being copied is reported as incomplete).
 | `ai gen note CKPT --sampler dpmpp_2m --scheduler karras --steps 30 --cfg 5 --negative "..."` | a checkpoint's own settings from its card: used by `--checkpoint`, no profile entry needed |
 | `ai gen verify` | re-read every file used before: a file changed under the same name is reported |
 
+Every model is used the same way: `--model` takes a profile from `profiles.json` (the shipped, tested settings) or any
+model file in `checkpoints/` or `diffusion_models/`. SDXL checkpoints are recognised from their header; any other file is
+described once with `ai gen note FILE --arch zimage` (plus `--sampler --steps --cfg --text_encoder --vae` from its card,
+as needed) and starts from that architecture's profile. A note on a profile's own file changes that profile locally.
+`--checkpoint` still works as before (the same, limited to `checkpoints/`).
+
+Every result is saved with `<name>.json` (what was asked, settings, LoRA checks, time, GPU memory) and
+`<name>.workflow.json`: the exact ComfyUI workflow (API format) that ran, with every parameter. `ai gen rerun
+<name>.workflow.json` runs it again exactly; the ComfyUI page can open it too.
+
 Notes (`~/work/comfyui/notes.json`) and tested pairs (`~/work/comfyui/tested.json`) are keyed by file content (SHA-256):
 a renamed file keeps its note, a changed file loses it. Settings for a job are chosen in this order: what the workflow
 must have (CFG 1 and no negative for zimage, flux3, fibo2), what you type, the LoRA notes, the model's defaults.

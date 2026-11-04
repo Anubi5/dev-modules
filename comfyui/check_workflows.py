@@ -52,9 +52,11 @@ def self_tests():
     bad = []
     with tempfile.TemporaryDirectory() as d:
         head = json.dumps({"conditioner.embedders.1.model.x": {"dtype": "F16", "shape": [1], "data_offsets": [0, 2]}}).encode()
-        with open(os.path.join(d, "myOwnSDXL.safetensors"), "wb") as f:
+        os.makedirs(os.path.join(d, "comfy", "checkpoints"))
+        ck = os.path.join(d, "comfy", "checkpoints", "myOwnSDXL.safetensors")
+        with open(ck, "wb") as f:
             f.write(struct.pack("<Q", len(head)) + head + b"\0\0")
-        dirs, gen.CKPT_DIRS = gen.CKPT_DIRS, [d]
+        roots, gen.assets.ROOTS[:] = gen.assets.ROOTS[:], [os.path.join(d, "comfy")]
         saved = (gen.assets.NOTES, gen.assets.CACHE)
         gen.assets.NOTES, gen.assets.CACHE = os.path.join(d, "n.json"), os.path.join(d, "c.json")
         try:
@@ -62,13 +64,13 @@ def self_tests():
             p = gen.find_checkpoint("myown", quiet)
             if p["arch"] != "sdxl" or p["file"] != "myOwnSDXL.safetensors":
                 bad.append(f"self-test: --checkpoint with an unprofiled SDXL file got arch {p['arch']} (needs sdxl)")
-            gen.assets.set_note(os.path.join(d, "myOwnSDXL.safetensors"),
+            gen.assets.set_note(ck,
                                 {"sampler": "euler", "scheduler": "sgm_uniform", "steps": "8", "cfg": "2", "negative": ""})
             p = gen.find_checkpoint("myown", quiet)
             if (p["sampler"], p["scheduler"], p["steps"], p["cfg"], gen.negative_for(p, "photo")) != ("euler", "sgm_uniform", 8, 2.0, ""):
                 bad.append(f"self-test: checkpoint note not applied: {p['sampler']} {p['scheduler']} {p['steps']} {p['cfg']}")
         finally:
-            gen.CKPT_DIRS = dirs
+            gen.assets.ROOTS[:] = roots
             gen.assets.NOTES, gen.assets.CACHE = saved
     api = gen.api
     gen.api = lambda path, *a, **k: {"UNETLoader": {"input": {"required": {"unet_name": [["have.safetensors"]]}}}}
@@ -79,7 +81,68 @@ def self_tests():
             bad.append("self-test: the model-file preflight did not tell a missing file from a present one")
     finally:
         gen.api = api
-    bad += lora_rule_tests()
+    bad += lora_rule_tests() + model_rule_tests()
+    return bad
+
+
+def model_rule_tests():
+    """!
+    @brief One rule for every model: a diffusion-model file gets its architecture from its note and starts from that
+           architecture's profile; without a note it is refused with how to fix it; a profile's own file takes its note
+           too; a file in the wrong folder is refused; every result saves the exact workflow next to its record.
+    @return list of problems
+    """
+    import struct
+    import tempfile
+    bad, quiet = [], (lambda t: None)
+
+    def st(p, keys):
+        h = json.dumps({k: {"dtype": "F16", "shape": [1], "data_offsets": [2 * i, 2 * i + 2]} for i, k in enumerate(keys)}).encode()
+        with open(p, "wb") as f:
+            f.write(struct.pack("<Q", len(h)) + h + b"\0" * (2 * len(keys)))
+
+    with tempfile.TemporaryDirectory() as d:
+        for sub in ("checkpoints", "diffusion_models"):
+            os.makedirs(os.path.join(d, "comfy", sub))
+        ft = os.path.join(d, "comfy/diffusion_models/my_zimage_finetune.safetensors")
+        st(ft, ["layers.0.attention.qkv.weight"])
+        zfile = gen.profile("zimage")["file"]
+        zp = os.path.join(d, "comfy/diffusion_models", zfile)
+        st(zp, ["layers.0.x.weight", "layers.1.y.weight"])
+        wrong = os.path.join(d, "comfy/diffusion_models/sdxl_in_wrong_place.safetensors")
+        st(wrong, ["conditioner.embedders.1.model.x"])
+        saved = (gen.assets.ROOTS[:], gen.assets.NOTES, gen.assets.CACHE)
+        gen.assets.ROOTS[:] = [os.path.join(d, "comfy")]
+        gen.assets.NOTES, gen.assets.CACHE = os.path.join(d, "n.json"), os.path.join(d, "c.json")
+        try:
+            try:
+                gen.resolve_model("my_zimage_finetune", quiet); bad.append("self-test: a file of unknown architecture was used")
+            except SystemExit as e:
+                if "--arch" not in str(e):
+                    bad.append(f"self-test: unknown architecture refused without the fix: {e}")
+            gen.assets.set_note(ft, {"arch": "zimage", "steps": "6"})
+            p = gen.resolve_model("my_zimage_finetune", quiet)
+            z = gen.profile("zimage")
+            if (p["arch"], p["file"], p["steps"], p["text_encoder"], p["vae"]) != ("zimage", "my_zimage_finetune.safetensors", 6,
+                                                                                z["text_encoder"], z["vae"]):
+                bad.append(f"self-test: diffusion-model file with a note resolved wrong: {p}")
+            gen.assets.set_note(zp, {"steps": "5"})
+            if gen.resolve_model("zimage", quiet)["steps"] != 5:
+                bad.append("self-test: a profile's own file did not take its note")
+            gen.assets.set_note(wrong, {"arch": "sdxl"})
+            try:
+                gen.resolve_model("sdxl_in_wrong_place", quiet); bad.append("self-test: an SDXL file in diffusion_models was used")
+            except SystemExit as e:
+                if "move it" not in str(e):
+                    bad.append(f"self-test: wrong folder refused for the wrong reason: {e}")
+            out = os.path.join(d, "x_00001_.png")
+            open(out, "wb").close()
+            wf = gen.zimage("p", 1, 8, 1024, 1024, "t", z)
+            rec = gen.write_record([out], {"kind": "image"}, wf)
+            if json.load(open(rec)).get("workflow") != "x_00001_.workflow.json" or json.load(open(os.path.join(d, "x_00001_.workflow.json"))) != wf:
+                bad.append("self-test: the exact workflow was not saved next to the record")
+        finally:
+            gen.assets.ROOTS[:], gen.assets.NOTES, gen.assets.CACHE = saved
     return bad
 
 

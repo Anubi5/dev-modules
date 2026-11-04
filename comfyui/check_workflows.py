@@ -127,6 +127,11 @@ def lora_rule_tests():
                 except SystemExit as e:
                     if want not in str(e):
                         bad.append(f"self-test: {case} refused for the wrong reason: {e}")
+            st(os.path.join(d, "comfy/checkpoints/fused.safetensors"), ["layers.0.proj.qkv.weight", "layers.0.proj.o.weight"])
+            st(os.path.join(d, "comfy/loras/sep.safetensors"), [f"diffusion_model.layers.0.proj.{x}.lora_A.weight" for x in "qkvo"])
+            f = gen.assets.lora_fit(os.path.join(d, "comfy/loras/sep.safetensors"), os.path.join(d, "comfy/checkpoints/fused.safetensors"))
+            if f["status"] != "fits":
+                bad.append(f"self-test: separate q/k/v LoRA layers on a fused qkv model: {f['status']} ({f['why']})")
             if run(["part_d"])[4][0]["fit"] != "unchecked":
                 bad.append("self-test: a still-copying LoRA was judged")
             if run(["flux_c"], force_lora=True)[4][0]["fit"] != "mismatch":

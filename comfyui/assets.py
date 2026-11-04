@@ -13,6 +13,7 @@ import datetime
 import hashlib
 import json
 import os
+import re
 import struct
 
 ROOTS = [os.path.join(os.environ.get("MODELS_MOUNT", "/models"), "comfy"),
@@ -132,6 +133,17 @@ def _module(k, lora):
     return k.replace(".", "_")
 
 
+def _fused(m):
+    """! @brief Names a separate q/k/v projection has when the model stores them fused (ComfyUI splits the LoRA over it). """
+    out = []
+    for pat, rep in ((r"(^|_)(q|k|v)$", r"\1qkv"), (r"(^|_)(k|v)$", r"\1kv"), (r"(^|_)(q|k|v)_proj$", r"\1qkv_proj"),
+                     (r"(^|_)to_(q|k|v)$", r"\1to_qkv")):
+        f = re.sub(pat, rep, m)
+        if f != m:
+            out.append(f)
+    return out
+
+
 def lora_fit(lora_path, model_path):
     """!
     @brief Structural fit: how many of the LoRA's layers exist in the model (headers only, no GPU, no loading).
@@ -149,7 +161,7 @@ def lora_fit(lora_path, model_path):
     if not mods:
         return {"status": "unchecked", "matched": 0, "layers": 0, "why": "only text-encoder layers"}
     have = {_module(k, False) for k in mt}
-    hit = sum(1 for m in mods if m in have)
+    hit = sum(1 for m in mods if m in have or any(f in have for f in _fused(m)))
     if hit == 0 and any(s in m for m in mods for s in ("down_blocks", "up_blocks", "mid_block")):
         return {"status": "unchecked", "matched": 0, "layers": len(mods), "why": "diffusers-style names, not compared"}
     share = hit / len(mods)

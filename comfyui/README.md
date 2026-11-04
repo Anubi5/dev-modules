@@ -98,6 +98,7 @@ at once (a file still being copied is reported as incomplete).
 | `ai gen show NAME [--json]` | one file: complete or not, embedded metadata (trigger phrase, training tags ...), note, tested pairs |
 | `ai gen check --model M --lora L` | does the LoRA fit the model: its layers compared with the model's, headers only, no GPU |
 | `ai gen note NAME --trigger T --strength 0.7 --cfg 3 --negative "" --base MOSS --source URL` | write down what the LoRA's card says |
+| `ai gen note CKPT --sampler dpmpp_2m --scheduler karras --steps 30 --cfg 5 --negative "..."` | a checkpoint's own settings from its card: used by `--checkpoint`, no profile entry needed |
 | `ai gen verify` | re-read every file used before: a file changed under the same name is reported |
 
 Notes (`~/work/comfyui/notes.json`) and tested pairs (`~/work/comfyui/tested.json`) are keyed by file content (SHA-256):

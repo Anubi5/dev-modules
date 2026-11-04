@@ -158,7 +158,7 @@ def is_sdxl(path):
         return False
 
 
-def find_checkpoint(name):
+def find_checkpoint(name, log=print):
     """!
     @brief --checkpoint: an SDXL checkpoint by (part of) its file name. Uses the matching profile's settings when there is
            one, else the default SDXL model's settings ("default_sdxl"; the overall default may be another architecture).
@@ -172,7 +172,27 @@ def find_checkpoint(name):
     if not is_sdxl(found[hit[0]]):
         sys.exit(f"--checkpoint {name}: {hit[0]} is not an SDXL checkpoint - this workflow needs SDXL")
     known = [k for k, v in PROFILES["models"].items() if v.get("file") == hit[0]]
-    return profile(known[0]) if known else dict(profile(PROFILES.get("default_sdxl", "realvis")), file=hit[0], name=hit[0])
+    prof = profile(known[0]) if known else dict(profile(PROFILES.get("default_sdxl", "realvis")), file=hit[0], name=hit[0])
+    return checkpoint_note(prof, found[hit[0]], log)
+
+
+def checkpoint_note(prof, path, log=print):
+    """!
+    @brief The checkpoint's note (ai gen note NAME --sampler --scheduler --steps --cfg --negative, from its card) replaces
+           the default settings it would otherwise get; typed options still win later. @return the profile
+    """
+    if not os.path.exists(assets.CACHE) or path not in assets._load(assets.CACHE):
+        if os.path.getsize(path) > 1 << 30:
+            log(f"reading {os.path.basename(path)} once to recognise it (about a minute; cached afterwards)")
+    note = assets.note_for(path)
+    used = {k: note[k] for k in ("sampler", "scheduler", "steps", "cfg") if k in note}
+    if "negative" in note:
+        used["negative"] = {"photo": note["negative"], "art": note["negative"]}
+    if used:
+        prof = dict(prof, **used)
+        log(f"{os.path.basename(path)}: " + ", ".join(f"{k} {note[k]!r}" for k in note
+                                                     if k in ("sampler", "scheduler", "steps", "cfg", "negative")) + " (from its note)")
+    return prof
 
 
 LORA_DIRS = [os.path.join(MODELS, "comfy", "loras"),
@@ -1030,6 +1050,7 @@ HELP = """ai gen - images, edits and short videos on the local GPU (one job at a
   ai gen show NAME [--json]                                one file: complete?, embedded metadata, note, tested with
   ai gen check --model M --lora L [--lora L2]              does a LoRA fit that model (file headers only, no GPU)
   ai gen note NAME [--trigger T --strength S --cfg C --negative N --base B --about A --source URL]
+                   checkpoint: [--sampler S --scheduler K --steps N --cfg C --negative N]
                                                            remember what the LoRA's card says (used automatically)
   ai gen verify                                            re-read files used before: same content?
   ai gen schema                                            save ComfyUI node definitions (for the CI check)
@@ -1153,6 +1174,15 @@ def asset_cmd(argv):
     if cmd == "note":
         f = _one(a.name)
         vals = {k: getattr(a, k) for k in assets.NOTE_KEYS if getattr(a, k) is not None}
+        try:                                   # sampler/scheduler names the pinned ComfyUI knows (schema.json)
+            ks = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "schema.json")))["KSampler"]
+            for k, inp in (("sampler", "sampler_name"), ("scheduler", "scheduler")):
+                if vals.get(k) and vals[k] not in ks[inp]["values"]:
+                    sys.exit(f"--{k} {vals[k]}: not known to ComfyUI. Choose from: {', '.join(ks[inp]['values'])}")
+        except (OSError, KeyError, ValueError):
+            pass
+        if "steps" in vals and vals["steps"] != "" and not 1 <= int(vals["steps"]) <= 60:
+            sys.exit("--steps must be 1-60")
         try:
             n = assets.set_note(f["path"], vals) if vals else assets.note_for(f["path"])
         except ValueError as e:

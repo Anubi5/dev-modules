@@ -55,12 +55,21 @@ def self_tests():
         with open(os.path.join(d, "myOwnSDXL.safetensors"), "wb") as f:
             f.write(struct.pack("<Q", len(head)) + head + b"\0\0")
         dirs, gen.CKPT_DIRS = gen.CKPT_DIRS, [d]
+        saved = (gen.assets.NOTES, gen.assets.CACHE)
+        gen.assets.NOTES, gen.assets.CACHE = os.path.join(d, "n.json"), os.path.join(d, "c.json")
         try:
-            p = gen.find_checkpoint("myown")
+            quiet = lambda t: None
+            p = gen.find_checkpoint("myown", quiet)
             if p["arch"] != "sdxl" or p["file"] != "myOwnSDXL.safetensors":
                 bad.append(f"self-test: --checkpoint with an unprofiled SDXL file got arch {p['arch']} (needs sdxl)")
+            gen.assets.set_note(os.path.join(d, "myOwnSDXL.safetensors"),
+                                {"sampler": "euler", "scheduler": "sgm_uniform", "steps": "8", "cfg": "2", "negative": ""})
+            p = gen.find_checkpoint("myown", quiet)
+            if (p["sampler"], p["scheduler"], p["steps"], p["cfg"], gen.negative_for(p, "photo")) != ("euler", "sgm_uniform", 8, 2.0, ""):
+                bad.append(f"self-test: checkpoint note not applied: {p['sampler']} {p['scheduler']} {p['steps']} {p['cfg']}")
         finally:
             gen.CKPT_DIRS = dirs
+            gen.assets.NOTES, gen.assets.CACHE = saved
     api = gen.api
     gen.api = lambda path, *a, **k: {"UNETLoader": {"input": {"required": {"unet_name": [["have.safetensors"]]}}}}
     try:

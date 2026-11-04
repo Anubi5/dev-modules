@@ -22,7 +22,8 @@ EXT = (".safetensors", ".gguf", ".pt", ".pth", ".bin", ".ckpt", ".onnx")
 DATA = os.path.expanduser("~/work/comfyui")
 NOTES, TESTED = os.path.join(DATA, "notes.json"), os.path.join(DATA, "tested.json")
 CACHE = os.path.expanduser("~/.cache/ai-gen/hashes.json")    # path -> [size, mtime, sha256]; disposable
-NOTE_KEYS = {"trigger": str, "strength": float, "cfg": float, "negative": str, "base": str, "about": str, "source": str}
+NOTE_KEYS = {"trigger": str, "strength": float, "cfg": float, "negative": str, "base": str, "about": str, "source": str,
+             "sampler": str, "scheduler": str, "steps": int}   # sampler/scheduler/steps: checkpoints
 MAX_HEADER = 100 << 20
 
 

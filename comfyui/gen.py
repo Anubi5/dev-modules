@@ -130,6 +130,8 @@ def slug(name):
 
 PROFILES = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles.json")))
 NEGATIVE = PROFILES["styles"]["photo"]["negative"]            # default style; kept as a name for the tests
+CKPT_DIRS = [os.path.join(MODELS, "comfy", "checkpoints"),
+             os.path.expanduser("~/.local/share/modules/comfyui/models/checkpoints")]
 
 
 def profile(name=None):
@@ -157,76 +159,40 @@ def is_sdxl(path):
 
 
 def find_checkpoint(name, log=print):
-    """! @brief --checkpoint NAME: the same as --model NAME, limited to the checkpoints folder (kept for old commands). """
-    return resolve_model(name, log, folders=("checkpoints",))
-
-
-def arch_base(arch):
-    """! @brief The shipped profile an architecture's other files start from (default_sdxl for SDXL, else the first). """
-    if arch == "sdxl":
-        return profile(PROFILES.get("default_sdxl", "realvis"))
-    name = next((n for n, p in PROFILES["models"].items() if p["arch"] == arch), None)
-    if not name:
-        sys.exit(f"architecture {arch!r} is not wired into ai gen. Known: {', '.join(sorted(archs()))}")
-    return profile(name)
-
-
-def archs():
-    """! @brief Architectures ai gen has workflows for. """
-    return {p["arch"] for p in PROFILES["models"].values()}
-
-
-def resolve_model(name, log=print, folders=("checkpoints", "diffusion_models")):
     """!
-    @brief --model NAME: one rule for every model. NAME is a profile (profiles.json: the shipped, tested settings) or
-           any model file in checkpoints/ or diffusion_models/ (part of its name). A file's architecture comes from
-           its note (ai gen note FILE --arch ...) or, for SDXL checkpoints, from its header; its settings start from
-           that architecture's shipped profile. The file's note then replaces any of them (sampler, scheduler, steps,
-           cfg, negative, text_encoder, vae, ...); typed options win over both later.
-    @return profile dict with "name", "file", "arch" and the settings
+    @brief --checkpoint: an SDXL checkpoint by (part of) its file name. Uses the matching profile's settings when there is
+           one, else the default SDXL model's settings ("default_sdxl"; the overall default may be another architecture).
+    @param name  Name or part of it (case-insensitive).  @return Profile dict with "file" set, or exits listing what is there.
     """
-    if name in PROFILES["models"] and "checkpoints" in folders and "diffusion_models" in folders:
-        prof = profile(name)
-        path = model_path(prof)
-        return apply_note(prof, path, log) if path else prof
-    fs = [f for d in folders for f in assets.files(d) if f["name"].endswith((".safetensors", ".gguf"))]
-    exact = [f for f in fs if f["name"].lower() in (name.lower(), name.lower() + ".safetensors")]
-    hit = exact or [f for f in fs if name.lower() in f["name"].lower()]
+    found = {f: os.path.join(d, f) for d in CKPT_DIRS if os.path.isdir(d) for f in os.listdir(d) if f.endswith(".safetensors")}
+    hit = [f for f in sorted(found) if name.lower() in f.lower()]
     if len(hit) != 1:
-        sys.exit(f"--model {name}: {'ambiguous: ' + ', '.join(f['name'] for f in hit) if hit else 'not found'}. "
-                 f"Profiles: {', '.join(PROFILES['models'])}; files: ai gen list")
-    f = hit[0]
-    known = [k for k, v in PROFILES["models"].items() if v["file"] == f["name"]]
-    if known:
-        return apply_note(profile(known[0]), f["path"], log)
-    note = assets.note_for(_announce_hash(f["path"], log))
-    arch = note.get("arch") or ("sdxl" if f["folder"] == "checkpoints" and is_sdxl(f["path"]) else None)
-    if not arch:
-        sys.exit(f"{f['name']}: architecture unknown - tell ai gen once from its card: ai gen note {f['name']} --arch "
-                 f"<{'|'.join(sorted(archs()))}> (then its settings: --sampler --steps --cfg ...)")
-    want = "checkpoints" if arch == "sdxl" else "diffusion_models"
-    if f["folder"] != want:
-        sys.exit(f"{f['name']} is in {f['folder']}/, but {arch} models are loaded from {want}/ - move it there")
-    stem = os.path.splitext(os.path.basename(f["name"]))[0]
-    base = {k: v for k, v in arch_base(arch).items() if k not in ("about", "licence", "source", "optional", "negative")}
-    return apply_note(dict(base, file=f["name"], name=stem), f["path"], log)
+        sys.exit(f"--checkpoint {name}: {'ambiguous' if hit else 'not found'}. Available: {', '.join(sorted(found)) or 'none'}"
+                 " (add your own to D:\\AI\\models\\comfy\\checkpoints)")
+    if not is_sdxl(found[hit[0]]):
+        sys.exit(f"--checkpoint {name}: {hit[0]} is not an SDXL checkpoint - this workflow needs SDXL")
+    known = [k for k, v in PROFILES["models"].items() if v.get("file") == hit[0]]
+    prof = profile(known[0]) if known else dict(profile(PROFILES.get("default_sdxl", "realvis")), file=hit[0], name=hit[0])
+    return checkpoint_note(prof, found[hit[0]], log)
 
 
-def _announce_hash(path, log):
-    if path not in assets._load(assets.CACHE) and os.path.getsize(path) > 1 << 30:
-        log(f"reading {os.path.basename(path)} once to recognise it by content (about a minute; cached afterwards)")
-    return path
-
-
-def apply_note(prof, path, log=print):
-    """! @brief The file's note replaces the profile's settings it names (said in the output). @return the profile """
-    note = assets.note_for(_announce_hash(path, log))
-    used = {k: note[k] for k in assets.PROFILE_KEYS if k in note and k != "arch"}
+def checkpoint_note(prof, path, log=print):
+    """!
+    @brief The checkpoint's note (ai gen note NAME --sampler --scheduler --steps --cfg --negative, from its card) replaces
+           the default settings it would otherwise get; typed options still win later. @return the profile
+    """
+    if not os.path.exists(assets.CACHE) or path not in assets._load(assets.CACHE):
+        if os.path.getsize(path) > 1 << 30:
+            log(f"reading {os.path.basename(path)} once to recognise it (about a minute; cached afterwards)")
+    note = assets.note_for(path)
+    used = {k: note[k] for k in ("sampler", "scheduler", "steps", "cfg") if k in note}
     if "negative" in note:
         used["negative"] = {"photo": note["negative"], "art": note["negative"]}
     if used:
-        log(f"{os.path.basename(path)}: " + ", ".join(f"{k} {note[k]!r}" for k in note if k in used) + " (from its note)")
-    return dict(prof, **used)
+        prof = dict(prof, **used)
+        log(f"{os.path.basename(path)}: " + ", ".join(f"{k} {note[k]!r}" for k in note
+                                                     if k in ("sampler", "scheduler", "steps", "cfg", "negative")) + " (from its note)")
+    return prof
 
 
 LORA_DIRS = [os.path.join(MODELS, "comfy", "loras"),
@@ -1040,7 +1006,7 @@ def dump_schema(path):
     return 0
 
 
-def write_record(files, info, wf=None):
+def write_record(files, info):
     """!
     @brief Saves "<image>.json" next to the main output: what was asked, what was used, how long it took.
     @param files  Output paths.  @param info  Request details.  @return Path of the record, or None.
@@ -1058,11 +1024,6 @@ def write_record(files, info, wf=None):
     except OSError:
         pass
     path = os.path.splitext(main[0])[0] + ".json"
-    if wf is not None:              # the exact ComfyUI workflow (API format) as it was run: ai gen rerun, or load it in the page
-        wpath = os.path.splitext(main[0])[0] + ".workflow.json"
-        with open(wpath, "w") as f:
-            json.dump(wf, f, indent=1)
-        rec["workflow"] = os.path.basename(wpath)
     with open(path, "w") as f:
         json.dump(rec, f, indent=1)
     return path
@@ -1092,11 +1053,6 @@ HELP = """ai gen - images, edits and short videos on the local GPU (one job at a
                    checkpoint: [--sampler S --scheduler K --steps N --cfg C --negative N]
                                                            remember what the LoRA's card says (used automatically)
   ai gen verify                                            re-read files used before: same content?
-  ai gen rerun FILE.workflow.json [--name N]               run a saved workflow again, exactly
-
-  --model takes a profile or any model file: SDXL checkpoints are recognised; any other file once
-  ai gen note FILE --arch <zimage|flux3|anima|moss|fibo2|sdxl> [--sampler --steps --cfg ...] - then --model FILE.
-  Every result gets <name>.json (what was asked) and <name>.workflow.json (the exact ComfyUI workflow that ran).
   ai gen schema                                            save ComfyUI node definitions (for the CI check)
 
   Reference images must be inside ~/work (e.g. ~/work/inputs). Results: ~/work/outputs/comfy/<date>/ (+ a .json record);
@@ -1113,10 +1069,6 @@ def _one(name, folder=None):
     if len(hit) != 1:
         sys.exit(f"{name}: {'ambiguous: ' + ', '.join(f['folder'] + '/' + f['name'] for f in hit[:12]) if hit else 'not found'}")
     return hit[0]
-
-
-def prof_files_all():
-    return {p["file"] for p in PROFILES["models"].values()}
 
 
 def asset_cmd(argv):
@@ -1142,9 +1094,7 @@ def asset_cmd(argv):
     a = ap.parse_args(argv[1:])
     out = {}
     if cmd == "names":
-        names = (list(PROFILES["models"]) + [os.path.splitext(f["name"])[0] for d in ("checkpoints", "diffusion_models")
-                                             for f in assets.files(d) if f["name"] not in prof_files_all()]
-                 if a.what == "models" else
+        names = (list(PROFILES["models"]) if a.what == "models" else
                  [f["name"] for f in assets.files(a.what if a.what == "loras" else "checkpoints")])
         print("\n".join(names)); return 0
     if cmd == "list":
@@ -1153,19 +1103,11 @@ def asset_cmd(argv):
             on_disk = {f["name"] for f in assets.files("checkpoints")} | {f["name"] for f in assets.files("diffusion_models")}
             out["models"] = [{"name": n, "arch": p["arch"], "ready": p["file"] in on_disk, "about": p.get("about", "")}
                              for n, p in PROFILES["models"].items()]
-        if a.what in ("checkpoints", "all"):        # every model file: how to use it (one rule for all kinds)
-            cache, allnotes = assets._load(assets.CACHE), assets.notes()
-            out["checkpoints"] = []
-            for d in ("checkpoints", "diffusion_models"):
-                for f in assets.files(d):
-                    if not f["name"].endswith((".safetensors", ".gguf")):
-                        continue
-                    sha = (cache.get(f["path"]) or [0, 0, None])[2]
-                    arch = allnotes.get(sha, {}).get("arch") if sha else None
-                    use = (f"--model {prof_files[f['name']]}" if f["name"] in prof_files else
-                           f"--model {os.path.splitext(f['name'])[0]}" + (f" ({arch}, from its note)" if arch else
-                           " (SDXL is recognised; other kinds: ai gen note FILE --arch ...)"))
-                    out["checkpoints"].append({"file": f["name"], "folder": d, "profile": prof_files.get(f["name"]), "use": use})
+        if a.what in ("checkpoints", "all"):
+            out["checkpoints"] = [{"file": f["name"], "profile": prof_files.get(f["name"]),
+                                   "use": f"--model {prof_files[f['name']]}" if f["name"] in prof_files
+                                   else f"--checkpoint {os.path.splitext(f['name'])[0]} (if SDXL)"}
+                                  for f in assets.files("checkpoints")]
         if a.what in ("loras", "all"):
             allnotes, alltested = assets.notes(), assets.tested()
             cache = assets._load(assets.CACHE)
@@ -1181,7 +1123,7 @@ def asset_cmd(argv):
         for m in out.get("models", []):
             print(f"model {m['name']:12} {m['arch']:7} {'ready' if m['ready'] else 'MISSING':8} {m['about'][:70]}")
         for c in out.get("checkpoints", []):
-            print(f"file  {c['folder'][:11]:11} {c['file']:45} {c['use']}")
+            print(f"checkpoint {c['file']:45} {c['use']}")
         for l in out.get("loras", []):
             extra = ", ".join(x for x in (l["trigger"] and f"trigger {l['trigger']}", l["strength"] and f"strength {l['strength']}",
                                          l["base"] and f"for {l['base']}",
@@ -1213,7 +1155,7 @@ def asset_cmd(argv):
     if cmd == "check":
         if not a.lora or bool(a.model) == bool(a.checkpoint):
             sys.exit("ai gen check (--model M | --checkpoint C) --lora L [--lora L2 ...]")
-        prof = find_checkpoint(a.checkpoint) if a.checkpoint else resolve_model(a.model)
+        prof = find_checkpoint(a.checkpoint) if a.checkpoint else profile(a.model)
         mp, ok = model_path(prof), True
         out = {"model": prof["name"], "loras": []}
         for name, _ in find_loras(a.lora):
@@ -1232,11 +1174,6 @@ def asset_cmd(argv):
     if cmd == "note":
         f = _one(a.name)
         vals = {k: getattr(a, k) for k in assets.NOTE_KEYS if getattr(a, k) is not None}
-        if vals.get("arch") and vals["arch"] not in archs():
-            sys.exit(f"--arch {vals['arch']}: ai gen has workflows for {', '.join(sorted(archs()))}")
-        for k, d in (("text_encoder", "text_encoders"), ("vae", "vae")):
-            if vals.get(k) and not any(x["name"] == vals[k] for x in assets.files(d)):
-                sys.exit(f"--{k} {vals[k]}: not in {d}/ (ai gen list)")
         try:                                   # sampler/scheduler names the pinned ComfyUI knows (schema.json)
             ks = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "schema.json")))["KSampler"]
             for k, inp in (("sampler", "sampler_name"), ("scheduler", "scheduler")):
@@ -1261,41 +1198,10 @@ def asset_cmd(argv):
     return 2
 
 
-def rerun(argv):
-    """!
-    @brief ai gen rerun FILE.workflow.json [--name N]: runs a saved workflow again exactly (same models, settings, seed),
-           through the same GPU hand-off and preflight. Reference images must still be in ComfyUI's input folder.
-    @return exit code
-    """
-    ap = argparse.ArgumentParser(prog="ai gen rerun")
-    ap.add_argument("workflow"); ap.add_argument("--name", default=""); ap.add_argument("--timeout", type=int, default=1800)
-    a = ap.parse_args(argv)
-    p = os.path.realpath(os.path.expanduser(a.workflow))
-    if not p.startswith(WORK + os.sep) or not p.endswith(".json"):
-        sys.exit("ai gen rerun: a .workflow.json inside ~/work (e.g. ~/work/outputs/comfy/<date>/x_00001_.workflow.json)")
-    wf = json.load(open(p))
-    day = datetime.date.today().isoformat()
-    prefix = f"{day}/{slug(a.name) if a.name else 'rerun-' + slug(os.path.basename(p).split('_0')[0])}"
-    for node in wf.values():                       # outputs go to today's folder under the new name, nothing else changes
-        if node.get("class_type", "").startswith("Save") and "filename_prefix" in node.get("inputs", {}):
-            old = node["inputs"]["filename_prefix"]
-            node["inputs"]["filename_prefix"] = prefix + (old[old.rfind("_"):] if re.search(r"_(base|pose|hires|upscaled)$", old) else "")
-    ok, files, err = generate(wf, a.timeout, log=lambda t: print(f"  {t}", flush=True))
-    rec = write_record(files, {"kind": "rerun", "from_workflow": p}, wf) if ok else None
-    print("OUTPUT" if ok else f"FAILED {err}")
-    for f in files:
-        print(f)
-    if rec:
-        print(f"  record: {rec}")
-    return 0 if ok else 1
-
-
 def main():
     """!
     @brief Command-line entry point. @return 0 on success, 1 on failure.
     """
-    if sys.argv[1:2] == ["rerun"]:
-        return rerun(sys.argv[2:])
     if sys.argv[1:2] and sys.argv[1] in ("list", "show", "check", "note", "verify", "names"):
         return asset_cmd(sys.argv[1:])
     ap = argparse.ArgumentParser(description="Generate an image or video on the GPU (hands the GPU over from the chat model).")
@@ -1314,7 +1220,7 @@ def main():
                     help="edit: the image to change (in ~/work); repeat for extra references (up to 4)")
     ap.add_argument("--no-expand", action="store_true", help="FLUX 3: use the prompt as typed (no caption expansion)")
     ap.add_argument("--name", default="", help="short name for the output files (default: from the prompt)")
-    ap.add_argument("--model", metavar="NAME", help=f"image model: a profile ({', '.join(PROFILES['models'])}; default {PROFILES['default']}) or any model file (ai gen list)")
+    ap.add_argument("--model", metavar="NAME", help=f"image model: {', '.join(PROFILES['models'])} (default {PROFILES['default']})")
     ap.add_argument("--style", choices=list(PROFILES["styles"]), default=None, help="image: photo or art (default: per model)")
     ap.add_argument("--negative", default=None, help='what to avoid (default: per model and style; "" = nothing)')
     ap.add_argument("--seed", type=int, default=None)
@@ -1383,8 +1289,7 @@ def main():
             a.model = a.model or PROFILES.get("edit_model", "flux3")
         if not a.model and not a.checkpoint and (a.pose or a.face or a.fix_faces or a.fix_hands or a.hires):
             a.model = PROFILES.get("default_sdxl", "realvis")    # those tools are SDXL-only
-        log0 = lambda t: print(f"  {t}", flush=True)
-        prof = find_checkpoint(a.checkpoint, log0) if a.checkpoint else resolve_model(a.model or PROFILES["default"], log0)
+        prof = find_checkpoint(a.checkpoint) if a.checkpoint else profile(a.model)
         arch, style = prof["arch"], a.style or prof.get("style", "photo")
         allowed = {"sdxl": {"pose", "face", "fix_faces", "fix_hands", "hires"}, "anima": {"pose"}}.get(arch, set())
         used = [o for o in ("pose", "face", "fix_faces", "fix_hands", "hires") if getattr(a, o)]
@@ -1400,6 +1305,7 @@ def main():
             sys.exit("--pose-strength must be 0.3-1.0 and --face-weight 0.3-1.2")
         neg = a.negative if a.negative is not None else negative_for(prof, style)
         steps = a.steps or prof["steps"]
+        log0 = lambda t: print(f"  {t}", flush=True)
         loras, prompt, neg, prof, lora_checks = resolve_loras(a, prof, neg, log0)
         if arch == "sdxl":
             uploads = [(n, check_input(f)) for n, f in (("30", a.pose), ("21", a.face)) if f]
@@ -1460,7 +1366,7 @@ def main():
         ok, files, err = generate(wf, limit, log=log, uploads=uploads)
     if err:
         print(f"  error: {err}")
-    rec = write_record(files, info, wf) if ok else None
+    rec = write_record(files, info) if ok else None
     if ok and a.kind != "video" and info.get("loras"):       # remember which LoRA + model contents ran together
         mp = model_path(prof)
         for d in LORA_DIRS:
@@ -1472,7 +1378,6 @@ def main():
         print(f)
     if rec:
         print(f"  record: {rec}")
-        print(f"  workflow: {os.path.splitext(rec)[0]}.workflow.json")
     return 0 if ok else 1
 
 

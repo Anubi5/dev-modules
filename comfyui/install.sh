@@ -49,7 +49,8 @@ roots() {   # model folders, same layout on D: and in the module's own folder (o
   printf '%s\n' '  checkpoints: checkpoints' '  diffusion_models: diffusion_models' '  unet: diffusion_models' '  vae: vae' \
     '  text_encoders: text_encoders' '  clip: text_encoders' '  loras: loras' '  upscale_models: upscale_models' \
     '  controlnet: controlnet' '  clip_vision: clip_vision' '  ipadapter: ipadapter' '  ultralytics: ultralytics' \
-    '  ultralytics_bbox: ultralytics/bbox' '  ultralytics_segm: ultralytics/segm' '  model_patches: model_patches'; }
+    '  ultralytics_bbox: ultralytics/bbox' '  ultralytics_segm: ultralytics/segm' '  model_patches: model_patches' \
+    '  background_removal: background_removal' '  geometry_estimation: geometry_estimation'; }
 { echo 'windows:'; echo "  base_path: ${MODELS_MOUNT:-/models}/comfy"; roots; echo 'module:'; echo "  base_path: $MOD/models"; roots; } > extra_model_paths.yaml
 
 say "model files (models.txt) - each download shows its progress"

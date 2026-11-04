@@ -48,3 +48,15 @@ Comfy-Org/MOSS-Image vae/flux2-vae_small.safetensors vae sha256:d8d52ba036475f5f
 Comfy-Org/Fibo-2.0 diffusion_models/fibo2_edit_turbo_int8_convrot.safetensors diffusion_models sha256:1f6fa7c499191f405467123f655f11762661eaa5bd479d1da8f161398ef72c3b
 Comfy-Org/Fibo-2.0 text_encoders/qwen3vl_4b_int8_convrot.safetensors text_encoders sha256:32de113cbf8282b02cbff0794b637b9d6676da09314a1db5a30bcea9bf4ee01c
 Comfy-Org/Fibo-2.0 vae/flux2-vae.safetensors vae sha256:868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3
+
+# Image to 3D (trial, optional): Pixal3D (MIT) + TRELLIS.2 (MIT) - native ComfyUI nodes, int8 weights for 12 GB.
+# The image encoders are Meta DINOv3 (DINOv3 licence: worldwide, royalty-free). Helpers: BiRefNet background
+# removal (MIT), MoGe-2 camera estimation (MIT). Safetensors: hashes recorded on download.
+Comfy-Org/Pixal3D diffusion_models/pixal3d_int8_convrot.safetensors diffusion_models optional
+Comfy-Org/Pixal3D clip_vision/dino_v3_L_naf_fp32.safetensors clip_vision optional
+Comfy-Org/Pixal3D vae/trellis_2_shape_vae_bf16.safetensors vae optional
+Comfy-Org/Pixal3D vae/trellis_2_texture_vae_bf16.safetensors vae optional
+Comfy-Org/BiRefNet background_removal/birefnet.safetensors background_removal optional
+Comfy-Org/MoGe geometry_estimation/moge_2_vitl_normal_fp16.safetensors geometry_estimation optional
+Comfy-Org/TRELLIS.2 diffusion_models/trellis_2_int8_convrot.safetensors diffusion_models optional
+Comfy-Org/TRELLIS.2 clip_vision/dino_v3_vit_l.safetensors clip_vision optional

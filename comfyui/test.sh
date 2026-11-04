@@ -38,6 +38,12 @@ print("\n".join(bad))') || { echo "  CHECK preflight could not run"; miss=1; }
   || echo "$pf" | sed 's/^/  (preflight would refuse, fine if that model is optional and not installed: /; s/$/)/'
 n=$(python3 "$MOD/gen.py" list --json | jq '[.models[], .checkpoints[], .loras[]] | length') \
   && echo "  ai gen list: $n models, checkpoints and LoRAs found" || { echo "  CHECK ai gen list failed"; miss=1; }
+ca=$(cd "$MOD" && python3 -c '
+import gen
+m = gen.class_arch()
+left = sorted(gen.archs() - set(m.values()))
+print(("OK " if not left else "MISSING ") + ", ".join(f"{c}={a}" for c, a in sorted(m.items())) + (" | not recognised: " + ", ".join(left) if left else ""))')
+case "$ca" in OK*) echo "  model detection (ComfyUI's own): ${ca#OK }" ;; *) echo "  CHECK model detection: $ca"; miss=1 ;; esac
 [ $miss = 0 ] || exit 1
 echo "  ComfyUI up, custom nodes loaded, all model files present"
 # img-check (agents quote it to prove a result): a flat image must be called BLANK, a real one must pass

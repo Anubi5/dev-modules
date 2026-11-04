@@ -115,12 +115,16 @@ def model_rule_tests():
         gen.assets.ROOTS[:] = [os.path.join(d, "comfy")]
         gen.assets.NOTES, gen.assets.CACHE = os.path.join(d, "n.json"), os.path.join(d, "c.json")
         try:
+            unknown = os.path.join(d, "comfy/diffusion_models/strange_model.safetensors")
+            st(unknown, ["blocks.0.x.weight"])
             try:
-                gen.resolve_model("my_zimage_finetune", quiet); bad.append("self-test: a file of unknown architecture was used")
+                gen.resolve_model("strange_model", quiet); bad.append("self-test: a file of unknown kind was used")
             except SystemExit as e:
                 if "--arch" not in str(e):
-                    bad.append(f"self-test: unknown architecture refused without the fix: {e}")
-            gen.assets.set_note(ft, {"arch": "zimage", "steps": "6"})
+                    bad.append(f"self-test: unknown kind refused without the fix: {e}")
+            if gen.resolve_model("my_zimage_finetune", quiet)["arch"] != "zimage":
+                bad.append("self-test: a detected Z-Image file did not get the zimage workflow")
+            gen.assets.set_note(ft, {"steps": "6"})
             p = gen.resolve_model("my_zimage_finetune", quiet)
             z = gen.profile("zimage")
             if (p["arch"], p["file"], p["steps"], p["text_encoder"], p["vae"]) != ("zimage", "my_zimage_finetune.safetensors", 6,
@@ -216,6 +220,11 @@ def lora_rule_tests():
 def main():
     """! @brief Builds all variants and checks them. @return 0 if clean """
     ci = bool(os.environ.get("CI"))     # GitHub Actions sets CI: there a missing schema or unknown node fails
+    # CI has no ComfyUI: its model detection (detect.py) is replaced by a stand-in that names files by their layers;
+    # on the PC, test.sh runs the real one against every profile file
+    gen.detect_classes = lambda paths: {p: ("SDXL" if gen.is_sdxl(p) else "ZImage" if "zimage" in os.path.basename(p)
+                                            else None) for p in paths}
+    gen.class_arch = lambda: {"SDXL": "sdxl", "ZImage": "zimage"}
     bad = self_tests()
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "schema.json")
     if not os.path.exists(path):

@@ -200,16 +200,64 @@ def resolve_model(name, log=print, folders=("checkpoints", "diffusion_models")):
     if known:
         return apply_note(profile(known[0]), f["path"], log)
     note = assets.note_for(_announce_hash(f["path"], log))
-    arch = note.get("arch") or ("sdxl" if f["folder"] == "checkpoints" and is_sdxl(f["path"]) else None)
+    cls = detect_classes([f["path"]]).get(f["path"])
+    arch = note.get("arch") or class_arch().get(cls)
     if not arch:
-        sys.exit(f"{f['name']}: architecture unknown - tell ai gen once from its card: ai gen note {f['name']} --arch "
-                 f"<{'|'.join(sorted(archs()))}> (then its settings: --sampler --steps --cfg ...)")
+        sys.exit(f"{f['name']}: ComfyUI recognises it as {cls or 'an unknown kind'}, which no ai gen workflow handles"
+                 + (" yet" if cls else "") + f". If it is one of {', '.join(sorted(archs()))}: ai gen note {f['name']} --arch ...")
     want = "checkpoints" if arch == "sdxl" else "diffusion_models"
     if f["folder"] != want:
         sys.exit(f"{f['name']} is in {f['folder']}/, but {arch} models are loaded from {want}/ - move it there")
     stem = os.path.splitext(os.path.basename(f["name"]))[0]
     base = {k: v for k, v in arch_base(arch).items() if k not in ("about", "licence", "source", "optional", "negative")}
     return apply_note(dict(base, file=f["name"], name=stem), f["path"], log)
+
+
+DETECT_CACHE = os.path.expanduser("~/.cache/ai-gen/detect.json")     # path -> [size, mtime, class]; disposable
+COMFY_PY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app", "ComfyUI", ".venv", "bin", "python")
+
+
+def detect_classes(paths):
+    """!
+    @brief ComfyUI's own model detection for these files (detect.py, CPU, headers only), cached by path, size and time.
+    @return {path: ComfyUI model class name or None}
+    """
+    cache, out, todo = assets._load(DETECT_CACHE), {}, []
+    for p in paths:
+        st = os.stat(p)
+        c = cache.get(p)
+        if c and c[0] == st.st_size and c[1] == int(st.st_mtime):
+            out[p] = c[2]
+        else:
+            todo.append(p)
+    if todo:
+        try:
+            r = subprocess.run([COMFY_PY, os.path.join(os.path.dirname(os.path.abspath(__file__)), "detect.py"), *todo],
+                               capture_output=True, text=True, timeout=600)
+            found = json.loads(r.stdout.strip().splitlines()[-1])
+        except (OSError, ValueError, IndexError, subprocess.TimeoutExpired):
+            found = {}
+        for p in todo:
+            st = os.stat(p)
+            out[p] = found.get(p)
+            if p in found:
+                cache[p] = [st.st_size, int(st.st_mtime), found[p]]
+        assets._save(DETECT_CACHE, cache)
+    return out
+
+
+def class_arch():
+    """!
+    @brief Which ai gen workflow a ComfyUI model class runs with, learned from the shipped profiles: the class ComfyUI
+           detects for each profile's file. A class seen with two workflows is left out (ambiguous). @return {class: arch}
+    """
+    paths = {model_path(p): p["arch"] for p in PROFILES["models"].values()}
+    paths.pop(None, None)
+    seen = {}
+    for path, cls in detect_classes(list(paths)).items():
+        if cls:
+            seen.setdefault(cls, set()).add(paths[path])
+    return {c: next(iter(a)) for c, a in seen.items() if len(a) == 1}
 
 
 def _announce_hash(path, log):
@@ -1094,8 +1142,8 @@ HELP = """ai gen - images, edits and short videos on the local GPU (one job at a
   ai gen verify                                            re-read files used before: same content?
   ai gen rerun FILE.workflow.json [--name N]               run a saved workflow again, exactly
 
-  --model takes a profile or any model file: SDXL checkpoints are recognised; any other file once
-  ai gen note FILE --arch <zimage|flux3|anima|moss|fibo2|sdxl> [--sampler --steps --cfg ...] - then --model FILE.
+  --model takes a profile or any model file: ComfyUI's own detection tells what kind it is (from the file's header)
+  and it starts from that kind's profile; ai gen note FILE [--sampler --steps --cfg ...] adds its card's settings.
   Every result gets <name>.json (what was asked) and <name>.workflow.json (the exact ComfyUI workflow that ran).
   ai gen schema                                            save ComfyUI node definitions (for the CI check)
 
@@ -1117,6 +1165,21 @@ def _one(name, folder=None):
 
 def prof_files_all():
     return {p["file"] for p in PROFILES["models"].values()}
+
+
+def lora_keys_dropped(since):
+    """!
+    @brief LoRA layers ComfyUI reported it could not apply since a time ("lora key not loaded" / "NOT LOADED" in its log).
+    @return count, or None when the log cannot be read
+    """
+    try:
+        r = subprocess.run(["journalctl", "--user", "-u", "comfyui", "--since", f"@{int(since)}", "-o", "cat", "--no-pager"],
+                           capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if r.returncode != 0:
+        return None
+    return sum(1 for l in r.stdout.splitlines() if "lora key not loaded" in l or "NOT LOADED" in l)
 
 
 def asset_cmd(argv):
@@ -1452,6 +1515,7 @@ def main():
         info = {"kind": "video", "prompt": a.prompt, "negative": neg, "seed": seed, "model": "wan2.2-ti2v-5b",
                 "steps": a.steps or 20, "frames": frames}
     log = lambda s: print(f"  {s}", flush=True)
+    t_start = time.time()
     ok, files, err = generate(wf, limit, log=log, uploads=uploads)
     if not ok and re.search(r"read_file_slice|HostBuffer|deserializ|Unable to load|out of memory", err or "", re.I):
         # model file read from D: failed (seen right after the chat model unloaded, and mid-job after a pose preview
@@ -1461,12 +1525,21 @@ def main():
     if err:
         print(f"  error: {err}")
     rec = write_record(files, info, wf) if ok else None
-    if ok and a.kind != "video" and info.get("loras"):       # remember which LoRA + model contents ran together
-        mp = model_path(prof)
-        for d in LORA_DIRS:
-            for c in info["loras"]:
-                if mp and os.path.exists(os.path.join(d, c["file"])):
-                    assets.record_tested(os.path.join(d, c["file"]), mp)
+    if ok and a.kind != "video" and info.get("loras"):       # ComfyUI's verdict: did it apply every LoRA layer?
+        dropped = lora_keys_dropped(t_start)
+        if dropped:
+            print(f"  warning: ComfyUI could not apply {dropped} LoRA layer(s) in this job (ai logs comfyui) - "
+                  "not recorded as tested")
+        elif dropped == 0:
+            mp = model_path(prof)
+            for d in LORA_DIRS:
+                for c in info["loras"]:
+                    if mp and os.path.exists(os.path.join(d, c["file"])):
+                        assets.record_tested(os.path.join(d, c["file"]), mp)
+        if rec:
+            r = json.load(open(rec))
+            r["lora_layers_not_applied"] = dropped
+            json.dump(r, open(rec, "w"), indent=1)
     print(f"OUTPUT (seed {seed})" if ok else "FAILED")
     for f in files:
         print(f)

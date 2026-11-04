@@ -102,9 +102,12 @@ at once (a file still being copied is reported as incomplete).
 | `ai gen verify` | re-read every file used before: a file changed under the same name is reported |
 
 Every model is used the same way: `--model` takes a profile from `profiles.json` (the shipped, tested settings) or any
-model file in `checkpoints/` or `diffusion_models/`. SDXL checkpoints are recognised from their header; any other file is
-described once with `ai gen note FILE --arch zimage` (plus `--sampler --steps --cfg --text_encoder --vae` from its card,
-as needed) and starts from that architecture's profile. A note on a profile's own file changes that profile locally.
+model file in `checkpoints/` or `diffusion_models/`. What kind a file is comes from ComfyUI's own model detection
+(`detect.py`: the file's header only, CPU, no weights loaded), and which workflow runs that kind is learned from the
+shipped profiles (the kind ComfyUI detects for each profile's file) - no list to keep. The file starts from that kind's
+profile; `ai gen note FILE --sampler --steps --cfg --text_encoder --vae` adds its card's settings, `--arch` corrects a
+file ComfyUI cannot classify. After a job with LoRAs, ComfyUI's own log says whether it applied every LoRA layer; only
+then is the pair recorded as tested (`lora_layers_not_applied` in the record). A note on a profile's own file changes that profile locally.
 `--checkpoint` still works as before (the same, limited to `checkpoints/`).
 
 Every result is saved with `<name>.json` (what was asked, settings, LoRA checks, time, GPU memory) and

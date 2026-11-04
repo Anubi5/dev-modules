@@ -14,7 +14,7 @@ it unloads the chat model through the model-serving contract, runs one fixed wor
 - `models.txt` takes Hugging Face lines and direct-download lines (`<https URL> <file> <folder> sha256:<hex>`, e.g. Juggernaut
   XL Ragnarok from CivitAI); a direct download is kept only if its SHA-256 matches. Models and their tuned settings live in
   `profiles.json` (`ai gen image ... --model realvis|juggernaut|sdxl-base`, `--style photo|art`); `--checkpoint <file>` uses
-  any other SDXL file (checked to be SDXL). Every result gets a `.json` record (prompt, seed, model, settings, time, memory);
+  any other SDXL file (checked to be SDXL; without its own profile it gets the `default_sdxl` model's settings). Every result gets a `.json` record (prompt, seed, model, settings, time, memory);
   with repair/upscale options the untouched original is kept as `<name>_base_*`.
 - `ai gen schema` saves ComfyUI's node definitions (`~/work/outputs/comfy/schema.json`); committed as `schema.json`, the
   GitHub check validates every workflow variant against it (`check_workflows.py`) without a GPU.
@@ -102,7 +102,9 @@ in the ComfyUI page (or restart it: `dev ai stop comfyui`, `dev comfy`):
 | ControlNet / Anima LLLite patch | `controlnet\` / `model_patches\` |
 
 It appears in the matching loader node at once. An SDXL checkpoint also works with ai gen right away:
-`ai gen image "..." --checkpoint <part of its name>` (checked to be SDXL). A LoRA works at once with
+`ai gen image "..." --checkpoint <part of its name>` (checked to be SDXL; settings of `default_sdxl`, now juggernaut, unless it has its own profile).
+Before the chat model is unloaded, every model file of the job is checked against the lists of the running ComfyUI;
+a missing one stops the job with its name and nothing else happens. A LoRA works at once with
 `ai gen image "..." --lora <part of its name>[:strength]` (strength -2..2, default 1; up to 4 `--lora`; also with
 `ai gen edit`). Use LoRAs made for the model you pick (SDXL LoRA with juggernaut/realvis, FLUX LoRA with flux3, an
 Anima LoRA with anima ...); a mismatched one is ignored by ComfyUI or spoils the image. Prefer `.safetensors`; a

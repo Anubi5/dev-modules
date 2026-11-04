@@ -156,7 +156,7 @@ def is_sdxl(path):
 def find_checkpoint(name):
     """!
     @brief --checkpoint: an SDXL checkpoint by (part of) its file name. Uses the matching profile's settings when there is
-           one, else the default model's settings.
+           one, else the default SDXL model's settings ("default_sdxl"; the overall default may be another architecture).
     @param name  Name or part of it (case-insensitive).  @return Profile dict with "file" set, or exits listing what is there.
     """
     found = {f: os.path.join(d, f) for d in CKPT_DIRS if os.path.isdir(d) for f in os.listdir(d) if f.endswith(".safetensors")}
@@ -167,7 +167,7 @@ def find_checkpoint(name):
     if not is_sdxl(found[hit[0]]):
         sys.exit(f"--checkpoint {name}: {hit[0]} is not an SDXL checkpoint - this workflow needs SDXL")
     known = [k for k, v in PROFILES["models"].items() if v.get("file") == hit[0]]
-    return profile(known[0]) if known else dict(profile(), file=hit[0], name=hit[0])
+    return profile(known[0]) if known else dict(profile(PROFILES.get("default_sdxl", "realvis")), file=hit[0], name=hit[0])
 
 
 LORA_DIRS = [os.path.join(env("MODELS_MOUNT", "/models"), "comfy", "loras"),
@@ -674,11 +674,43 @@ def comfy_busy(own=None):
     return any(i != own for i in ids)
 
 
-def prepare(log, wait):
+MODEL_EXT = (".safetensors", ".gguf", ".pt", ".pth", ".bin", ".ckpt", ".onnx", ".torchscript")
+
+
+def missing_files(wf):
     """!
-    @brief Hands the GPU to ComfyUI: starts it if needed, waits while it runs someone else's job, unloads the chat models.
+    @brief Preflight: every model file the workflow names must be in the list the loader node offers in the running
+           ComfyUI (/object_info - the files ComfyUI itself can see, in every model folder it knows). Runs before the chat
+           model is unloaded, so a missing file costs nothing. Image inputs (uploads) are not checked here.
+    @param wf  Workflow in API format.  @return list of "Node.input = file" that ComfyUI cannot see
+    """
+    info, bad = {}, []
+    for node in wf.values():
+        c = node["class_type"]
+        if c not in info:
+            try:
+                info[c] = api(f"/object_info/{c}").get(c, {}).get("input", {})
+            except Exception:
+                info[c] = None                     # unknown to ComfyUI: its own validation reports it
+        spec = info[c] or {}
+        for k, v in node["inputs"].items():
+            if not (isinstance(v, str) and v.lower().endswith(MODEL_EXT)):
+                continue
+            d = spec.get("required", {}).get(k) or spec.get("optional", {}).get(k)
+            t = d[0] if isinstance(d, list) and d else None
+            opts = t if isinstance(t, list) else (d[1].get("options") if t == "COMBO" and len(d) > 1 and isinstance(d[1], dict) else None)
+            if opts is not None and v not in opts:
+                bad.append(f"{c}.{k} = {v}")
+    return bad
+
+
+def prepare(log, wait, wf=None):
+    """!
+    @brief Hands the GPU to ComfyUI: starts it if needed, checks the workflow's model files, waits while ComfyUI runs
+           someone else's job, unloads the chat models.
     @param log   Progress printer.
     @param wait  Seconds to wait for a busy ComfyUI.
+    @param wf    Workflow to preflight (None: no check).
     @return Error text, or "" when ComfyUI is ready and the GPU is free of chat models.
     """
     if not comfy_up():
@@ -688,6 +720,10 @@ def prepare(log, wait):
             time.sleep(2)
     if not comfy_up():
         return f"ComfyUI is not answering on {URL} (ai logs comfyui)"
+    miss = missing_files(wf) if wf else []
+    if miss:
+        return ("model file(s) not found by ComfyUI - nothing started, the chat model stays loaded: " + "; ".join(miss)
+                + " (put them under D:\\AI\\models\\comfy\\<folder>, or: ai mod update comfyui)")
     t0 = time.time()
     while comfy_busy():
         if time.time() - t0 > wait:
@@ -772,7 +808,7 @@ def generate(wf, timeout, wait=600, log=print, uploads=None):
                 if time.time() - t0 > wait:
                     return False, [], "GPU busy with another job (lock held) - try again later"
                 time.sleep(5)
-        err = prepare(log, max(0, wait - (time.time() - t0)))
+        err = prepare(log, max(0, wait - (time.time() - t0)), wf)
         if err:
             return False, [], err
         try:

@@ -29,6 +29,13 @@ while read -r repo want folder name; do
   [ -e "${MODELS_MOUNT:-/models}/comfy/$folder/$name" ] || [ -e "$MOD/models/$folder/$name" ] || { echo "  missing $folder/$name"; miss=1; }
 done < "$MOD/models.txt"
 echo "  image models:"; python3 "$MOD/gen.py" models || miss=1     # every model in profiles.json: ready / optional / MISSING
+# preflight against the live ComfyUI: every model file of every workflow variant is in its loader's list (test LoRAs excluded)
+pf=$(cd "$MOD" && python3 -c '
+import gen
+bad = sorted({m for wf in gen.all_workflows() for m in gen.missing_files(wf) if not m.startswith("LoraLoader.")})
+print("\n".join(bad))') || { echo "  CHECK preflight could not run"; miss=1; }
+[ -z "$pf" ] && echo "  preflight: ComfyUI sees every model file the workflows name" \
+  || echo "$pf" | sed 's/^/  (preflight would refuse, fine if that model is optional and not installed: /; s/$/)/'
 [ $miss = 0 ] || exit 1
 echo "  ComfyUI up, custom nodes loaded, all model files present"
 # img-check (agents quote it to prove a result): a flat image must be called BLANK, a real one must pass

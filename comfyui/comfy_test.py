@@ -10,6 +10,7 @@ Outputs go to COMFY_OUTPUT/<date>/selftest-*. Exit code 0 only if every job prod
 """
 import datetime
 import os
+import subprocess
 import sys
 
 import gen
@@ -114,6 +115,16 @@ def main():
     print(f"  SDXL image with a LoRA (--lora): {'OK' if ok and files else 'FAILED'}  {', '.join(files) or '-'}"
           f"{'  error: ' + err if err else ''}")
     results.append(ok and len(files) == 1)
+    # ai gen 3d (when the 3D models are installed): the car picture above becomes a textured GLB, checked in Blender
+    if files and gen.model_path(gen.profile(gen.PROFILES.get("default_3d", "pixal3d"))):
+        r = subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "gen.py"), "3d",
+                            "--image", files[0], "--faces", "100000", "--seed", "5", "--name", "selftest-3d"],
+                           capture_output=True, text=True, timeout=2700)
+        glb = next((l.strip() for l in r.stdout.splitlines() if l.strip().endswith(".glb")), None)
+        summary = next((l.strip() for l in r.stdout.splitlines() if l.strip().startswith("model:")), "")
+        print(f"  3D model from a picture (ai gen 3d): {'OK' if r.returncode == 0 and glb else 'FAILED'}  {glb or '-'}  {summary}"
+              + ("" if r.returncode == 0 else "  " + (r.stdout + r.stderr).strip()[-400:]))
+        results.append(r.returncode == 0 and bool(glb))
     return 0 if all(results) else 1
 
 

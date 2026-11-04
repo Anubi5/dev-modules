@@ -81,7 +81,35 @@ def self_tests():
             bad.append("self-test: the model-file preflight did not tell a missing file from a present one")
     finally:
         gen.api = api
-    bad += lora_rule_tests() + model_rule_tests()
+    bad += lora_rule_tests() + model_rule_tests() + recipe_tests()
+    return bad
+
+
+def recipe_tests():
+    """! @brief Recipes: declared inputs are set (seeds keep their per-stage offsets), undeclared values refused,
+           3D models refused on the image path. @return list of problems """
+    bad = []
+    for name, p in gen.PROFILES["models"].items():
+        if p.get("kind") != "3d":
+            continue
+        r = gen.load_recipe(p["workflow"])
+        w = gen.apply_recipe(r, dict(p.get("set", {}), seed=7, faces=123456, image="a.png", prefix="d/x"))
+        for inp, val in (("faces", 123456), ("image", "a.png"), ("prefix", "d/x")):
+            node, key = r["inputs"][inp]["set"][0][:2]
+            if w[node]["inputs"][key] != val:
+                bad.append(f"self-test: recipe {p['workflow']} input {inp} not set")
+        for node, key, *off in r["inputs"]["seed"]["set"]:
+            if w[node]["inputs"][key] != 7 + (off[0] if off else 0):
+                bad.append(f"self-test: recipe seed offset lost on node {node}")
+        try:
+            gen.apply_recipe(r, {"texture": 3000}); bad.append("self-test: a texture size outside the recipe's choices was used")
+        except SystemExit:
+            pass
+        try:
+            gen.resolve_model(name, lambda t: None); bad.append(f"self-test: 3D model {name} accepted for images")
+        except SystemExit as e:
+            if "ai gen 3d" not in str(e):
+                bad.append(f"self-test: 3D model refused for images with the wrong message: {e}")
     return bad
 
 

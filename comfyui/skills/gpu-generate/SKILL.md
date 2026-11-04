@@ -42,6 +42,12 @@ The user asks for a picture, illustration, concept art, texture, reference image
        file is; a file it reports as unknown needs the owner's `ai gen note FILE --arch ...` - do not guess.
      - Every result has `<name>.workflow.json` next to it: the exact ComfyUI workflow. Quote it when asked how an image
        was made; `ai gen rerun <file>` reproduces it.
+   - 3d: `ai gen 3d --image <picture in ~/work> --name <name>` makes a textured 3D model (GLB, PBR materials)
+     from one picture of one object (plain background best; make one with `ai gen image` first if needed).
+     `--model pixal3d` (default, follows the photo closely) or `trellis2`; `--quality high` only when asked (slower,
+     less GPU headroom); `--faces N` for a lighter or denser mesh. The output lists the .glb, 4 Blender renders
+     (`*_view_front.png` ...) and a record with triangle count, open edges and loose parts - look at the renders
+     with img-ask before saying the model is good; the back of an object is invented by the model.
      - `--cfg <n>`: only when the user asks for it (each model has a tuned default; zimage/flux3/fibo2 ignore it).
      - `--style art` for illustration, concept art, paintings, textures (the default `photo` style pushes away from art).
      - `--negative ""` means no negative prompt at all.

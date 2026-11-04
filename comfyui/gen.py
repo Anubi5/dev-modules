@@ -172,8 +172,36 @@ def arch_base(arch):
 
 
 def archs():
-    """! @brief Architectures ai gen has workflows for. """
-    return {p["arch"] for p in PROFILES["models"].values()}
+    """! @brief Image architectures ai gen has workflows for (3D models run through ai gen 3d). """
+    return {p["arch"] for p in PROFILES["models"].values() if p.get("kind") != "3d"}
+
+
+RECIPES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "recipes")
+
+
+def load_recipe(name):
+    """! @brief A recipe: a tested ComfyUI workflow (API format) with declared inputs. @return dict """
+    return json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), name)))
+
+
+def apply_recipe(recipe, values):
+    """!
+    @brief Fills a recipe's declared inputs and nothing else. Each input names the node inputs it sets
+           ([node, input] or [node, input, offset] for seeds that differ per stage); values outside an input's
+           declared range or choices are refused. @param values  {input name: value}  @return workflow (a copy)
+    """
+    wf = json.loads(json.dumps(recipe["workflow"]))
+    for name, spec in recipe["inputs"].items():
+        v = values.get(name, spec.get("default"))
+        if v is None:
+            continue
+        if "choices" in spec and v not in spec["choices"]:
+            sys.exit(f"{name} {v}: choose one of {', '.join(map(str, spec['choices']))}")
+        if ("min" in spec and v < spec["min"]) or ("max" in spec and v > spec["max"]):
+            sys.exit(f"{name} {v}: must be {spec.get('min')}-{spec.get('max')}")
+        for node, key, *off in spec["set"]:
+            wf[node]["inputs"][key] = v + off[0] if off else v
+    return wf
 
 
 def resolve_model(name, log=print, folders=("checkpoints", "diffusion_models")):
@@ -185,6 +213,8 @@ def resolve_model(name, log=print, folders=("checkpoints", "diffusion_models")):
            cfg, negative, text_encoder, vae, ...); typed options win over both later.
     @return profile dict with "name", "file", "arch" and the settings
     """
+    if PROFILES["models"].get(name, {}).get("kind") == "3d":
+        sys.exit(f"{name} makes 3D models: ai gen 3d --image PHOTO --model {name}")
     if name in PROFILES["models"] and "checkpoints" in folders and "diffusion_models" in folders:
         prof = profile(name)
         path = model_path(prof)
@@ -961,7 +991,7 @@ def run_job(wf, timeout, log=print):
                 continue
             st = h.get("status", {})
             files = [os.path.join(OUTPUT, f.get("subfolder", ""), f["filename"]) for o in h.get("outputs", {}).values()
-                     for k in ("images", "gifs", "videos") for f in o.get(k, []) if f.get("type") == "output"]
+                     for k in ("images", "gifs", "videos", "3d") for f in o.get(k, []) if f.get("type") == "output"]
             err = " ".join(m[1].get("exception_message", "")[:400] for m in st.get("messages", []) if m[0] == "execution_error")
             ok = st.get("status_str") == "success" and bool(files) and all(os.path.exists(f) and os.path.getsize(f) > 2000 for f in files)
             JOB.update(secs=round(time.time() - t0), peak_gb=round(mon.peak / 1024, 1))
@@ -1030,6 +1060,9 @@ def all_workflows():
                 yield fibo2("x", 1, p["steps"], 1024, 1024, "t", p, refs=refs, upscale=up)
     for name in PROFILES["models"]:                    # every architecture with two LoRAs chained
         p = profile(name)
+        if p.get("kind") == "3d":
+            yield apply_recipe(load_recipe(p["workflow"]), dict(p.get("set", {}), image="x.png", prefix="t"))
+            continue
         if p["arch"] == "sdxl":
             w = sdxl("x", "y", 1, p["steps"], 1024, 1024, True, "t", pose="p", face="f", fix_faces=True, hires=True, prof=p)
         elif p["arch"] == "anima":
@@ -1132,6 +1165,9 @@ HELP = """ai gen - images, edits and short videos on the local GPU (one job at a
                                                            best for --pose) + "<name>_pose" (the skeleton picture)
       --pose-skeleton      (image) the --pose picture is already a skeleton (files named *_pose_*.png are detected)
   ai gen video "prompt" [--frames 33]                      Wan 2.2 clip (33 frames ~ 1.4 s, up to 121)
+  ai gen 3d --image PHOTO [--model pixal3d|trellis2] [--quality normal|high] [--faces N] [--texture 2048]
+                                                           a textured 3D model (GLB) from one picture; Blender renders
+                                                           it from 4 sides when installed
   ai gen models                                            which image models are ready
   ai gen list [models|loras|checkpoints] [--json]          what is installed now, with notes and tested pairs
   ai gen show NAME [--json]                                one file: complete?, embedded metadata, note, tested with
@@ -1182,6 +1218,89 @@ def lora_keys_dropped(since):
     return sum(1 for l in r.stdout.splitlines() if "lora key not loaded" in l or "NOT LOADED" in l)
 
 
+QUALITY = {"normal": {"resolution": 1024, "faces": 300000, "texture": 2048},     # ~10 GB peak expected: headroom
+           "high": {"resolution": 1536, "faces": 700000, "texture": 4096}}       # the template's own; 10.5 GB measured
+
+
+def glb_stats(path):
+    """! @brief Reads a GLB's header (no extra tools): mesh, triangles, vertices, materials, textures. @return dict """
+    with open(path, "rb") as f:
+        head = f.read(20)
+        if head[:4] != b"glTF":
+            return {"valid": False}
+        j = json.loads(f.read(int.from_bytes(head[12:16], "little")))
+    acc, tri, verts = j.get("accessors", []), 0, 0
+    for m in j.get("meshes", []):
+        for p in m.get("primitives", []):
+            verts += acc[p["attributes"]["POSITION"]]["count"]
+            tri += acc[p["indices"]]["count"] // 3 if "indices" in p else 0
+    mats = [sorted(k for k in ("baseColorTexture", "metallicRoughnessTexture") if k in m.get("pbrMetallicRoughness", {}))
+            + (["normalTexture"] if "normalTexture" in m else []) + (["occlusionTexture"] if "occlusionTexture" in m else [])
+            for m in j.get("materials", [])]
+    return {"valid": True, "meshes": len(j.get("meshes", [])), "triangles": tri, "vertices": verts, "material_maps": mats,
+            "textures": len(j.get("textures", [])), "size_mb": round(os.path.getsize(path) / 1e6, 1)}
+
+
+def gen3d(a):
+    """!
+    @brief ai gen 3d --image PHOTO: a textured 3D model (GLB) from one picture, through the image-to-3D recipe (official
+           ComfyUI template, core nodes only), with the same GPU hand-off, preflight, record and saved workflow as
+           every job; afterwards the GLB is measured and, when the Blender module is installed, rendered from 4 sides
+           and image-checked. @return exit code
+    """
+    if not a.image:
+        sys.exit('ai gen 3d needs --image PHOTO (one object, plain background works best; in ~/work)')
+    name = a.model or PROFILES.get("default_3d", "pixal3d")
+    prof = PROFILES["models"].get(name)
+    if not prof or prof.get("kind") != "3d":
+        sys.exit(f"--model {name}: 3D models are {', '.join(n for n, p in PROFILES['models'].items() if p.get('kind') == '3d')}")
+    src = check_input(a.image[0])
+    recipe = load_recipe(prof["workflow"])
+    seed = a.seed if a.seed is not None else random.randint(0, 2**31 - 1000)
+    day = datetime.date.today().isoformat()
+    prefix = f"{day}/{slug(a.name) if a.name else slug(os.path.splitext(os.path.basename(src))[0])}"
+    vals = dict(QUALITY[a.quality], **{k: v for k, v in (("faces", a.faces), ("texture", a.texture)) if v is not None})
+    vals.update(prof.get("set", {}), seed=seed, prefix=prefix, image="pending", remove_background=not a.keep_background)
+    wf = apply_recipe(recipe, vals)
+    log = lambda s: print(f"  {s}", flush=True)
+    log(f"{name}: {a.quality} quality ({vals['faces']} faces, upsample {vals['resolution']}, texture {vals['texture']}), seed {seed}")
+    ok, files, err = generate(wf, a.timeout or 2400, log=log, uploads=[(recipe["inputs"]["image"]["set"][0][0], src)])
+    glb = next((f for f in files if f.endswith(".glb")), None)
+    info = {"kind": "3d", "model": name, "model_file": prof["file"], "image": a.image[0], "seed": seed, "quality": a.quality,
+            **{k: vals[k] for k in ("faces", "resolution", "texture", "remove_background")}, "recipe": prof["workflow"]}
+    if ok and glb:
+        info["glb"] = glb_stats(glb)
+        ok = info["glb"].get("valid") and info["glb"]["triangles"] > 0
+        blender = shutil.which("blender")
+        if ok and blender:
+            log("checking the model in Blender (import, mesh, 4 renders)")
+            r = subprocess.run([blender, "-b", "--factory-startup", "--python-exit-code", "1", "--python",
+                                os.path.join(os.path.dirname(os.path.abspath(__file__)), "mesh_check.py"), "--",
+                                glb, os.path.splitext(glb)[0] + "_view"], capture_output=True, text=True, timeout=900)
+            line = next((l for l in r.stdout.splitlines() if l.startswith("MESH-CHECK ")), None)
+            info["blender"] = json.loads(line[11:]) if line else {"ok": False, "error": (r.stderr or r.stdout)[-300:]}
+            views = info["blender"].get("renders", [])
+            files += views
+            chk = subprocess.run([os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin", "img-check"), *views],
+                                 capture_output=True, text=True) if views else None
+            info["renders_check"] = chk.stdout.strip()[-600:] if chk else None
+            if chk and chk.returncode != 0:
+                log("warning: a render looks blank - see the record")
+        elif ok:
+            info["blender"] = "not installed (ai mod add blender for renders and mesh checks)"
+    rec = write_record(files, info, wf) if ok else None
+    print("OUTPUT (seed %d)" % seed if ok else f"FAILED {err}")
+    for f in files:
+        print(f)
+    if ok:
+        s = info["glb"]
+        print(f"  model: {s['triangles']} triangles, {s['textures']} textures, {s['size_mb']} MB"
+              + (f"; Blender: {info['blender'].get('loose_parts')} parts, {info['blender'].get('non_manifold_edges')} open edges"
+                 if isinstance(info.get("blender"), dict) and info["blender"].get("ok") else ""))
+        print(f"  record: {rec}")
+    return 0 if ok else 1
+
+
 def asset_cmd(argv):
     """!
     @brief ai gen list | show | check | note | verify | names - what is installed and what is known about it. Lists the
@@ -1228,7 +1347,9 @@ def asset_cmd(argv):
                     arch = allnotes.get(sha, {}).get("arch") if sha else None
                     dc = (detected.get(f["path"]) or [0, 0, None])[2]      # ComfyUI's detection, when already run
                     kind = arch or ca.get(dc)
-                    use = (f"--model {prof_files[f['name']]}" if f["name"] in prof_files else
+                    p3 = PROFILES["models"].get(prof_files.get(f["name"]), {}).get("kind") == "3d"
+                    use = (f"ai gen 3d --model {prof_files[f['name']]}" if p3 else
+                           f"--model {prof_files[f['name']]}" if f["name"] in prof_files else
                            f"--model {os.path.splitext(f['name'])[0]} ({kind})" if kind else
                            f"ComfyUI: {dc} - no ai gen workflow for that kind yet" if dc else
                            f"--model {os.path.splitext(f['name'])[0]} (kind checked on first use)" if f["name"].endswith(".safetensors")
@@ -1373,7 +1494,7 @@ def main():
         return models_report()
     if not sys.argv[1:] or sys.argv[1] in ("help", "-h", "--help") or sys.argv[2:3] == ["help"]:   # "image --help": all options
         print(HELP); models_report(); return 0
-    ap.add_argument("kind", choices=["image", "video", "edit", "pose"],
+    ap.add_argument("kind", choices=["image", "video", "edit", "pose", "3d"],
                     help="edit = change an image by instruction; pose = a ControlNet pose (photo + skeleton)")
     ap.add_argument("prompt", nargs="?", default="", help="what to make; for edit: what to change; for pose: the pose")
     ap.add_argument("--from", dest="src", metavar="PHOTO", help="pose: make the skeleton from this photo (in ~/work)")
@@ -1403,7 +1524,13 @@ def main():
     ap.add_argument("--fix-hands", action="store_true", help="image: redraw hands in more detail")
     ap.add_argument("--frames", type=int, default=33, help="video length, 4n+1 (33 ~ 1.4 s, 121 ~ 5 s)")
     ap.add_argument("--timeout", type=int, default=None, help="seconds (default 900 image, 3600 video)")
+    ap.add_argument("--quality", choices=list(QUALITY), default="normal", help="3d: normal (fast, more GPU headroom) or high")
+    ap.add_argument("--faces", type=int, default=None, help="3d: triangles in the final model (default per --quality)")
+    ap.add_argument("--texture", type=int, default=None, help="3d: texture size 1024 | 2048 | 4096 (default per --quality)")
+    ap.add_argument("--keep-background", action="store_true", help="3d: the picture is already cut out (no background removal)")
     a = ap.parse_args()
+    if a.kind == "3d":
+        return gen3d(a)
     # limits for a 12 GB GPU (and against a runaway agent): larger jobs fail or block the GPU for hours
     if a.steps is not None and not 1 <= a.steps <= MAX_STEPS:
         sys.exit(f"--steps must be 1-{MAX_STEPS}")

@@ -151,9 +151,34 @@
       "about": "Fibo 2.0 Edit Turbo: edits with up to 4 references (ai gen edit --model fibo2), also text-to-image; about 1 MP",
       "licence": "CC BY-NC 4.0 (non-commercial unless you have a Bria agreement)",
       "source": "huggingface.co/Comfy-Org/Fibo-2.0 + Comfy template image_fibo2_edit_turbo_pe (4 steps, CFG 1, euler, simple, empty negative)"
+    },
+    "pixal3d": {
+      "arch": "pixal3d",
+      "kind": "3d",
+      "file": "pixal3d_int8_convrot.safetensors",
+      "workflow": "recipes/image-to-3d.json",
+      "set": {
+        "trellis2": false
+      },
+      "about": "Pixal3D: one picture to a textured 3D model (GLB, PBR); geometry follows the photo closely",
+      "licence": "MIT (image encoder: Meta DINOv3 licence)",
+      "source": "huggingface.co/Comfy-Org/Pixal3D (ComfyUI template 3d_pixal3d_trellis2_image_to_model)"
+    },
+    "trellis2": {
+      "arch": "trellis2",
+      "kind": "3d",
+      "file": "trellis_2_int8_convrot.safetensors",
+      "workflow": "recipes/image-to-3d.json",
+      "set": {
+        "trellis2": true
+      },
+      "about": "TRELLIS.2 (Microsoft): one picture to a textured 3D model; fallback to pixal3d",
+      "licence": "MIT (image encoder: Meta DINOv3 licence)",
+      "source": "huggingface.co/Comfy-Org/TRELLIS.2"
     }
   },
   "edit_model": "flux3",
   "expander": "qwen3.5-9b",
-  "default_sdxl": "juggernaut"
+  "default_sdxl": "juggernaut",
+  "default_3d": "pixal3d"
 }

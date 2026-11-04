@@ -87,6 +87,17 @@ What we learned:
   completely." --image <reference> --image <pose source>` - ~1.5 min, no FaceID or hand repair needed in the test.
   The face likeness comes from the reference image alone, so it is a bit looser than SDXL with `--face`.
 
+## 3D models from a picture
+
+`ai gen 3d --image PHOTO [--model pixal3d|trellis2] [--quality normal|high] [--faces N] [--texture 2048]` turns one
+picture of one object into a textured 3D model (GLB with base colour, metallic/roughness, normal and occlusion maps).
+It runs the official ComfyUI template `3d_pixal3d_trellis2_image_to_model` (core nodes only), stored as the recipe
+`recipes/image-to-3d.json`: the exported workflow plus its declared inputs - the first model type added as data, not
+code. `normal` = 1024 upsample, 300k triangles, 2K textures; `high` = the template's own 1536 / 700k / 4K (measured on
+the 12 GB laptop: 455 s, 10.5 GB peak). With the Blender module installed, the model is imported, measured (triangles,
+open edges, loose parts, size) and rendered from 4 sides; the renders are image-checked. Models: Pixal3D (default) and
+TRELLIS.2, both MIT; their image encoder is Meta DINOv3 (DINOv3 licence).
+
 ## What is installed, and what is known about it
 
 Nothing is indexed: `ai gen list` reads the model folders as they are now, so a file copied, renamed or removed shows up

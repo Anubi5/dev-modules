@@ -1217,7 +1217,8 @@ def asset_cmd(argv):
             out["models"] = [{"name": n, "arch": p["arch"], "ready": p["file"] in on_disk, "about": p.get("about", "")}
                              for n, p in PROFILES["models"].items()]
         if a.what in ("checkpoints", "all"):        # every model file: how to use it (one rule for all kinds)
-            cache, allnotes = assets._load(assets.CACHE), assets.notes()
+            cache, allnotes, detected = assets._load(assets.CACHE), assets.notes(), assets._load(DETECT_CACHE)
+            ca = class_arch() if detected else {}
             out["checkpoints"] = []
             for d in ("checkpoints", "diffusion_models"):
                 for f in assets.files(d):
@@ -1225,9 +1226,13 @@ def asset_cmd(argv):
                         continue
                     sha = (cache.get(f["path"]) or [0, 0, None])[2]
                     arch = allnotes.get(sha, {}).get("arch") if sha else None
+                    dc = (detected.get(f["path"]) or [0, 0, None])[2]      # ComfyUI's detection, when already run
+                    kind = arch or ca.get(dc)
                     use = (f"--model {prof_files[f['name']]}" if f["name"] in prof_files else
-                           f"--model {os.path.splitext(f['name'])[0]}" + (f" ({arch}, from its note)" if arch else
-                           " (SDXL is recognised; other kinds: ai gen note FILE --arch ...)"))
+                           f"--model {os.path.splitext(f['name'])[0]} ({kind})" if kind else
+                           f"ComfyUI: {dc} - no ai gen workflow for that kind yet" if dc else
+                           f"--model {os.path.splitext(f['name'])[0]} (kind checked on first use)" if f["name"].endswith(".safetensors")
+                           else "GGUF: used by the video workflow, not by --model")
                     out["checkpoints"].append({"file": f["name"], "folder": d, "profile": prof_files.get(f["name"]), "use": use})
         if a.what in ("loras", "all"):
             allnotes, alltested = assets.notes(), assets.tested()

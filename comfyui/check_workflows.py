@@ -70,6 +70,69 @@ def self_tests():
             bad.append("self-test: the model-file preflight did not tell a missing file from a present one")
     finally:
         gen.api = api
+    bad += lora_rule_tests()
+    return bad
+
+
+def lora_rule_tests():
+    """!
+    @brief The LoRA rules on dummy files: structural fit, a mismatch refused before anything starts, the LoRA's note
+           used for strength / trigger / CFG, typed values win over the note, conflicting notes stop the job,
+           an incomplete (still copying) file is not judged. @return list of problems
+    """
+    import argparse
+    import struct
+    import tempfile
+    bad = []
+
+    def st(p, keys, trunc=False):
+        h = json.dumps({k: {"dtype": "F16", "shape": [1], "data_offsets": [2 * i, 2 * i + 2]} for i, k in enumerate(keys)}).encode()
+        with open(p, "wb") as f:
+            f.write(struct.pack("<Q", len(h)) + h + b"\0" * (2 * len(keys) - (2 if trunc else 0)))
+
+    with tempfile.TemporaryDirectory() as d:
+        L = ["input_blocks.4.1.proj_in", "middle_block.1.proj_out", "output_blocks.2.1.proj_in"]
+        for sub in ("checkpoints", "loras"):
+            os.makedirs(os.path.join(d, "comfy", sub))
+        st(os.path.join(d, "comfy/checkpoints/juggernautXL_ragnarok.safetensors"), ["model.diffusion_model." + k + ".weight" for k in L])
+        st(os.path.join(d, "comfy/loras/sdxl_a.safetensors"), [f"lora_unet_{k.replace('.', '_')}.lora_down.weight" for k in L])
+        st(os.path.join(d, "comfy/loras/sdxl_b.safetensors"), [f"lora_unet_{k.replace('.', '_')}.lora_up.weight" for k in L])
+        st(os.path.join(d, "comfy/loras/flux_c.safetensors"), ["transformer.single_blocks.0.linear1.lora_A.weight"])
+        st(os.path.join(d, "comfy/loras/part_d.safetensors"), [f"lora_unet_{L[0].replace('.', '_')}.lora_down.weight"], trunc=True)
+        saved = (gen.LORA_DIRS, gen.assets.ROOTS[:], gen.assets.NOTES, gen.assets.TESTED, gen.assets.CACHE)
+        gen.LORA_DIRS, gen.assets.ROOTS[:] = [os.path.join(d, "comfy/loras")], [os.path.join(d, "comfy")]
+        gen.assets.NOTES, gen.assets.TESTED, gen.assets.CACHE = (os.path.join(d, n) for n in ("n.json", "t.json", "c.json"))
+        quiet = lambda t: None
+        prof = gen.profile("juggernaut")
+
+        def run(loras, **kw):
+            a = argparse.Namespace(prompt="a harbour", lora=loras, cfg=None, negative=None, force_lora=False)
+            for k, v in kw.items():
+                setattr(a, k, v)
+            return gen.resolve_loras(a, prof, "blurry", quiet)
+        try:
+            lp = os.path.join(d, "comfy/loras/sdxl_a.safetensors")
+            gen.assets.set_note(lp, {"trigger": "wtrclr", "strength": "0.6", "cfg": "5"})
+            loras, prompt, neg, p, checks = run(["sdxl_a"])
+            if (loras, prompt, p["cfg"], checks[0]["fit"]) != ([("sdxl_a.safetensors", 0.6)], "wtrclr, a harbour", 5.0, "fits"):
+                bad.append(f"self-test: LoRA note not applied: {loras} {prompt!r} cfg {p['cfg']} {checks[0]['fit']}")
+            loras, _, _, p, _ = run(["sdxl_a:0.9"], cfg=3.5)
+            if loras[0][1] != 0.9 or p["cfg"] != 3.5:
+                bad.append("self-test: typed strength / --cfg did not win over the LoRA note")
+            gen.assets.set_note(os.path.join(d, "comfy/loras/sdxl_b.safetensors"), {"cfg": "7"})
+            for case, ls, want in (("mismatch", ["flux_c"], "does not fit"),
+                                   ("conflicting notes", ["sdxl_a", "sdxl_b"], "disagree")):
+                try:
+                    run(ls); bad.append(f"self-test: {case} was not refused")
+                except SystemExit as e:
+                    if want not in str(e):
+                        bad.append(f"self-test: {case} refused for the wrong reason: {e}")
+            if run(["part_d"])[4][0]["fit"] != "unchecked":
+                bad.append("self-test: a still-copying LoRA was judged")
+            if run(["flux_c"], force_lora=True)[4][0]["fit"] != "mismatch":
+                bad.append("self-test: --force-lora did not record the mismatch")
+        finally:
+            gen.LORA_DIRS, gen.assets.ROOTS[:], gen.assets.NOTES, gen.assets.TESTED, gen.assets.CACHE = saved
     return bad
 
 

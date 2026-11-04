@@ -36,6 +36,8 @@ bad = sorted({m for wf in gen.all_workflows() for m in gen.missing_files(wf) if 
 print("\n".join(bad))') || { echo "  CHECK preflight could not run"; miss=1; }
 [ -z "$pf" ] && echo "  preflight: ComfyUI sees every model file the workflows name" \
   || echo "$pf" | sed 's/^/  (preflight would refuse, fine if that model is optional and not installed: /; s/$/)/'
+n=$(python3 "$MOD/gen.py" list --json | jq '[.models[], .checkpoints[], .loras[]] | length') \
+  && echo "  ai gen list: $n models, checkpoints and LoRAs found" || { echo "  CHECK ai gen list failed"; miss=1; }
 [ $miss = 0 ] || exit 1
 echo "  ComfyUI up, custom nodes loaded, all model files present"
 # img-check (agents quote it to prove a result): a flat image must be called BLANK, a real one must pass

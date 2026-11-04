@@ -87,6 +87,25 @@ What we learned:
   completely." --image <reference> --image <pose source>` - ~1.5 min, no FaceID or hand repair needed in the test.
   The face likeness comes from the reference image alone, so it is a bit looser than SDXL with `--face`.
 
+## What is installed, and what is known about it
+
+Nothing is indexed: `ai gen list` reads the model folders as they are now, so a file copied, renamed or removed shows up
+at once (a file still being copied is reported as incomplete).
+
+| Command | Does |
+|---|---|
+| `ai gen list [models\|loras\|checkpoints] [--json]` | everything installed, with each LoRA's note and the models it ran with |
+| `ai gen show NAME [--json]` | one file: complete or not, embedded metadata (trigger phrase, training tags ...), note, tested pairs |
+| `ai gen check --model M --lora L` | does the LoRA fit the model: its layers compared with the model's, headers only, no GPU |
+| `ai gen note NAME --trigger T --strength 0.7 --cfg 3 --negative "" --base MOSS --source URL` | write down what the LoRA's card says |
+| `ai gen verify` | re-read every file used before: a file changed under the same name is reported |
+
+Notes (`~/work/comfyui/notes.json`) and tested pairs (`~/work/comfyui/tested.json`) are keyed by file content (SHA-256):
+a renamed file keeps its note, a changed file loses it. Settings for a job are chosen in this order: what the workflow
+must have (CFG 1 and no negative for zimage, flux3, fibo2), what you type, the LoRA notes, the model's defaults.
+LoRA notes that disagree stop the job; a LoRA whose layers do not match the model is refused before the GPU is touched
+(`--force-lora` runs it anyway and records it). A missing model file stops the job before the chat model is unloaded.
+
 ## Adding a model, LoRA, checkpoint or node
 Pick the lightest step that does what you need.
 

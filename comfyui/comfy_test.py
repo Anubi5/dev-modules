@@ -100,6 +100,14 @@ def main():
     # --lora: an SDXL LoRA chained into an SDXL job (the FaceID LoRA that is always installed, at low strength - this
     # proves LoRA loading works; a style LoRA of your own goes the same way)
     lo = gen.find_loras(["ip-adapter-faceid-plusv2_sdxl_lora:0.3"])
+    jp = gen.model_path(gen.profile(gen.PROFILES.get("default_sdxl", "realvis")))
+    fit = gen.assets.lora_fit(os.path.join(gen.LORA_DIRS[0], lo[0][0]), jp) if jp else {"status": "no model file"}
+    print(f"  LoRA fit check (headers only): {lo[0][0]} with the SDXL default: {fit['status']} ({fit.get('why')})")
+    results.append(fit["status"] != "mismatch")
+    for f in gen.assets.files("loras"):                  # every LoRA on D: against the models: informational
+        fits = [n for n, p in gen.PROFILES["models"].items()
+                if (mp := gen.model_path(p)) and gen.assets.lora_fit(f["path"], mp)["status"] in ("fits", "partial")]
+        print(f"    {f['name']}: fits {', '.join(fits) or 'none of the profiles (or a format not compared)'}")
     wf = gen.apply_loras(gen.sdxl("RAW photo of a red vintage car on a coastal road, 35mm", gen.NEGATIVE, 23, 30, 1024, 1024, False,
                                   f"{day}/selftest-lora", prof=gen.profile(gen.PROFILES.get("default_sdxl", "realvis"))), lo, "sdxl")
     ok, files, err = gen.generate(wf, 900, log=log)

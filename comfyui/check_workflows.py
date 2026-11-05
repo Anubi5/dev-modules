@@ -331,6 +331,22 @@ def failure_tests():
                 gen.api, gen.Peak = api, peak
             if "/interrupt" not in calls:
                 bad.append("self-test: a job stopped while ComfyUI ran it was not cancelled there")
+            # stopped while the chat server is paused (e.g. during an upload): entry() starts it again
+            started = []
+            run0, gen.subprocess.run = gen.subprocess.run, lambda cmd, *a, **k: started.append(cmd) or type("R", (), {"returncode": 3})()
+            stub, gen.chat_resume = gen.chat_resume, saved[8]
+
+            def stop_while_paused():
+                gen.JOB.pop("ledger", None); gen.JOB.pop("pending", None); gen.job_state("preparing")
+                gen.JOB["chat_paused"] = True
+                raise KeyboardInterrupt
+            try:
+                with contextlib.redirect_stderr(io.StringIO()):
+                    gen.entry(stop_while_paused)
+            finally:
+                gen.subprocess.run, gen.chat_resume = run0, stub
+            if ["systemctl", "--user", "start", "llama-swap"] not in started or gen.JOB.get("chat_paused"):
+                bad.append(f"self-test: a job stopped while the chat server was paused did not start it again")
             dead = subprocess.Popen(["true"]); dead.wait()
             for state, pid, want in (("running", dead.pid, "abandoned"), ("running", os.getpid(), "running"),
                                      ("succeeded", dead.pid, "succeeded")):

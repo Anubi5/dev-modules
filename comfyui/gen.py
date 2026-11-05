@@ -1126,6 +1126,8 @@ def entry(fn=None):
         j = JOB.get("ledger")
         if j and j.get("state") not in FINAL:
             job_state("interrupted", error=f"stopped ({e or 'Ctrl+C'}) while {j.get('state')}")
+        if JOB.get("chat_paused"):               # stopped between pausing the chat server and resuming it
+            chat_resume(True, lambda t: print(f"  {t}", file=sys.stderr))
         if JOB.get("pending"):                   # the record every outcome gets (a second Ctrl+C skips it)
             info, wf, prefix = JOB["pending"]
             try:
@@ -1173,6 +1175,7 @@ def chat_pause(log=print):
            job (llama-swap does not take the GPU lock). @return True when it was running and is now paused """
     if subprocess.run(["systemctl", "--user", "is-active", "-q", "llama-swap"]).returncode != 0:
         return False
+    JOB["chat_paused"] = True                    # set before stopping: a stop from here on still resumes it (entry)
     subprocess.run(["systemctl", "--user", "stop", "llama-swap"], stderr=subprocess.DEVNULL)
     if subprocess.run(["systemctl", "--user", "is-active", "-q", "llama-swap"]).returncode == 0:
         raise RuntimeError("the chat model server could not be stopped - not starting the GPU job")
@@ -1183,6 +1186,7 @@ def chat_pause(log=print):
 def chat_resume(paused, log=print):
     """! @brief Starts the chat-model server again when chat_pause() stopped it. """
     if paused:
+        JOB.pop("chat_paused", None)
         subprocess.run(["systemctl", "--user", "start", "llama-swap"], stderr=subprocess.DEVNULL)
         log("chat model server running again")
 

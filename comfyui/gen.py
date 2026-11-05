@@ -18,6 +18,7 @@ Usage:
 Prints the output file paths (one per line, after "OUTPUT"); exit code 0 on success.
 """
 import argparse
+import contextlib
 import datetime
 import fcntl
 import json
@@ -1032,7 +1033,7 @@ def wf_sha(wf):
     return hashlib.sha256(json.dumps(wf, indent=1).encode()).hexdigest()
 
 
-def input_hashes(wf, uploads=(), log=print):
+def input_hashes(wf, uploads=(), log=print, fresh=False):
     """!
     @brief SHA-256 of every model file the workflow names and every input picture - what a rerun must find unchanged.
            Hashes are cached by path, size and time (the first record for a large model reads it once).
@@ -1042,12 +1043,14 @@ def input_hashes(wf, uploads=(), log=print):
              if isinstance(v, str) and v.lower().endswith(MODEL_EXT)}
     where = {f["name"]: f["path"] for f in assets.files() if f["name"] in names}
     cache = assets._load(assets.CACHE)
-    if any(p not in cache and os.path.getsize(p) > 1 << 30 for p in where.values()):
+    if fresh:
+        log("re-reading every model file and input to compare contents (about a minute per large model; --fast skips this)")
+    elif any(p not in cache and os.path.getsize(p) > 1 << 30 for p in where.values()):
         log("recording model file hashes (once per model file, about a minute each; cached afterwards)")
-    out = {n: assets.sha256(p) for n, p in sorted(where.items())}
+    out = {n: assets.sha256(p, fresh) for n, p in sorted(where.items())}
     for _, src in uploads or ():
         if src and os.path.exists(src):
-            out["input:" + os.path.basename(src)] = assets.sha256(src)
+            out["input:" + os.path.basename(src)] = assets.sha256(src, fresh)
     return out
 
 
@@ -1057,6 +1060,8 @@ def chat_pause(log=print):
     if subprocess.run(["systemctl", "--user", "is-active", "-q", "llama-swap"]).returncode != 0:
         return False
     subprocess.run(["systemctl", "--user", "stop", "llama-swap"], stderr=subprocess.DEVNULL)
+    if subprocess.run(["systemctl", "--user", "is-active", "-q", "llama-swap"]).returncode == 0:
+        raise RuntimeError("the chat model server could not be stopped - not starting the GPU job")
     log("chat model server paused for the GPU job")
     return True
 
@@ -1068,15 +1073,17 @@ def chat_resume(paused, log=print):
         log("chat model server running again")
 
 
-def generate(wf, timeout, wait=600, log=print, uploads=None):
+class GpuBusy(Exception):
+    """! @brief The GPU lock stayed taken longer than the wait allowed. """
+
+
+@contextlib.contextmanager
+def gpu_lease(wait=600):
     """!
-    @brief The whole hand-off around one job, under the GPU lock.
-    @param wf       Workflow.  @param timeout  Job time limit (s).  @param wait  How long to wait for the lock / a busy ComfyUI (s).
-    @param log      Progress printer.  @param uploads  [(node id, image path)]: reference images, handed over once ComfyUI runs.
-    @return (ok, output paths, error text).
+    @brief Owns the shared GPU lock (/tmp/ai-gpu.lock, also taken by the blender command) for everything inside the
+           with-block: one job, from generation through its checks. @param wait  Seconds to wait for it.
+    @return the open lock file; its descriptor can be handed to blender so it knows the lock is already held
     """
-    JOB.pop("ledger", None)
-    job_state("waiting")
     with open(LOCK, "w") as lock:
         t0 = time.time()
         while True:
@@ -1084,36 +1091,66 @@ def generate(wf, timeout, wait=600, log=print, uploads=None):
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB); break
             except BlockingIOError:
                 if time.time() - t0 > wait:
-                    job_state("failed", error="GPU busy (lock held)")
-                    return False, [], "GPU busy with another job (lock held) - try again later"
+                    raise GpuBusy("GPU busy with another job (lock held) - try again later")
                 time.sleep(5)
-        job_state("preparing")
-        err = prepare(log, max(0, wait - (time.time() - t0)), wf)
-        if err:
-            job_state("failed", error=err)
-            return False, [], err
+        yield lock
+
+
+def generate(wf, timeout, wait=600, log=print, uploads=None, lease=None, finish=True):
+    """!
+    @brief The whole hand-off around one job: GPU lock, preflight, chat server paused, ComfyUI run, GPU given back.
+    @param wf       Workflow.  @param timeout  Job time limit (s).  @param wait  How long to wait for the lock / a busy ComfyUI (s).
+    @param log      Progress printer.  @param uploads  [(node id, image path)]: reference images, handed over once ComfyUI runs.
+    @param lease    An already held gpu_lease (a job with checks after it keeps the lock through them).
+    @param finish   False: the job file stays "validating" - the caller writes the final state after its checks.
+    @return (ok, output paths, error text).
+    """
+    JOB.pop("ledger", None)
+    job_state("waiting")
+    if lease is None:
+        try:
+            with gpu_lease(wait):
+                return _run(wf, timeout, wait, log, uploads, finish)
+        except GpuBusy as e:
+            job_state("failed", error=str(e))
+            return False, [], str(e)
+    return _run(wf, timeout, wait, log, uploads, finish)
+
+
+def _run(wf, timeout, wait, log, uploads, finish):
+    """! @brief generate() under the lock. """
+    job_state("preparing")
+    err = prepare(log, wait, wf)
+    if err:
+        job_state("failed", error=err)
+        return False, [], err
+    try:
         paused = chat_pause(log)
-        try:
-            for node, src in uploads or []:
-                wf[node]["inputs"]["image"] = upload(src)
-        except Exception as e:
-            release(log); chat_resume(paused, log)
-            job_state("failed", error=f"upload: {e}")
-            return False, [], f"could not hand the reference image to ComfyUI: {e}"
-        try:
-            ok, files, err = run_job(wf, timeout, log)
-            job_state("succeeded" if ok else "cancelled" if err.startswith("timeout") else "failed",
-                      error=err or None, outputs=files)
-            return ok, files, err
-        except KeyboardInterrupt:
-            job_state("interrupted", prompt_id=JOB.get("pid"))
-            raise
-        except Exception as e:                       # lost contact: ComfyUI may still be running it
-            job_state("unknown", prompt_id=JOB.get("pid"), error=f"{type(e).__name__}: {e}")
-            return False, [], f"lost contact with ComfyUI ({e}) - the job may still finish there (prompt {JOB.get('pid')})"
-        finally:
-            release(log, JOB.pop("pid", None))
-            chat_resume(paused, log)
+    except RuntimeError as e:
+        job_state("failed", error=str(e))
+        return False, [], str(e)
+    try:
+        for node, src in uploads or []:
+            wf[node]["inputs"]["image"] = upload(src)
+    except Exception as e:
+        release(log); chat_resume(paused, log)
+        job_state("failed", error=f"upload: {e}")
+        return False, [], f"could not hand the reference image to ComfyUI: {e}"
+    try:
+        ok, files, err = run_job(wf, timeout, log)
+        state = ("validating" if ok and not finish else "succeeded" if ok
+                 else "cancelled" if err.startswith("timeout") else "failed")
+        job_state(state, error=err or None, outputs=files)
+        return ok, files, err
+    except KeyboardInterrupt:
+        job_state("interrupted", prompt_id=JOB.get("pid"))
+        raise
+    except Exception as e:                       # lost contact: ComfyUI may still be running it
+        job_state("unknown", prompt_id=JOB.get("pid"), error=f"{type(e).__name__}: {e}")
+        return False, [], f"lost contact with ComfyUI ({e}) - the job may still finish there (prompt {JOB.get('pid')})"
+    finally:
+        release(log, JOB.pop("pid", None))
+        chat_resume(paused, log)
 
 
 def all_workflows():
@@ -1363,14 +1400,29 @@ def gen3d(a):
     wf = apply_recipe(recipe, vals)
     log = lambda s: print(f"  {s}", flush=True)
     log(f"{name}: {a.quality} quality ({vals['faces']} faces, upsample {vals['resolution']}, texture {vals['texture']}), seed {seed}")
-    ok, files, err = generate(wf, a.timeout or 2400, log=log, uploads=[(recipe["inputs"]["image"]["set"][0][0], src)])
-    glb = next((f for f in files if f.endswith(".glb")), None)
     info = {"kind": "3d", "model": name, "model_file": prof["file"], "image": a.image[0], "seed": seed, "quality": a.quality,
-            **{k: vals[k] for k in ("faces", "resolution", "texture", "remove_background")}, "recipe": prof["workflow"]}
-    info["uploads"] = [[recipe["inputs"]["image"]["set"][0][0], src]]
-    status, extra = check_3d(glb, info, log) if ok and glb else ("failed", [])
-    files += extra
+            **{k: vals[k] for k in ("faces", "resolution", "texture", "remove_background")}, "recipe": prof["workflow"],
+            "uploads": [[recipe["inputs"]["image"]["set"][0][0], src]]}
+    status, files, err = job_3d(wf, [(recipe["inputs"]["image"]["set"][0][0], src)], info, a.timeout or 2400, log)
     return report_3d(status, files, info, wf, err, prefix, seed, log)
+
+
+def job_3d(wf, uploads, info, timeout, log=print):
+    """!
+    @brief A 3D job as one unit: the GPU lock is held from generation through the Blender check, and the job file gets
+           its final state only from the checks' verdict. @return (status, output files, error text)
+    """
+    try:
+        with gpu_lease() as lock:
+            ok, files, err = generate(wf, timeout, log=log, uploads=uploads, lease=lock, finish=False)
+            glb = next((f for f in files if f.endswith(".glb")), None)
+            status, extra = check_3d(glb, info, log, lock) if ok and glb else ("failed", [])
+    except GpuBusy as e:
+        job_state("failed", error=str(e))
+        return "failed", [], str(e)
+    files = files + extra
+    job_state(status, outputs=files, error=None if status == "succeeded" else err or status)
+    return status, files, err
 
 
 EXIT = {"succeeded": 0, "failed": 1, "check_failed": 2, "check_skipped": 3}
@@ -1391,7 +1443,7 @@ def check_status(glb_info, blender_present, blender_rc=None, mesh=None, renders=
     return "succeeded"
 
 
-def check_3d(glb, info, log=print):
+def check_3d(glb, info, log=print, lock=None):
     """!
     @brief Required checks of a 3D result: GLB header, then (Blender module) import, mesh measures, 4 renders and
            img-check, with the chat-model server paused (the blender command takes the GPU lock itself).
@@ -1401,11 +1453,18 @@ def check_3d(glb, info, log=print):
     blender, views, rc, mesh, chk_rc = shutil.which("blender"), [], None, None, None
     if info["glb"].get("valid") and info["glb"].get("triangles") and blender:
         log("checking the model in Blender (import, mesh, 4 renders)")
-        paused = chat_pause(log)
+        try:
+            paused = chat_pause(log)
+        except RuntimeError as e:
+            info["blender"] = {"ok": False, "error": str(e)}
+            return "check_failed", []
+        fd = lock.fileno() if lock else None          # the held lock is handed to blender, which then does not wait for itself
+        env = dict(os.environ, AI_GPU_LOCK_FD=str(fd)) if fd is not None else None
         try:
             r = subprocess.run([blender, "-b", "--factory-startup", "--python-exit-code", "1", "--python",
                                 os.path.join(os.path.dirname(os.path.abspath(__file__)), "mesh_check.py"), "--",
-                                glb, os.path.splitext(glb)[0] + "_view"], capture_output=True, text=True, timeout=900)
+                                glb, os.path.splitext(glb)[0] + "_view"], capture_output=True, text=True, timeout=900,
+                               pass_fds=(fd,) if fd is not None else (), env=env)
             rc = r.returncode
             line = next((l for l in r.stdout.splitlines() if l.startswith("MESH-CHECK ")), None)
             mesh = json.loads(line[11:]) if line else {"ok": False, "error": (r.stderr or r.stdout)[-300:]}
@@ -1605,6 +1664,7 @@ def rerun(argv):
     ap = argparse.ArgumentParser(prog="ai gen rerun")
     ap.add_argument("workflow"); ap.add_argument("--name", default=""); ap.add_argument("--timeout", type=int, default=2400)
     ap.add_argument("--allow-drift", action="store_true", help="run even when a model file or input picture changed")
+    ap.add_argument("--fast", action="store_true", help="compare cached hashes (size and time) instead of re-reading files")
     a = ap.parse_args(argv)
     p = os.path.realpath(os.path.expanduser(a.workflow))
     if not p.startswith(WORK + os.sep) or not p.endswith(".workflow.json"):
@@ -1626,7 +1686,7 @@ def rerun(argv):
         sys.exit(f"ai gen rerun: node types ai gen does not use: {', '.join(odd)} - not run")
     uploads = [(n, s) for n, s in old.get("uploads", [])]
     log = lambda s: print(f"  {s}", flush=True)
-    now = input_hashes(wf, uploads, log)
+    now = input_hashes(wf, uploads, log, fresh=not a.fast)
     drift = sorted(k for k in set(now) | set(old.get("inputs_sha256", {})) if now.get(k) != old.get("inputs_sha256", {}).get(k))
     if drift and not a.allow_drift:
         sys.exit(f"ai gen rerun: changed or missing since the original: {', '.join(drift)} (--allow-drift runs anyway)")
@@ -1636,14 +1696,13 @@ def rerun(argv):
         if node.get("class_type", "").startswith("Save") and "filename_prefix" in node.get("inputs", {}):
             oldp = node["inputs"]["filename_prefix"]
             node["inputs"]["filename_prefix"] = prefix + (oldp[oldp.rfind("_"):] if re.search(r"_(base|pose|hires|upscaled)$", oldp) else "")
-    ok, files, err = generate(wf, a.timeout, log=log, uploads=uploads)
     info = {k: v for k, v in old.items() if k not in ("time", "status", "error", "job", "outputs", "duration_s", "peak_gpu_gb",
                                                        "workflow", "workflow_sha256", "inputs_sha256", "glb", "blender", "renders_check")}
     info.update(rerun_of=p, drift=drift or None)
     if old.get("kind") == "3d":
-        glb = next((f for f in files if f.endswith(".glb")), None)
-        status, extra = check_3d(glb, info, log) if ok and glb else ("failed", [])
-        return report_3d(status, files + extra, info, wf, err, prefix, old.get("seed", 0), log)
+        status, files, err = job_3d(wf, uploads, info, a.timeout, log)
+        return report_3d(status, files, info, wf, err, prefix, old.get("seed", 0), log)
+    ok, files, err = generate(wf, a.timeout, log=log, uploads=uploads)
     rec = write_record(files, info, wf, "succeeded" if ok else "failed", err, prefix, log)
     print("OUTPUT" if ok else f"FAILED {err}")
     for f in files:

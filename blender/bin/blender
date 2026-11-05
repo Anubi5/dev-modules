@@ -5,8 +5,13 @@ B=~/.local/share/modules/blender/app/current/blender
 case " $* " in
   *" --command blender_mcp "*) ;;                                   # the long-running MCP bridge: no GPU lock
   *" -b "*|*" --background "*)
-    exec 9>/tmp/ai-gpu.lock
-    flock -n 9 || { echo "  waiting for another GPU job (ai gen / blender) to finish..." >&2; flock 9; }
+    fd=${AI_GPU_LOCK_FD:-}                                            # ai gen hands over the lock it already holds
+    if [[ "$fd" =~ ^[0-9]+$ ]] && [ "$(readlink "/proc/self/fd/$fd" 2>/dev/null)" = /tmp/ai-gpu.lock ] && flock -n "$fd"; then
+      :                                                               # same lock (an inherited descriptor), held by our caller
+    else
+      exec 9>/tmp/ai-gpu.lock
+      flock -n 9 || { echo "  waiting for another GPU job (ai gen / blender) to finish..." >&2; flock 9; }
+    fi
     ai free >&2 || { echo "  the GPU could not be freed (see above) - not rendering; try: ai free" >&2; exit 1; } ;;
 esac
 exec "$B" "$@"

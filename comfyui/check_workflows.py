@@ -7,6 +7,7 @@
 @return exit code 0 when all variants and self-tests pass. A missing schema.json or a node class not in it is a
        warning locally and a failure in CI (CI set).
 """
+import contextlib
 import itertools
 import json
 import os
@@ -120,6 +121,50 @@ def outcome_tests():
             except SystemExit as e:
                 if "does not match" not in str(e):
                     bad.append(f"self-test: rerun refused a changed workflow for the wrong reason: {e}")
+            # the job file's final state comes from the checks, not from the generation
+            gen.JOBS = os.path.join(d, "jobs")
+            real_gen, real_chk, real_lease = gen.generate, gen.check_3d, gen.gpu_lease
+
+            def fake_gen(*a, **k):
+                gen.JOB.pop("ledger", None); gen.job_state("validating")
+                return True, [os.path.join(d, "m.glb")], ""
+            gen.generate, gen.check_3d = fake_gen, lambda glb, info, log=None, lock=None: ("check_failed", [])
+            gen.gpu_lease = lambda wait=600: contextlib.nullcontext(None)
+            try:
+                st, _, _ = gen.job_3d({}, [], {}, 10, lambda t: None)
+                j = json.load(open(os.path.join(gen.JOBS, gen.JOB["ledger"]["id"] + ".json")))
+                if (st, j["state"]) != ("check_failed", "check_failed"):
+                    bad.append(f"self-test: 3D job file ends as {j['state']} after a failed check (needs check_failed)")
+            finally:
+                gen.generate, gen.check_3d, gen.gpu_lease = real_gen, real_chk, real_lease
+            # one GPU job at a time: a second lease cannot be taken while one is held
+            lk = gen.LOCK
+            gen.LOCK = os.path.join(d, "gpu.lock")
+            try:
+                with gen.gpu_lease(0):
+                    try:
+                        with gen.gpu_lease(0):
+                            bad.append("self-test: two GPU leases were held at once")
+                    except gen.GpuBusy:
+                        pass
+            finally:
+                gen.LOCK = lk
+            # a chat server that does not stop blocks the job (fail closed)
+            run = gen.subprocess.run
+            gen.subprocess.run = lambda cmd, *a, **k: type("R", (), {"returncode": 0})()   # "still active", always
+            try:
+                gen.chat_pause(lambda t: None); bad.append("self-test: a chat server that did not stop was taken as paused")
+            except RuntimeError:
+                pass
+            finally:
+                gen.subprocess.run = run
+            # strict hashes see a change that kept size and time; the cache alone does not
+            p = os.path.join(d, "w.bin")
+            open(p, "wb").write(b"a" * 64); st0 = os.stat(p)
+            h1 = gen.assets.sha256(p)
+            open(p, "wb").write(b"b" * 64); os.utime(p, (st0.st_atime, st0.st_mtime))
+            if gen.assets.sha256(p, fresh=True) == h1:
+                bad.append("self-test: a strict hash missed a change that kept size and time")
         finally:
             gen.OUTPUT, gen.WORK, gen.assets.CACHE, gen.JOBS = saved
     return bad

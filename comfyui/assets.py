@@ -68,12 +68,15 @@ def header(path):
     return h, meta, os.path.getsize(path) >= 8 + n + end
 
 
-def sha256(path):
-    """! @brief SHA-256 of a file; cached by path, size and modified time (ai gen verify re-reads everything). """
+def sha256(path, fresh=False):
+    """!
+    @brief SHA-256 of a file; cached by path, size and modified time. fresh=True re-reads the file whatever the cache
+           says (strict checks: rerun, verify) and updates the cache.
+    """
     st = os.stat(path)
     cache = _load(CACHE)
     c = cache.get(path)
-    if c and c[0] == st.st_size and c[1] == int(st.st_mtime):
+    if c and not fresh and c[0] == st.st_size and c[1] == int(st.st_mtime):
         return c[2]
     h = hashlib.sha256()
     with open(path, "rb") as f:

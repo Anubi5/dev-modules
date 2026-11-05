@@ -202,6 +202,47 @@ def apply_recipe(recipe, values):
             sys.exit(f"{name} {v}: must be {spec.get('min')}-{spec.get('max')}")
         for node, key, *off in spec["set"]:
             wf[node]["inputs"][key] = v + off[0] if off else v
+    return prune(wf)
+
+
+def _link(v):
+    return isinstance(v, list) and len(v) == 2 and isinstance(v[0], str)
+
+
+def prune(wf):
+    """!
+    @brief Reduces a workflow to what its chosen settings use: a switch whose choice is fixed (a constant, or a
+           Primitive node's value) is replaced by a direct link to the chosen input, then every node no output depends on
+           is dropped. So a recipe holding several models needs, loads and records only the selected one. Outputs are
+           the nodes nothing reads from in the full workflow; switches decided at run time stay. @return wf (changed)
+    """
+    sinks = [k for k in wf if k not in {v[0] for n in wf.values() for v in n["inputs"].values() if _link(v)}]
+
+    def choice(k):
+        n = wf.get(k, {})
+        if n.get("class_type") != "ComfySwitchNode":
+            return None
+        s = n["inputs"].get("switch")
+        if _link(s):
+            p = wf.get(s[0], {})
+            s = p["inputs"].get("value") if p.get("class_type", "").startswith("Primitive") else None
+        return None if not isinstance(s, bool) else n["inputs"].get("on_true" if s else "on_false")
+
+    for n in wf.values():
+        for key, v in n["inputs"].items():
+            seen = set()
+            while _link(v) and v[1] == 0 and v[0] not in seen and _link(choice(v[0])):
+                seen.add(v[0]); v = choice(v[0])
+            n["inputs"][key] = v
+    keep, todo = set(), list(sinks)
+    while todo:
+        k = todo.pop()
+        if k in keep or k not in wf:
+            continue
+        keep.add(k)
+        todo += [v[0] for v in wf[k]["inputs"].values() if _link(v)]
+    for k in set(wf) - keep:
+        del wf[k]
     return wf
 
 
@@ -1359,22 +1400,37 @@ QUALITY = {"normal": {"resolution": 1024, "faces": 300000, "texture": 2048},    
 
 
 def glb_stats(path):
-    """! @brief Reads a GLB's header (no extra tools): mesh, triangles, vertices, materials, textures. @return dict """
-    with open(path, "rb") as f:
-        head = f.read(20)
-        if head[:4] != b"glTF":
-            return {"valid": False}
-        j = json.loads(f.read(int.from_bytes(head[12:16], "little")))
-    acc, tri, verts = j.get("accessors", []), 0, 0
-    for m in j.get("meshes", []):
-        for p in m.get("primitives", []):
-            verts += acc[p["attributes"]["POSITION"]]["count"]
-            tri += acc[p["indices"]]["count"] // 3 if "indices" in p else 0
-    mats = [sorted(k for k in ("baseColorTexture", "metallicRoughnessTexture") if k in m.get("pbrMetallicRoughness", {}))
-            + (["normalTexture"] if "normalTexture" in m else []) + (["occlusionTexture"] if "occlusionTexture" in m else [])
-            for m in j.get("materials", [])]
-    return {"valid": True, "meshes": len(j.get("meshes", [])), "triangles": tri, "vertices": verts, "material_maps": mats,
-            "textures": len(j.get("textures", [])), "size_mb": round(os.path.getsize(path) / 1e6, 1)}
+    """!
+    @brief Reads a GLB's header (no extra tools): mesh, triangles, vertices, materials, textures. Never raises: a
+           missing, truncated or malformed file gives {"valid": False, "error": why}. @return dict
+    """
+    try:
+        size = os.path.getsize(path)
+        with open(path, "rb") as f:
+            head = f.read(20)
+            n = int.from_bytes(head[12:16], "little")
+            if len(head) < 20 or head[:4] != b"glTF" or head[16:20] != b"JSON":
+                return {"valid": False, "error": "not a GLB file"}
+            if int.from_bytes(head[8:12], "little") > size or 20 + n > size:
+                return {"valid": False, "error": "truncated (file shorter than its header says)"}
+            j = json.loads(f.read(n))
+        acc, tri, verts = j.get("accessors", []), 0, 0
+
+        def count(i):                                  # an accessor's count; a bad index is an error, not acc[-1]
+            if not isinstance(i, int) or not 0 <= i < len(acc) or not isinstance(acc[i].get("count"), int):
+                raise IndexError(f"accessor {i} out of range")
+            return acc[i]["count"]
+        for m in j.get("meshes", []):
+            for p in m.get("primitives", []):
+                verts += count(p["attributes"]["POSITION"])
+                tri += count(p["indices"]) // 3 if "indices" in p else 0
+        mats = [sorted(k for k in ("baseColorTexture", "metallicRoughnessTexture") if k in m.get("pbrMetallicRoughness", {}))
+                + (["normalTexture"] if "normalTexture" in m else []) + (["occlusionTexture"] if "occlusionTexture" in m else [])
+                for m in j.get("materials", [])]
+        return {"valid": True, "meshes": len(j.get("meshes", [])), "triangles": int(tri), "vertices": int(verts),
+                "material_maps": mats, "textures": len(j.get("textures", [])), "size_mb": round(size / 1e6, 1)}
+    except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError) as e:
+        return {"valid": False, "error": f"malformed GLB: {type(e).__name__}: {str(e)[:150]}"}
 
 
 def gen3d(a):
@@ -1412,11 +1468,23 @@ def job_3d(wf, uploads, info, timeout, log=print):
     @brief A 3D job as one unit: the GPU lock is held from generation through the Blender check, and the job file gets
            its final state only from the checks' verdict. @return (status, output files, error text)
     """
+    files, extra = [], []
     try:
         with gpu_lease() as lock:
-            ok, files, err = generate(wf, timeout, log=log, uploads=uploads, lease=lock, finish=False)
+            try:
+                ok, files, err = generate(wf, timeout, log=log, uploads=uploads, lease=lock, finish=False)
+            except Exception as e:                     # whatever breaks, the job ends with a state and a record
+                ok, err = False, f"generation stopped: {type(e).__name__}: {str(e)[:300]}"
             glb = next((f for f in files if f.endswith(".glb")), None)
-            status, extra = check_3d(glb, info, log, lock) if ok and glb else ("failed", [])
+            if ok and not glb:
+                err = "ComfyUI finished but saved no GLB"
+            status = "failed"
+            if ok and glb:
+                try:
+                    status, extra = check_3d(glb, info, log, lock)
+                except Exception as e:
+                    status, info["check_error"] = "check_failed", f"{type(e).__name__}: {str(e)[:300]}"
+                    info.setdefault("glb", {"valid": False, "error": "not read"})
     except GpuBusy as e:
         job_state("failed", error=str(e))
         return "failed", [], str(e)
@@ -1474,7 +1542,7 @@ def check_3d(glb, info, log=print, lock=None):
             chat_resume(paused, log)
         views = [v for v in mesh.get("renders", []) if os.path.exists(v)]
         if views:
-            chk = subprocess.run([os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin", "img-check"), *views],
+            chk = subprocess.run([os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin", "img-check"), "--min-coverage", "0.02", *views],
                                  capture_output=True, text=True)
             chk_rc, info["renders_check"] = chk.returncode, chk.stdout.strip()[-600:]
         info["blender"] = mesh
@@ -1485,7 +1553,7 @@ def check_3d(glb, info, log=print, lock=None):
 
 def report_3d(status, files, info, wf, err, prefix, seed, log=print):
     """! @brief Record and summary for a 3D job; the exit code says whether the required checks passed. """
-    why = {"failed": err or "no valid model", "check_failed": "the model was made but a required check failed (see the record)",
+    why = {"failed": err or "no valid model" + (f" ({info['glb']['error']})" if (info.get("glb") or {}).get("error") else ""), "check_failed": "the model was made but a required check failed (see the record)",
            "check_skipped": "the model was made but not checked (Blender module not installed)"}.get(status)
     rec = write_record(files, info, wf, status, why, prefix, log)
     print({"succeeded": f"OUTPUT (seed {seed})", "check_skipped": f"OUTPUT, NOT CHECKED (seed {seed})",
@@ -1493,12 +1561,14 @@ def report_3d(status, files, info, wf, err, prefix, seed, log=print):
     for f in files:
         print(f)
     if status != "failed":
-        s = info["glb"]
+        s = info.get("glb") or {}
         b = info.get("blender") if isinstance(info.get("blender"), dict) else {}
-        print(f"  model: {s['triangles']} triangles, {s['textures']} textures, {s['size_mb']} MB"
-              + (f"; Blender: {b.get('loose_parts')} parts, {b.get('non_manifold_edges')} open edges" if b.get("ok") else ""))
+        if s.get("valid"):
+            print(f"  model: {s.get('triangles')} triangles, {s.get('textures')} textures, {s.get('size_mb')} MB"
+                  + (f"; Blender: {b.get('loose_parts')} parts, {b.get('non_manifold_edges')} open edges" if b.get("ok") else ""))
         if status == "check_failed":
-            print(f"  check failed: Blender {'ok' if b.get('ok') else b.get('error', 'failed')}; renders: {info.get('renders_check') or 'none'}")
+            print(f"  check failed: {info.get('check_error') or s.get('error') or ''} Blender {'ok' if b.get('ok') else b.get('error', 'failed')};"
+                  f" renders: {info.get('renders_check') or 'none'}")
     if rec:
         print(f"  record: {rec}")
     return EXIT[status]

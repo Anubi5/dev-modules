@@ -9,8 +9,10 @@
 """
 import contextlib
 import itertools
+import io
 import json
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -84,7 +86,7 @@ def self_tests():
             bad.append("self-test: the model-file preflight did not tell a missing file from a present one")
     finally:
         gen.api = api
-    bad += lora_rule_tests() + model_rule_tests() + recipe_tests() + outcome_tests()
+    bad += lora_rule_tests() + model_rule_tests() + recipe_tests() + outcome_tests() + failure_tests()
     return bad
 
 
@@ -167,6 +169,118 @@ def outcome_tests():
                 bad.append("self-test: a strict hash missed a change that kept size and time")
         finally:
             gen.OUTPUT, gen.WORK, gen.assets.CACHE, gen.JOBS = saved
+    return bad
+
+
+def glb(path, body=None, total=None, raw=None):
+    """! @brief Writes a small GLB for the tests: one triangle, or the given JSON / raw bytes. """
+    import struct
+    j = raw if raw is not None else json.dumps(body or {"accessors": [{"count": 3}, {"count": 3}],
+                                                     "meshes": [{"primitives": [{"attributes": {"POSITION": 0}, "indices": 1}]}]}).encode()
+    j += b" " * (-len(j) % 4)
+    data = b"glTF" + struct.pack("<II", 2, total or 12 + 8 + len(j)) + struct.pack("<I", len(j)) + b"JSON" + j
+    open(path, "wb").write(data)
+    return path
+
+
+def failure_tests():
+    """!
+    @brief What goes wrong must end as a recorded failure: a recipe reduced to the chosen model names no file of the
+           other; a broken GLB is reported, not raised; out of GPU memory, a crashed ComfyUI connection, a crashed
+           Blender and an exception in the checks each end the job with the right state, a record and the chat
+           server given back. @return list of problems
+    """
+    import tempfile
+    bad, quiet = [], lambda t: None
+    # 1. a multi-model recipe is reduced to the chosen model
+    threed = {n: p for n, p in gen.PROFILES["models"].items() if p.get("kind") == "3d"}
+    for name, p in threed.items():
+        r = gen.load_recipe(p["workflow"])
+        w = gen.apply_recipe(r, dict(p.get("set", {}), image="x.png", prefix="t"))
+        names = {v for n in w.values() for v in n["inputs"].values() if isinstance(v, str)}
+        others = {q["file"] for m, q in threed.items() if m != name and q["file"] != p["file"]}
+        if p["file"] not in names or names & others:
+            bad.append(f"self-test: 3D model {name}: reduced workflow names {sorted(names & others)} of another model"
+                       f" or misses its own {p['file']}")
+        for inp in ("image", "prefix"):
+            if r["inputs"][inp]["set"][0][0] not in w:
+                bad.append(f"self-test: reducing the {name} workflow dropped its {inp} node")
+        if any(n["class_type"] == "ComfySwitchNode" and not isinstance(n["inputs"].get("switch"), list) for n in w.values()):
+            bad.append(f"self-test: a fixed switch stayed in the {name} workflow")
+    toy = {"1": {"class_type": "Calc", "inputs": {}}, "2": {"class_type": "A", "inputs": {}}, "3": {"class_type": "B", "inputs": {}},
+           "4": {"class_type": "ComfySwitchNode", "inputs": {"switch": ["1", 0], "on_true": ["2", 0], "on_false": ["3", 0]}},
+           "5": {"class_type": "Save", "inputs": {"x": ["4", 0]}}}
+    if set(gen.prune(json.loads(json.dumps(toy)))) != set(toy):
+        bad.append("self-test: a switch decided at run time was removed")
+    # 2. broken GLBs are reported, never raised
+    with tempfile.TemporaryDirectory() as d:
+        ok = gen.glb_stats(glb(os.path.join(d, "ok.glb")))
+        if not ok.get("valid") or ok.get("triangles") != 1:
+            bad.append(f"self-test: a valid one-triangle GLB read as {ok}")
+        cases = {"truncated": dict(total=10 ** 6), "bad JSON": dict(raw=b"{not json"),
+                 "index out of range": dict(body={"accessors": [{"count": 3}], "meshes": [{"primitives": [{"attributes": {"POSITION": 5}}]}]}),
+                 "negative index": dict(body={"accessors": [{"count": 3}], "meshes": [{"primitives": [{"attributes": {"POSITION": -1}}]}]}),
+                 "wrong types": dict(body={"meshes": "x"})}
+        for why, kw in cases.items():
+            try:
+                r = gen.glb_stats(glb(os.path.join(d, "b.glb"), **kw))
+                if r.get("valid") or not r.get("error"):
+                    bad.append(f"self-test: a GLB with {why} read as valid: {r}")
+            except Exception as e:
+                bad.append(f"self-test: a GLB with {why} raised {type(e).__name__}")
+        if gen.glb_stats(os.path.join(d, "missing.glb")).get("valid") is not False:
+            bad.append("self-test: a missing GLB was not reported as invalid")
+        # 3. stand-in failures through the real job_3d / check_3d / report_3d
+        saved = (gen.OUTPUT, gen.WORK, gen.assets.CACHE, gen.JOBS, gen.generate, gen.gpu_lease, gen.check_3d,
+                 gen.chat_pause, gen.chat_resume, gen.shutil.which, gen.subprocess.run)
+        gen.OUTPUT, gen.WORK, gen.assets.CACHE, gen.JOBS = d, d, os.path.join(d, "c.json"), os.path.join(d, "jobs")
+        gen.gpu_lease = lambda wait=600: contextlib.nullcontext(None)
+        resumed = []
+        gen.chat_pause, gen.chat_resume = (lambda log=None: "paused"), (lambda p, log=None: resumed.append(p))
+        good, broken = glb(os.path.join(d, "m.glb")), glb(os.path.join(d, "t.glb"), total=10 ** 6)
+
+        def gen_with(result=None, exc=None):
+            def fake(*a, **k):
+                gen.JOB.pop("ledger", None); gen.job_state("running")
+                if exc:
+                    raise exc
+                if result[0]:
+                    gen.job_state("validating")
+                return result
+            return fake
+
+        def run(label, want, **fake):
+            gen.generate = gen_with(**fake)
+            info = {"kind": "3d"}
+            try:
+                st, files, err = gen.job_3d({}, [], info, 10, quiet)
+                j = json.load(open(os.path.join(gen.JOBS, gen.JOB["ledger"]["id"] + ".json")))
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    code = gen.report_3d(st, files, info, {"1": {"class_type": "X", "inputs": {}}}, err, "2026-01-01/" + label, 1, quiet)
+                rec = re.findall(r"record: (\S+)", out.getvalue())
+                r = json.load(open(rec[-1])) if rec else {}
+                if (st, j["state"], r.get("status"), code) != (want, want, want, gen.EXIT[want]):
+                    bad.append(f"self-test: {label}: job {st}, job file {j['state']}, record {r.get('status')}, exit {code}"
+                               f" (needs {want} everywhere)")
+            except Exception as e:
+                bad.append(f"self-test: {label} escaped as {type(e).__name__}: {e}")
+        try:
+            run("oom", "failed", result=(False, [], "CUDA error: out of memory"))
+            run("comfyui-gone", "failed", exc=ConnectionError("connection refused"))
+            run("broken-glb", "failed", result=(True, [broken], ""))
+            gen.check_3d = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("checker bug"))
+            run("check-raises", "check_failed", result=(True, [good], ""))
+            gen.check_3d = saved[6]
+            gen.shutil.which = lambda n: "/stand-in/blender" if n == "blender" else saved[9](n)
+            gen.subprocess.run = lambda *a, **k: type("R", (), {"returncode": 139, "stdout": "", "stderr": "Segmentation fault"})()
+            resumed.clear()
+            run("blender-crash", "check_failed", result=(True, [good], ""))
+            if resumed != ["paused"]:
+                bad.append("self-test: the chat server was not given back after Blender crashed")
+        finally:
+            (gen.OUTPUT, gen.WORK, gen.assets.CACHE, gen.JOBS, gen.generate, gen.gpu_lease, gen.check_3d,
+             gen.chat_pause, gen.chat_resume, gen.shutil.which, gen.subprocess.run) = saved
     return bad
 
 

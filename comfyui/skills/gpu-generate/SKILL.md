@@ -66,7 +66,7 @@ The user asks for a picture, illustration, concept art, texture, reference image
 4. The lines after `OUTPUT` are the file paths (in `~/work/outputs/comfy/<date>/`); `record:` is a .json with every
    setting used. Report the files and the seed. With repair/upscale options, `<name>_base_*` is the untouched original -
    offer it if the repaired one looks worse.
-   Before you report success, run `img-check <file>` and quote its line (size, contrast, main colours; BLANK = failed).
+   Before you report success, run `img-check <file>` and quote its line (size, content share, contrast, main colours; BLANK or TOO SMALL = failed).
    If your vision tool works, also look at it and compare with the request (subject, pose, text, number of people,
    hands). Say honestly what is off instead of only listing the file.
 5. If the result belongs to a project, copy it into `~/work/projects/<project>/output/`.

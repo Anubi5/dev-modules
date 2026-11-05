@@ -3,7 +3,7 @@
 @brief Checks a generated 3D model in Blender (headless): imports the GLB, measures the mesh and renders it from
        4 sides (front, right, back, left) with Cycles on the GPU, so the result can be looked at and image-checked.
 @details Run as: blender -b --factory-startup --python-exit-code 1 --python mesh_check.py -- MODEL.glb OUT_PREFIX
-         Writes OUT_PREFIX_front.png ... and prints one line "MESH-CHECK {json}". Watertightness is reported, not
+         Writes OUT_PREFIX_front.png ... (transparent background, so img-check measures the object) and prints one line "MESH-CHECK {json}". Watertightness is reported, not
          required (open shapes such as cups or cloth are fine); a model with no faces fails.
 """
 import json
@@ -66,7 +66,8 @@ for backend in ("OPTIX", "CUDA"):
         pass
 scene = bpy.context.scene
 scene.render.engine = "CYCLES"; scene.cycles.device = "GPU" if used != "CPU" else "CPU"
-scene.cycles.samples = 32; scene.render.resolution_x = scene.render.resolution_y = 768
+scene.cycles.samples = 32; scene.render.film_transparent = True; scene.render.image_settings.color_mode = "RGBA"   # coverage = alpha
+scene.render.resolution_x = scene.render.resolution_y = 768
 world = bpy.data.worlds.new("w"); scene.world = world; world.use_nodes = True
 world.node_tree.nodes["Background"].inputs["Color"].default_value = (0.55, 0.55, 0.58, 1)
 world.node_tree.nodes["Background"].inputs["Strength"].default_value = 1.0

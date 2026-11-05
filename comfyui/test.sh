@@ -46,12 +46,31 @@ print(("OK " if not left else "MISSING ") + ", ".join(f"{c}={a}" for c, a in sor
 case "$ca" in OK*) echo "  model detection (ComfyUI's own): ${ca#OK }" ;; *) echo "  CHECK model detection: $ca"; miss=1 ;; esac
 [ $miss = 0 ] || exit 1
 echo "  ComfyUI up, custom nodes loaded, all model files present"
-# img-check (agents quote it to prove a result): a flat image must be called BLANK, a real one must pass
+# img-check (agents quote it to prove a result; the 3D check uses it on the renders): each case must get its verdict
 V=$MOD/app/ComfyUI/.venv/bin/python; t=$(mktemp -d)
-"$V" -c "from PIL import Image, ImageDraw; Image.new('RGB',(64,64),(60,60,60)).save('$t/flat.png'); i=Image.new('RGB',(64,64),(60,60,60)); ImageDraw.Draw(i).rectangle((16,16,48,48),fill=(200,30,30)); i.save('$t/cube.png')"
-flat=$("$MOD/bin/img-check" "$t/flat.png"); fr=$?; cube=$("$MOD/bin/img-check" "$t/cube.png"); cr=$?   # (exit 1 = blank, by design)
-[ $fr = 1 ] && [[ "$flat" == *BLANK* ]] && [ $cr = 0 ] && [[ "$cube" == *red* ]] \
-  && echo "  img-check: flat image -> BLANK, red square -> red" || { echo "img-check does not work: $flat (exit $fr) / $cube (exit $cr)"; rm -rf "$t"; exit 1; }
+"$V" - "$t" <<'PY'
+import sys, numpy as np; from PIL import Image, ImageDraw
+d = sys.argv[1]; S = lambda n, i: i.save(f"{d}/{n}.png")
+S("solid_red", Image.new("RGB", (64, 64), (200, 30, 30))); S("solid_blue", Image.new("RGB", (64, 64), (30, 30, 200)))
+S("transparent", Image.new("RGBA", (64, 64), (0, 0, 0, 0)))
+S("near_black", Image.fromarray(np.random.default_rng(1).integers(0, 4, (64, 64, 3), dtype=np.uint8)))
+g = np.tile(np.linspace(0, 255, 64, dtype=np.uint8), (64, 1)); S("gradient", Image.fromarray(np.stack([g, g // 2, 255 - g], -1)))
+i = Image.new("RGB", (64, 64), (60, 60, 60)); ImageDraw.Draw(i).rectangle((16, 16, 48, 48), fill=(200, 30, 30)); S("square", i)
+for n, box in (("object", (16, 48)), ("small_object", (60, 72))):      # a shaded shape on transparency: 26% / 1% cover
+    i = Image.new("RGBA", (64, 64) if n == "object" else (120, 120), (0, 0, 0, 0)); dr = ImageDraw.Draw(i)
+    for y in range(*box):
+        dr.line((box[0], y, box[1], y), fill=(100 + 150 * (y - box[0]) // (box[1] - box[0]), 80, 40, 255))
+    S(n, i)
+S("opaque_flat", Image.new("RGBA", (64, 64), (200, 30, 30, 255)))     # all visible, one colour: the per-channel rule
+i = Image.new("RGBA", (200, 200), (0, 0, 0, 0)); i.putpixel((5, 5), (255, 0, 0, 255)); i.putpixel((6, 5), (0, 0, 255, 255))
+S("speck", i)                                                          # varied but almost nothing visible: the coverage rule
+PY
+ic() { "$MOD/bin/img-check" "$@" >/dev/null; echo $?; }
+res=""; for c in solid_red:1 solid_blue:1 opaque_flat:1 speck:1 transparent:1 near_black:1 gradient:0 square:0 object:0; do
+  [ "$(ic "$t/${c%:*}.png")" = "${c#*:}" ] || res="$res ${c%:*}"; done
+[ "$(ic --min-coverage 0.02 "$t/small_object.png")" = 1 ] && [ "$(ic --min-coverage 0.02 "$t/object.png")" = 0 ] || res="$res coverage"
+[ -z "$res" ] && echo "  img-check: solid colours, specks, transparent and near-black -> BLANK; gradient, square, object pass; small object too small" \
+  || { echo "img-check gives the wrong verdict for:$res"; "$MOD/bin/img-check" "$t"/*.png; rm -rf "$t"; exit 1; }
 rm -rf "$t"
 [ "${1:-}" = --full ] && { cd "$MOD" && exec python3 comfy_test.py; }
 exit 0

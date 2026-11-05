@@ -1269,6 +1269,38 @@
    "values": null
   }
  },
+ "Pixal3DMultiViewConditioning": {
+  "back": {
+   "part": "optional",
+   "type": "IMAGE",
+   "values": null
+  },
+  "clip_vision_model": {
+   "part": "required",
+   "type": "CLIP_VISION",
+   "values": null
+  },
+  "fov": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "front": {
+   "part": "optional",
+   "type": "IMAGE",
+   "values": null
+  },
+  "left": {
+   "part": "optional",
+   "type": "IMAGE",
+   "values": null
+  },
+  "right": {
+   "part": "optional",
+   "type": "IMAGE",
+   "values": null
+  }
+ },
  "Preview3DAdvanced": {
   "camera_info": {
    "part": "optional",

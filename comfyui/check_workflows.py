@@ -200,13 +200,14 @@ def failure_tests():
     threed = {n: p for n, p in gen.PROFILES["models"].items() if p.get("kind") == "3d"}
     for name, p in threed.items():
         r = gen.load_recipe(p["workflow"])
-        w = gen.apply_recipe(r, dict(p.get("set", {}), image="x.png", prefix="t"))
+        pic = next(k for k, sp in r["inputs"].items() if sp.get("upload"))
+        w = gen.apply_recipe(r, dict(p.get("set", {}), prefix="t", **{pic: "x.png"}))
         names = {v for n in w.values() for v in n["inputs"].values() if isinstance(v, str)}
         others = {q["file"] for m, q in threed.items() if m != name and q["file"] != p["file"]}
         if p["file"] not in names or names & others:
             bad.append(f"self-test: 3D model {name}: reduced workflow names {sorted(names & others)} of another model"
                        f" or misses its own {p['file']}")
-        for inp in ("image", "prefix"):
+        for inp in (pic, "prefix"):
             if r["inputs"][inp]["set"][0][0] not in w:
                 bad.append(f"self-test: reducing the {name} workflow dropped its {inp} node")
         if any(n["class_type"] == "ComfySwitchNode" and not isinstance(n["inputs"].get("switch"), list) for n in w.values()):
@@ -367,14 +368,26 @@ def recipe_tests():
         if p.get("kind") != "3d":
             continue
         r = gen.load_recipe(p["workflow"])
-        w = gen.apply_recipe(r, dict(p.get("set", {}), seed=7, faces=123456, image="a.png", prefix="d/x"))
-        for inp, val in (("faces", 123456), ("image", "a.png"), ("prefix", "d/x")):
+        pic = next(k for k, sp in r["inputs"].items() if sp.get("upload"))     # the first picture input (image / front)
+        w = gen.apply_recipe(r, dict(p.get("set", {}), seed=7, faces=123456, prefix="d/x", **{pic: "a.png"}))
+        for inp, val in (("faces", 123456), (pic, "a.png"), ("prefix", "d/x")):
             node, key = r["inputs"][inp]["set"][0][:2]
             if w[node]["inputs"][key] != val:
                 bad.append(f"self-test: recipe {p['workflow']} input {inp} not set")
         for node, key, *off in r["inputs"]["seed"]["set"]:
             if w[node]["inputs"][key] != 7 + (off[0] if off else 0):
                 bad.append(f"self-test: recipe seed offset lost on node {node}")
+        views = [k for k, sp in r["inputs"].items() if sp.get("upload")]
+        if len(views) > 1:
+            one = gen.apply_recipe(r, dict(prefix="d/x", **{views[0]: "f.png"}))
+            alln = gen.apply_recipe(r, dict(prefix="d/x", **{v: v + ".png" for v in views}))
+            loads = lambda wf: sorted(n["inputs"]["image"] for n in wf.values() if n["class_type"] == "LoadImage")
+            if loads(one) != ["f.png"] or loads(alln) != sorted(v + ".png" for v in views):
+                bad.append(f"self-test: recipe {p['workflow']}: views not given were not pruned (or given ones lost): {loads(one)} / {loads(alln)}")
+            for v in views[1:]:
+                node, key = r["inputs"][v]["drop"]
+                if key in one[node]["inputs"]:
+                    bad.append(f"self-test: recipe {p['workflow']}: missing view {v} still linked")
         try:
             gen.apply_recipe(r, {"texture": 3000}); bad.append("self-test: a texture size outside the recipe's choices was used")
         except SystemExit:

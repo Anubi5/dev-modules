@@ -191,12 +191,17 @@ def apply_recipe(recipe, values):
     """!
     @brief Fills a recipe's declared inputs and nothing else. Each input names the node inputs it sets
            ([node, input] or [node, input, offset] for seeds that differ per stage); values outside an input's
-           declared range or choices are refused. @param values  {input name: value}  @return workflow (a copy)
+           declared range or choices are refused; an input with "drop" that is not given is unlinked there (a missing
+           optional view), and prune() then removes what only it used. @param values  {input name: value}  @return workflow (a copy)
     """
     wf = json.loads(json.dumps(recipe["workflow"]))
+    outputs = sinks(wf)                          # taken before any input is unlinked
     for name, spec in recipe["inputs"].items():
         v = values.get(name, spec.get("default"))
         if v is None:
+            if "drop" in spec:                   # an optional input not given (a view): unlinked, its branch pruned below
+                node, key = spec["drop"]
+                wf[node]["inputs"].pop(key, None)
             continue
         if "choices" in spec and v not in spec["choices"]:
             sys.exit(f"{name} {v}: choose one of {', '.join(map(str, spec['choices']))}")
@@ -204,21 +209,27 @@ def apply_recipe(recipe, values):
             sys.exit(f"{name} {v}: must be {spec.get('min')}-{spec.get('max')}")
         for node, key, *off in spec["set"]:
             wf[node]["inputs"][key] = v + off[0] if off else v
-    return prune(wf)
+    return prune(wf, outputs)
 
 
 def _link(v):
     return isinstance(v, list) and len(v) == 2 and isinstance(v[0], str)
 
 
-def prune(wf):
+def sinks(wf):
+    """! @brief The nodes nothing reads from: a workflow's outputs (save and preview nodes). """
+    return [k for k in wf if k not in {v[0] for n in wf.values() for v in n["inputs"].values() if _link(v)}]
+
+
+def prune(wf, outputs=None):
     """!
     @brief Reduces a workflow to what its chosen settings use: a switch whose choice is fixed (a constant, or a
            Primitive node's value) is replaced by a direct link to the chosen input, then every node no output depends on
            is dropped. So a recipe holding several models needs, loads and records only the selected one. Outputs are
-           the nodes nothing reads from in the full workflow; switches decided at run time stay. @return wf (changed)
+           the nodes nothing reads from in the full workflow (outputs: given when inputs were unlinked since); switches
+           decided at run time stay. @return wf (changed)
     """
-    sinks = [k for k in wf if k not in {v[0] for n in wf.values() for v in n["inputs"].values() if _link(v)}]
+    outputs = sinks(wf) if outputs is None else outputs
 
     def choice(k):
         n = wf.get(k, {})
@@ -236,7 +247,7 @@ def prune(wf):
             while _link(v) and v[1] == 0 and v[0] not in seen and _link(choice(v[0])):
                 seen.add(v[0]); v = choice(v[0])
             n["inputs"][key] = v
-    keep, todo = set(), list(sinks)
+    keep, todo = set(), list(outputs)
     while todo:
         k = todo.pop()
         if k in keep or k not in wf:
@@ -1298,7 +1309,8 @@ def all_workflows():
     for name in PROFILES["models"]:                    # every architecture with two LoRAs chained
         p = profile(name)
         if p.get("kind") == "3d":
-            yield apply_recipe(load_recipe(p["workflow"]), dict(p.get("set", {}), image="x.png", prefix="t"))
+            r = load_recipe(p["workflow"])                 # every picture input given (all views of a multi-view model)
+            yield apply_recipe(r, dict(p.get("set", {}), prefix="t", **{k: "x.png" for k, sp in r["inputs"].items() if sp.get("upload")}))
             continue
         if p["arch"] == "sdxl":
             w = sdxl("x", "y", 1, p["steps"], 1024, 1024, True, "t", pose="p", face="f", fix_faces=True, hires=True, prof=p)
@@ -1421,6 +1433,7 @@ HELP = """ai gen - images, edits and short videos on the local GPU (one job at a
       --pose-skeleton      (image) the --pose picture is already a skeleton (files named *_pose_*.png are detected)
   ai gen video "prompt" [--frames 33]                      Wan 2.2 clip (33 frames ~ 1.4 s, up to 121)
   ai gen 3d --image PHOTO [--model pixal3d|trellis2] [--quality normal|high] [--faces N] [--texture 2048]
+  ai gen 3d --model pixal3d-mv --image FRONT [--image LEFT --image BACK --image RIGHT]   3D model from up to 4 views
                                                            a textured 3D model (GLB) from one picture; Blender renders
                                                            it from 4 sides when installed
   ai gen models                                            which image models are ready
@@ -1514,8 +1527,9 @@ def glb_stats(path):
 
 def gen3d(a):
     """!
-    @brief ai gen 3d --image PHOTO: a textured 3D model (GLB) from one picture, through the image-to-3D recipe (official
-           ComfyUI template, core nodes only), with the same GPU hand-off, preflight, record and saved workflow as
+    @brief ai gen 3d --image PHOTO: a textured 3D model (GLB) from one picture - or, for a multi-view model, from up to
+           as many pictures as its recipe has image inputs (in their order, e.g. front, left, back, right) - through the
+           model's recipe (official ComfyUI template, core nodes only), with the same GPU hand-off, preflight, record and saved workflow as
            every job; afterwards the GLB is measured and, when the Blender module is installed, rendered from 4 sides
            and image-checked. @return exit code
     """
@@ -1525,21 +1539,27 @@ def gen3d(a):
     prof = PROFILES["models"].get(name)
     if not prof or prof.get("kind") != "3d":
         sys.exit(f"--model {name}: 3D models are {', '.join(n for n, p in PROFILES['models'].items() if p.get('kind') == '3d')}")
-    src = check_input(a.image[0])
     recipe = load_recipe(prof["workflow"])
+    slots = [k for k, sp in recipe["inputs"].items() if sp.get("upload")]
+    if len(a.image) > len(slots):
+        sys.exit(f"--model {name} takes {'one picture' if len(slots) == 1 else f'up to {len(slots)} pictures, in this order: ' + ', '.join(slots)}")
+    srcs = {k: check_input(f) for k, f in zip(slots, a.image)}
+    src = srcs[slots[0]]
     seed = a.seed if a.seed is not None else random.randint(0, 2**31 - 1000)
     day = datetime.date.today().isoformat()
     prefix = f"{day}/{slug(a.name) if a.name else slug(os.path.splitext(os.path.basename(src))[0])}"
     vals = dict(QUALITY[a.quality], **{k: v for k, v in (("faces", a.faces), ("texture", a.texture)) if v is not None})
-    vals.update(prof.get("set", {}), seed=seed, prefix=prefix, image="pending", remove_background=not a.keep_background)
+    vals.update(prof.get("set", {}), seed=seed, prefix=prefix, remove_background=not a.keep_background, **{k: "pending" for k in srcs})
     wf = apply_recipe(recipe, vals)
     log = lambda s: print(f"  {s}", flush=True)
     log(f"{name}: {a.quality} quality ({vals['faces']} faces, upsample {vals['resolution']}, texture {vals['texture']}), seed {seed}")
+    uploads = [(recipe["inputs"][k]["set"][0][0], f) for k, f in srcs.items()]
     info = {"kind": "3d", "model": name, "model_file": prof["file"], "image": a.image[0], "seed": seed, "quality": a.quality,
+            **({"views": dict(zip(slots, a.image))} if len(slots) > 1 else {}),
             **{k: vals[k] for k in ("faces", "resolution", "texture", "remove_background")}, "recipe": prof["workflow"],
-            "uploads": [[recipe["inputs"]["image"]["set"][0][0], src]]}
+            "uploads": [list(u) for u in uploads]}
     JOB["pending"] = (info, wf, prefix)          # a stop before the end still gets a record (entry)
-    status, files, err = job_3d(wf, [(recipe["inputs"]["image"]["set"][0][0], src)], info, a.timeout or 2400, log)
+    status, files, err = job_3d(wf, uploads, info, a.timeout or 2400, log)
     return report_3d(status, files, info, wf, err, prefix, seed, log)
 
 

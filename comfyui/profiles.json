@@ -175,6 +175,15 @@
       "about": "TRELLIS.2 (Microsoft): one picture to a textured 3D model; fallback to pixal3d",
       "licence": "MIT (image encoder: Meta DINOv3 licence)",
       "source": "huggingface.co/Comfy-Org/TRELLIS.2"
+    },
+    "pixal3d-mv": {
+      "arch": "pixal3d",
+      "kind": "3d",
+      "file": "pixal3d_multiview_int8_convrot.safetensors",
+      "workflow": "recipes/multiview-to-3d.json",
+      "about": "Pixal3D multi-view: up to 4 views (front, left, back, right - e.g. a character turnaround) to one textured 3D model",
+      "licence": "MIT (image encoder: Meta DINOv3 licence)",
+      "source": "huggingface.co/Comfy-Org/Pixal3D (ComfyUI template 3d_pixal3d_multi_views)"
     }
   },
   "edit_model": "flux3",

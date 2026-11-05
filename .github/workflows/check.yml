@@ -25,3 +25,5 @@ jobs:
         run: bash _tests/models_test.sh
       - name: Module contract (real tests, checksums for code-carrying model files)
         run: bash _tests/contract_check.sh
+      - name: Rig contract and CLI (offline)
+        run: bash rig/test.sh

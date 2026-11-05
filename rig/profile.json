@@ -1,0 +1,13 @@
+{
+  "id": "unirig-humanoid-v1",
+  "backend": "unirig",
+  "model_config": "unirig_ar_350m_1024_81920_float32.yaml",
+  "seed": 12345,
+  "inference_faces": 50000,
+  "smooth_iterations": 256,
+  "max_peak_vram_mib": 11264,
+  "tasks": {
+    "skeleton": "quick_inference_skeleton_articulationxl_ar_256.yaml",
+    "skin": "quick_inference_unirig_skin.yaml"
+  }
+}

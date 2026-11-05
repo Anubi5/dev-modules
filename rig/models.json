@@ -1,0 +1,9 @@
+{
+  "source": {"repository": "https://github.com/VAST-AI-Research/UniRig", "revision": "6793c6640ff01c8fb389f3993434124bb43d2933"},
+  "weights": {"repository": "VAST-AI/UniRig", "revision": "36842e2b5947e9e60f89275b83208c8e74071c63",
+    "files": [
+      {"path": "skeleton/articulation-xl_quantization_256/model.ckpt", "sha256": "d8cf9b42d56e7bc316d293597ecf8c4c39a8631cdd44a261ecf388242fabd0f4"},
+      {"path": "skin/articulation-xl/model.ckpt", "sha256": "9d40cf42fb9d4c10d8b373d9f4f557c6fbbc5ebacae7ae6b3dce5a0d8a18bc33"}
+    ]
+  }
+}

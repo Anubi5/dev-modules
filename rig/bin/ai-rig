@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+MOD=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+export MOD
+P="$MOD/app/venv/bin/python"
+[ -x "$P" ] || { echo "Rig runtime missing; update the rig module" >&2; exit 1; }
+export PYTHONDONTWRITEBYTECODE=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HUB_DISABLE_IMPLICIT_TOKEN=1 WANDB_MODE=disabled
+exec "$P" "$MOD/cli.py" "$@"

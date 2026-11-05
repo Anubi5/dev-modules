@@ -190,8 +190,12 @@ def failure_tests():
            Blender and an exception in the checks each end the job with the right state, a record and the chat
            server given back. @return list of problems
     """
+    import signal
+    import subprocess
     import tempfile
+    import time
     bad, quiet = [], lambda t: None
+    saved_term = signal.getsignal(signal.SIGTERM)
     # 1. a multi-model recipe is reduced to the chosen model
     threed = {n: p for n, p in gen.PROFILES["models"].items() if p.get("kind") == "3d"}
     for name, p in threed.items():
@@ -278,6 +282,57 @@ def failure_tests():
             run("blender-crash", "check_failed", result=(True, [good], ""))
             if resumed != ["paused"]:
                 bad.append("self-test: the chat server was not given back after Blender crashed")
+            # an old Blender wrapper (no lock hand-over) fails the check at once instead of waiting for the held lock
+            gen.subprocess.run = saved[10]
+            old_wrapper = os.path.join(d, "old-blender")
+            open(old_wrapper, "w").write("#!/bin/sh\nexec 9>/tmp/ai-gpu.lock; flock 9\n")
+            gen.shutil.which = lambda n: old_wrapper if n == "blender" else saved[9](n)
+            called = []
+            gen.subprocess.run = lambda *a, **k: called.append(a) or type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+            info = {}
+            with open(os.path.join(d, "lock"), "w") as lk:
+                st, _ = gen.check_3d(good, info, quiet, lk)
+            if st != "check_failed" or called or "too old" not in str(info.get("blender")):
+                bad.append(f"self-test: an old Blender wrapper gave {st} (ran: {bool(called)}), needs an immediate check_failed")
+            gen.subprocess.run = saved[10]
+            # a stop at any point leaves the job "interrupted"; a job whose process is gone reads as abandoned
+            def stop_while_preparing():
+                gen.JOB.pop("ledger", None); gen.job_state("preparing")
+                os.kill(os.getpid(), signal.SIGTERM); time.sleep(5)
+            with contextlib.redirect_stderr(io.StringIO()):
+                code = gen.entry(stop_while_preparing)
+            j = json.load(open(os.path.join(gen.JOBS, gen.JOB["ledger"]["id"] + ".json")))
+            if code != 130 or j["state"] != "interrupted":
+                bad.append(f"self-test: a job stopped (SIGTERM) while preparing ended as {j['state']}, exit {code} (needs interrupted, 130)")
+            if signal.getsignal(signal.SIGTERM) is not signal.SIG_DFL and signal.getsignal(signal.SIGTERM) != saved_term:
+                bad.append("self-test: entry() left its signal handler installed")
+            # stopped while ComfyUI runs our job: the job is cancelled there before the lock is given back
+            api, peak = gen.api, gen.Peak
+            calls = []
+
+            def fake_api(path, data=None, *a, **k):
+                calls.append(path)
+                if path == "/prompt":
+                    return {"prompt_id": "p1"}
+                if path == "/queue":
+                    return {"queue_running": [[0, "p1"]], "queue_pending": []}
+                if path.startswith("/history"):
+                    os.kill(os.getpid(), signal.SIGTERM); time.sleep(5)
+                return {}
+            gen.api, gen.Peak = fake_api, lambda: type("P", (), {"start": lambda s: None, "peak": 0, "go": True})()
+            try:
+                with contextlib.redirect_stderr(io.StringIO()):
+                    gen.entry(lambda: (gen.JOB.pop("ledger", None), gen.run_job({}, 60, quiet)))
+            finally:
+                gen.api, gen.Peak = api, peak
+            if "/interrupt" not in calls:
+                bad.append("self-test: a job stopped while ComfyUI ran it was not cancelled there")
+            dead = subprocess.Popen(["true"]); dead.wait()
+            for state, pid, want in (("running", dead.pid, "abandoned"), ("running", os.getpid(), "running"),
+                                     ("succeeded", dead.pid, "succeeded")):
+                v = gen.job_view({"id": "x", "state": state, "pid": pid, "started": gen.proc_start(pid) or 1})
+                if v["state"] != want:
+                    bad.append(f"self-test: a {state} job of a {'dead' if pid != os.getpid() else 'live'} process reads as {v['state']} (needs {want})")
         finally:
             (gen.OUTPUT, gen.WORK, gen.assets.CACHE, gen.JOBS, gen.generate, gen.gpu_lease, gen.check_3d,
              gen.chat_pause, gen.chat_resume, gen.shutil.which, gen.subprocess.run) = saved

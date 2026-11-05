@@ -21,11 +21,13 @@ import argparse
 import contextlib
 import datetime
 import fcntl
+import glob
 import json
 import os
 import random
 import re
 import shutil
+import signal
 import subprocess
 import sys
 
@@ -1042,6 +1044,12 @@ def run_job(wf, timeout, log=print):
             return ok, files, err
         cancel(pid, log)
         return False, [], f"timeout after {timeout} s (our job cancelled)"
+    except KeyboardInterrupt:                    # stopped (Ctrl+C, SIGTERM, SIGHUP): our ComfyUI job must not keep the GPU
+        try:
+            cancel(pid, log)
+        except Exception:
+            pass
+        raise
     finally:
         mon.go = False
 
@@ -1055,7 +1063,8 @@ def job_state(state, **kv):
            running (with ComfyUI's prompt id), succeeded / failed / cancelled / interrupted / unknown - so a job whose
            client died can still be traced and reconciled. @return the job dict
     """
-    j = JOB.setdefault("ledger", {"id": f"{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"})
+    j = JOB.setdefault("ledger", {"id": f"{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}",
+                                  "pid": os.getpid(), "started": proc_start(os.getpid())})
     j.update(kv, state=state, at=datetime.datetime.now().isoformat(timespec="seconds"))
     try:
         os.makedirs(JOBS, exist_ok=True)
@@ -1066,6 +1075,62 @@ def job_state(state, **kv):
     except OSError:
         pass
     return j
+
+
+FINAL = ("succeeded", "failed", "check_failed", "check_skipped", "cancelled", "interrupted", "unknown")
+
+
+def proc_start(pid):
+    """! @brief A process's start time (clock ticks since boot; with the pid it names one process run) or None. """
+    try:
+        return int(open(f"/proc/{pid}/stat").read().rsplit(")", 1)[1].split()[19])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def job_view(j):
+    """!
+    @brief A job file as it stands now: a job that is not finished but whose process is gone (killed, window closed,
+           machine restarted) is "abandoned" - it will never finish. @return the job dict (a copy)
+    """
+    j = dict(j)
+    if j.get("state") not in FINAL and j.get("pid") and proc_start(j["pid"]) != j.get("started"):
+        j["was"], j["state"] = j.get("state"), "abandoned"
+    return j
+
+
+def jobs_cmd(argv):
+    """! @brief ai gen jobs [N] [--json]: the newest jobs with their state now (abandoned = its process is gone). """
+    n = next((int(x) for x in argv if x.isdigit()), 10)
+    fs = sorted(glob.glob(os.path.join(JOBS, "*.json")))[-n:]
+    out = [job_view(json.load(open(f))) for f in fs]
+    if "--json" in argv:
+        print(json.dumps(out, indent=1)); return 0
+    for j in out:
+        print(f"{j['id']}  {j['state']:<13} {(j.get('was') and 'was ' + j['was'] + ' ') or ''}{(j.get('error') or '')[:90]}")
+    return 0
+
+
+def entry(fn=None):
+    """!
+    @brief Runs a command so that a stop at any point - Ctrl+C, the terminal closing (SIGHUP), a kill (SIGTERM) -
+           leaves the job file "interrupted" instead of mid-way (SIGKILL cannot be caught: job_view shows those as
+           abandoned). @return exit code
+    """
+    def stop(sig, frame):
+        raise KeyboardInterrupt(signal.Signals(sig).name)
+    old = {s: signal.signal(s, stop) for s in (signal.SIGTERM, signal.SIGHUP)}
+    try:
+        return (fn or main)()
+    except KeyboardInterrupt as e:
+        j = JOB.get("ledger")
+        if j and j.get("state") not in FINAL:
+            job_state("interrupted", error=f"stopped ({e or 'Ctrl+C'}) while {j.get('state')}")
+        print("stopped", file=sys.stderr)
+        return 130
+    finally:
+        for s, h in old.items():
+            signal.signal(s, h)
 
 
 def wf_sha(wf):
@@ -1354,6 +1419,7 @@ HELP = """ai gen - images, edits and short videos on the local GPU (one job at a
                                                            remember what the LoRA's card says (used automatically)
   ai gen verify                                            re-read files used before: same content?
   ai gen rerun FILE.workflow.json [--name N]               run a saved workflow again, exactly
+  ai gen jobs [N] [--json]                                 the newest jobs and their state (abandoned = process gone)
 
   --model takes a profile or any model file: ComfyUI's own detection tells what kind it is (from the file's header)
   and it starts from that kind's profile; ai gen note FILE [--sampler --steps --cfg ...] adds its card's settings.
@@ -1511,6 +1577,15 @@ def check_status(glb_info, blender_present, blender_rc=None, mesh=None, renders=
     return "succeeded"
 
 
+def handover_ok(blender):
+    """! @brief Whether the blender command accepts the GPU lock handed over by its caller (AI_GPU_LOCK_FD). """
+    try:
+        with open(blender, "rb") as f:
+            return b"AI_GPU_LOCK_FD" in f.read(1 << 16)
+    except OSError:
+        return False
+
+
 def check_3d(glb, info, log=print, lock=None):
     """!
     @brief Required checks of a 3D result: GLB header, then (Blender module) import, mesh measures, 4 renders and
@@ -1519,6 +1594,10 @@ def check_3d(glb, info, log=print, lock=None):
     """
     info["glb"] = glb_stats(glb)
     blender, views, rc, mesh, chk_rc = shutil.which("blender"), [], None, None, None
+    if blender and lock and not handover_ok(blender):
+        info["blender"] = {"ok": False, "error": "the Blender module is too old to take over the GPU lock this job holds "
+                                                 "(it would wait for it until the time limit): ai mod update blender"}
+        return check_status(info["glb"], True, None, info["blender"], 0, None), []
     if info["glb"].get("valid") and info["glb"].get("triangles") and blender:
         log("checking the model in Blender (import, mesh, 4 renders)")
         try:
@@ -1788,6 +1867,8 @@ def main():
     """
     if sys.argv[1:2] == ["rerun"]:
         return rerun(sys.argv[2:])
+    if sys.argv[1:2] == ["jobs"]:
+        return jobs_cmd(sys.argv[2:])
     if sys.argv[1:2] and sys.argv[1] in ("list", "show", "check", "note", "verify", "names"):
         return asset_cmd(sys.argv[1:])
     ap = argparse.ArgumentParser(description="Generate an image or video on the GPU (hands the GPU over from the chat model).")
@@ -1986,4 +2067,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(entry())

@@ -1126,6 +1126,14 @@ def entry(fn=None):
         j = JOB.get("ledger")
         if j and j.get("state") not in FINAL:
             job_state("interrupted", error=f"stopped ({e or 'Ctrl+C'}) while {j.get('state')}")
+        if JOB.get("pending"):                   # the record every outcome gets (a second Ctrl+C skips it)
+            info, wf, prefix = JOB["pending"]
+            try:
+                rec = write_record([], info, wf, "interrupted", (JOB.get("ledger") or {}).get("error") or "stopped", prefix,
+                                   lambda t: None)
+                print(f"  record: {rec}", file=sys.stderr)
+            except (OSError, ValueError):
+                pass
         print("stopped", file=sys.stderr)
         return 130
     finally:
@@ -1350,16 +1358,17 @@ def write_record(files, info, wf=None, status="succeeded", error=None, prefix=No
     """!
     @brief Saves "<output>.json" next to the main output for every outcome - succeeded, failed, check failed: what was
            asked, what was used (with SHA-256 of every model file and input picture), the job id, how long it took.
-           A failed job without outputs is recorded as "<prefix>_failed_<job id>.json".
+           A job without outputs is recorded as "<prefix>_<status>_<job id>.json" (failed, interrupted).
     @param files  Output paths.  @param info  Request details.  @param wf  The workflow (saved beside it).
     @param status  Outcome.  @param error  Error text.  @param prefix  "<date>/<name>" for a record without outputs.
     @return Path of the record, or None.
     """
+    JOB.pop("pending", None)
     main = [f for f in files if not re.search(r"_(base|pose|hires|upscaled|view_\w+)_?\d*_?\.", os.path.basename(f))] or files[:1]
     job = JOB.get("ledger", {}).get("id", time.strftime("%Y%m%d-%H%M%S"))
     if not main and not prefix:
         return None
-    base = os.path.splitext(main[0])[0] if main else os.path.join(OUTPUT, f"{prefix}_failed_{job}")
+    base = os.path.splitext(main[0])[0] if main else os.path.join(OUTPUT, f"{prefix}_{status}_{job}")
     os.makedirs(os.path.dirname(base), exist_ok=True)
     rec = {"time": datetime.datetime.now().isoformat(timespec="seconds"), "status": status, "error": error or None,
            "job": job, **info, "outputs": files, "duration_s": JOB.get("secs"), "peak_gpu_gb": JOB.get("peak_gb")}
@@ -1525,6 +1534,7 @@ def gen3d(a):
     info = {"kind": "3d", "model": name, "model_file": prof["file"], "image": a.image[0], "seed": seed, "quality": a.quality,
             **{k: vals[k] for k in ("faces", "resolution", "texture", "remove_background")}, "recipe": prof["workflow"],
             "uploads": [[recipe["inputs"]["image"]["set"][0][0], src]]}
+    JOB["pending"] = (info, wf, prefix)          # a stop before the end still gets a record (entry)
     status, files, err = job_3d(wf, [(recipe["inputs"]["image"]["set"][0][0], src)], info, a.timeout or 2400, log)
     return report_3d(status, files, info, wf, err, prefix, seed, log)
 
@@ -1848,6 +1858,7 @@ def rerun(argv):
     info = {k: v for k, v in old.items() if k not in ("time", "status", "error", "job", "outputs", "duration_s", "peak_gpu_gb",
                                                        "workflow", "workflow_sha256", "inputs_sha256", "glb", "blender", "renders_check")}
     info.update(rerun_of=p, drift=drift or None)
+    JOB["pending"] = (info, wf, prefix)
     if old.get("kind") == "3d":
         status, files, err = job_3d(wf, uploads, info, a.timeout, log)
         return report_3d(status, files, info, wf, err, prefix, old.get("seed", 0), log)
@@ -2032,6 +2043,8 @@ def main():
                 "steps": a.steps or 20, "frames": frames}
     log = lambda s: print(f"  {s}", flush=True)
     t_start = time.time()
+    info["uploads"] = [[n, s] for n, s in uploads]
+    JOB["pending"] = (info, wf, prefix)
     ok, files, err = generate(wf, limit, log=log, uploads=uploads)
     if not ok and re.search(r"read_file_slice|HostBuffer|deserializ|Unable to load|out of memory", err or "", re.I):
         # model file read from D: failed (seen right after the chat model unloaded, and mid-job after a pose preview
@@ -2040,7 +2053,6 @@ def main():
         ok, files, err = generate(wf, limit, log=log, uploads=uploads)
     if err:
         print(f"  error: {err}")
-    info["uploads"] = [[n, s] for n, s in uploads]
     rec = write_record(files, info, wf, "succeeded" if ok else "failed", err, prefix)
     if ok and a.kind != "video" and info.get("loras"):       # ComfyUI's verdict: did it apply every LoRA layer?
         dropped = lora_keys_dropped(t_start)

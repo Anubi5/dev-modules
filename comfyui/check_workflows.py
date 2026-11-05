@@ -298,12 +298,16 @@ def failure_tests():
             # a stop at any point leaves the job "interrupted"; a job whose process is gone reads as abandoned
             def stop_while_preparing():
                 gen.JOB.pop("ledger", None); gen.job_state("preparing")
+                gen.JOB["pending"] = ({"kind": "image"}, {"1": {"class_type": "SaveImage", "inputs": {}}}, "2026-01-01/stop")
                 os.kill(os.getpid(), signal.SIGTERM); time.sleep(5)
             with contextlib.redirect_stderr(io.StringIO()):
                 code = gen.entry(stop_while_preparing)
             j = json.load(open(os.path.join(gen.JOBS, gen.JOB["ledger"]["id"] + ".json")))
             if code != 130 or j["state"] != "interrupted":
                 bad.append(f"self-test: a job stopped (SIGTERM) while preparing ended as {j['state']}, exit {code} (needs interrupted, 130)")
+            rec = os.path.join(d, "2026-01-01", f"stop_interrupted_{j['id']}.json")
+            if not os.path.exists(rec) or json.load(open(rec)).get("status") != "interrupted":
+                bad.append("self-test: a stopped job got no record (needs <prefix>_interrupted_<job>.json)")
             if signal.getsignal(signal.SIGTERM) is not signal.SIG_DFL and signal.getsignal(signal.SIGTERM) != saved_term:
                 bad.append("self-test: entry() left its signal handler installed")
             # stopped while ComfyUI runs our job: the job is cancelled there before the lock is given back

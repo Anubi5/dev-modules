@@ -10,6 +10,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from validate_contract import load_contract, validate_summary
 from orientation import verify_facing, verify_named_sides
+from render_content import render_metrics
 
 
 def main():
@@ -79,12 +80,9 @@ def main():
             image = bpy.data.images.load(file, check_existing=False)
             rgba = np.empty(len(image.pixels), dtype=np.float32)
             image.pixels.foreach_get(rgba); rgba = rgba.reshape((-1,4))
-            visible = rgba[:,3] > .05
-            coverage = float(np.mean(visible))
-            rgb_std = float(np.std(rgba[visible,:3])) if np.any(visible) else 0
-            ok = coverage > .02 and rgb_std > .005
-            summary["render_checks"].append(dict(file=file, coverage=coverage, rgb_std=rgb_std, ok=ok))
-            if not ok: summary["errors"].append("Blank/empty render: " + Path(file).name)
+            metrics = render_metrics(rgba)
+            summary["render_checks"].append(dict(file=file, **metrics))
+            if not metrics["ok"]: summary["errors"].append("Blank/empty render: " + Path(file).name)
             bpy.data.images.remove(image)
     summary["ok"] = not summary["errors"]
     args.output.write_text(json.dumps(summary, indent=2))

@@ -24,6 +24,16 @@ the 2.5 limit. Visible shoulder/sleeve deformation remains a quality blocker
 module source changed during these sessions. Do not install this revision in
 production; broader fixture coverage and automatic recovery remain outstanding.
 
+The F6 investigation traced the visible tears to joint smoothing on disconnected
+UV/normal-split vertices: coincident copies start with equal weights and diverge
+during smoothing, before Unreal export. Welding before smoothing preserves the
+reference's triangles and face-corner UV data and closes the tears in controlled
+retained-pose renders, but **is not an accepted fix**: walk/jog p99.9 stretch reaches
+2.678/4.403 against the unchanged 2.5 limit. Post-smoothing weight matching and a
+512-iteration welded profile also fail existing gates. These candidates were
+rejected; executable module code is unchanged. F6 remains open; do not merge or
+install a visually improved candidate that fails the numerical contract.
+
 ## Commands
 
 Requires the Blender module, `uv`, Git, Python 3.11 and a CUDA 12.1 compatible GPU.

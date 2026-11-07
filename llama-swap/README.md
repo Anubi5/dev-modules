@@ -6,8 +6,9 @@ unloads when idle. Chat page: http://127.0.0.1:8080/upstream/qwen3.5-9b/ (`dev c
 - Models: `models.json` (repo or search, quantisation, llama-server args). Add a model = add an entry, push, `dev mod update llama-swap`.
 - Model files: `D:\AI\models\llm\<id>\` only (read-only at `/models/llm`); `$MOD/models/models.json` records which files
   each model uses. Downloads need D: writable, so run `dev mod add|update llama-swap` from Windows.
-  Exception: `"local_copy": true` (the 35B) also keeps a copy inside the distro - it reads its MoE experts from the file
-  while answering, ~2.5x slower from D:.
+  No model keeps a copy inside the distro (owner decision, 7 Nov 2026: every weight only on D:). `"local_copy": true`
+  would add one for speed - the 35B MoE answers ~2.5x slower from D: - and is deliberately unused. The next update
+  removes an existing copy once its SHA-256 matches the file on D:.
 - MoE offload: `MOE_CPU` from config.ps1, or tune: `cd ~/.local/share/modules/llama-swap && app/venv/bin/python tune_moe.py` (service stopped).
 - `test.sh --full` = answers, speed and vision of every model (report in `$MOD/bench-*.md`).
 - llama.cpp is built from a pinned release (`LLAMA_CPP_TAG` in install.sh); raising it rebuilds on the next update (15-30 min).

@@ -1,7 +1,13 @@
 {
   "schema_version": 1,
   "id": "humanoid-unreal-v1",
-  "status": "reference-100k-profile-validated",
+  "status": "experimental-reference-numerical-validated",
+  "quality_limitations": {
+    "F6": "OPEN — DEFERRED",
+    "visual": "not_established",
+    "generalization": "not_established",
+    "automatic_crash_recovery": "not_established"
+  },
   "scope": "Adult fictional humanoids; creatures require a separate contract",
   "required_bones": [
     "root", "pelvis", "spine_01", "spine_02", "spine_03", "neck_01", "head",

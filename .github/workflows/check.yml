@@ -21,6 +21,8 @@ jobs:
           ! grep -q "undefined name" pf.txt
       - name: ai gen workflows match the pinned ComfyUI node definitions
         run: python3 comfyui/check_workflows.py
+      - name: Generation capability compatibility (offline)
+        run: python3 -m unittest discover -s comfyui -p 'test_generation.py'
       - name: Model files (copies, conflicts, moves)
         run: bash _tests/models_test.sh
       - name: Module contract (real tests, checksums for code-carrying model files)

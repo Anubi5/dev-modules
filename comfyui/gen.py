@@ -39,6 +39,12 @@ import urllib.error
 import urllib.request
 import uuid
 
+from generation.graph import (apply_recipe, _link, sinks, prune, apply_loras, use_skeleton)  # noqa: E402,F401
+from generation.models import (PROFILES, NEGATIVE, profile, negative_for, arch_base, archs)  # noqa: E402,F401
+from generation.image import (FACE_DET, HAND_DET, POSE_CN, detailer, sdxl, _loaders, _finish, flux3, anima, zimage, moss, fibo2, POSE_PROMPT, _dwpose, pose_wf)  # noqa: E402,F401
+from generation.video import (wan)  # noqa: E402,F401
+from generation.mesh import (QUALITY, glb_stats, EXIT, check_status)  # noqa: E402,F401
+
 SETUP = "/opt/ai/setup"
 NVSMI = "/usr/lib/wsl/lib/nvidia-smi"
 LOCK = "/tmp/ai-gpu.lock"
@@ -131,23 +137,6 @@ def slug(name):
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:40] or "untitled"
 
 
-PROFILES = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles.json")))
-NEGATIVE = PROFILES["styles"]["photo"]["negative"]            # default style; kept as a name for the tests
-
-
-def profile(name=None):
-    """! @brief Settings for a model from profiles.json (default model when name is None). @return dict incl. "name" """
-    name = name or PROFILES["default"]
-    if name not in PROFILES["models"]:
-        sys.exit(f"--model {name}: unknown. Models: {', '.join(PROFILES['models'])}")
-    return dict(PROFILES["models"][name], name=name)
-
-
-def negative_for(prof, style):
-    """! @brief Default negative prompt for a model and style (the model's own, else the style's). @return text """
-    return prof.get("negative", {}).get(style, PROFILES["styles"][style]["negative"])
-
-
 def is_sdxl(path):
     """! @brief Reads a .safetensors header and tells whether it is an SDXL checkpoint (has SDXL's 2nd text encoder). """
     try:
@@ -164,99 +153,13 @@ def find_checkpoint(name, log=print):
     return resolve_model(name, log, folders=("checkpoints",))
 
 
-def arch_base(arch):
-    """! @brief The shipped profile an architecture's other files start from (default_sdxl for SDXL, else the first). """
-    if arch == "sdxl":
-        return profile(PROFILES.get("default_sdxl", "realvis"))
-    name = next((n for n, p in PROFILES["models"].items() if p["arch"] == arch), None)
-    if not name:
-        sys.exit(f"architecture {arch!r} is not wired into ai gen. Known: {', '.join(sorted(archs()))}")
-    return profile(name)
-
-
-def archs():
-    """! @brief Image architectures ai gen has workflows for (3D models run through ai gen 3d). """
-    return {p["arch"] for p in PROFILES["models"].values() if p.get("kind") != "3d"}
-
-
 RECIPES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "recipes")
 
 
 def load_recipe(name):
     """! @brief A recipe: a tested ComfyUI workflow (API format) with declared inputs. @return dict """
-    return json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), name)))
-
-
-def apply_recipe(recipe, values):
-    """!
-    @brief Fills a recipe's declared inputs and nothing else. Each input names the node inputs it sets
-           ([node, input] or [node, input, offset] for seeds that differ per stage); values outside an input's
-           declared range or choices are refused; an input with "drop" that is not given is unlinked there (a missing
-           optional view), and prune() then removes what only it used. @param values  {input name: value}  @return workflow (a copy)
-    """
-    wf = json.loads(json.dumps(recipe["workflow"]))
-    outputs = sinks(wf)                          # taken before any input is unlinked
-    for name, spec in recipe["inputs"].items():
-        v = values.get(name, spec.get("default"))
-        if v is None:
-            if "drop" in spec:                   # an optional input not given (a view): unlinked, its branch pruned below
-                node, key = spec["drop"]
-                wf[node]["inputs"].pop(key, None)
-            continue
-        if "choices" in spec and v not in spec["choices"]:
-            sys.exit(f"{name} {v}: choose one of {', '.join(map(str, spec['choices']))}")
-        if ("min" in spec and v < spec["min"]) or ("max" in spec and v > spec["max"]):
-            sys.exit(f"{name} {v}: must be {spec.get('min')}-{spec.get('max')}")
-        for node, key, *off in spec["set"]:
-            wf[node]["inputs"][key] = v + off[0] if off else v
-    return prune(wf, outputs)
-
-
-def _link(v):
-    return isinstance(v, list) and len(v) == 2 and isinstance(v[0], str)
-
-
-def sinks(wf):
-    """! @brief The nodes nothing reads from: a workflow's outputs (save and preview nodes). """
-    return [k for k in wf if k not in {v[0] for n in wf.values() for v in n["inputs"].values() if _link(v)}]
-
-
-def prune(wf, outputs=None):
-    """!
-    @brief Reduces a workflow to what its chosen settings use: a switch whose choice is fixed (a constant, or a
-           Primitive node's value) is replaced by a direct link to the chosen input, then every node no output depends on
-           is dropped. So a recipe holding several models needs, loads and records only the selected one. Outputs are
-           the nodes nothing reads from in the full workflow (outputs: given when inputs were unlinked since); switches
-           decided at run time stay. @return wf (changed)
-    """
-    outputs = sinks(wf) if outputs is None else outputs
-
-    def choice(k):
-        n = wf.get(k, {})
-        if n.get("class_type") != "ComfySwitchNode":
-            return None
-        s = n["inputs"].get("switch")
-        if _link(s):
-            p = wf.get(s[0], {})
-            s = p["inputs"].get("value") if p.get("class_type", "").startswith("Primitive") else None
-        return None if not isinstance(s, bool) else n["inputs"].get("on_true" if s else "on_false")
-
-    for n in wf.values():
-        for key, v in n["inputs"].items():
-            seen = set()
-            while _link(v) and v[1] == 0 and v[0] not in seen and _link(choice(v[0])):
-                seen.add(v[0]); v = choice(v[0])
-            n["inputs"][key] = v
-    keep, todo = set(), list(outputs)
-    while todo:
-        k = todo.pop()
-        if k in keep or k not in wf:
-            continue
-        keep.add(k)
-        todo += [v[0] for v in wf[k]["inputs"].values() if _link(v)]
-    for k in set(wf) - keep:
-        del wf[k]
-    return wf
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), name)) as stream:
+        return json.load(stream)
 
 
 def resolve_model(name, log=print, folders=("checkpoints", "diffusion_models")):
@@ -468,294 +371,6 @@ def resolve_loras(a, prof, neg, log=print):
     return loras, prompt, neg, prof, checks
 
 
-def apply_loras(wf, loras, arch):
-    """!
-    @brief Chains LoRA loaders after the model loader: everything that used the base model and text encoder now uses the
-           LoRA'd ones (sampler, pose/face nodes, repairs, upscale). SDXL: checkpoint outputs "4"/0,1; the newer models:
-           "1" (model) and "2" (text encoder). @param loras  [(file, strength)]  @return the workflow, changed in place
-    """
-    if not loras:
-        return wf
-    model, clip = (["4", 0], ["4", 1]) if arch == "sdxl" else (["1", 0], ["2", 0])
-    base_model, base_clip = model, clip
-    ids = []
-    for i, (name, strength) in enumerate(loras):
-        nid = f"6{i}"
-        wf[nid] = {"class_type": "LoraLoader", "inputs": {"model": model, "clip": clip, "lora_name": name,
-                                                          "strength_model": strength, "strength_clip": strength}}
-        model, clip = [nid, 0], [nid, 1]
-        ids.append(nid)
-    for nid, node in wf.items():
-        if nid in ids:
-            continue
-        for k, v in node["inputs"].items():
-            if v == base_model:
-                node["inputs"][k] = model
-            elif v == base_clip:
-                node["inputs"][k] = clip
-    return wf
-
-
-POSE_CN = "controlnet-union-sdxl-promax.safetensors"
-FACE_DET, HAND_DET = "bbox/face_yolov8m.pt", "bbox/hand_yolov8s.pt"
-
-
-def detailer(image, model, pos, neg, detector, seed, denoise, prof):
-    """! @brief FaceDetailer inputs (Impact Pack) that redraw what the detector finds. @return inputs dict """
-    return {"image": image, "model": model, "clip": ["4", 1], "vae": ["4", 2], "guide_size": 512, "guide_size_for": True,
-            "max_size": 1024, "seed": seed, "steps": 20, "cfg": prof["cfg"], "sampler_name": prof["sampler"],
-            "scheduler": prof["scheduler"],
-            "positive": pos, "negative": neg, "denoise": denoise, "feather": 5, "noise_mask": True, "force_inpaint": True,
-            "bbox_threshold": 0.5, "bbox_dilation": 10, "bbox_crop_factor": 3.0, "sam_detection_hint": "center-1",
-            "sam_dilation": 0, "sam_threshold": 0.93, "sam_bbox_expansion": 0, "sam_mask_hint_threshold": 0.7,
-            "sam_mask_hint_use_negative": "False", "drop_size": 10, "bbox_detector": detector, "wildcard": "", "cycle": 1,
-            "inpaint_model": False, "noise_mask_feather": 20, "tiled_encode": False, "tiled_decode": False}
-
-
-def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix, pose=None, face=None, fix_faces=False,
-         fix_hands=False, hires=False, pose_strength=0.65, face_weight=0.65, prof=None, save_base=None):
-    """!
-    @brief SDXL text-to-image workflow with optional pose control, a face to keep, face/hand repair and upscaling.
-    @param prompt    What to draw.  @param negative  What to avoid.  @param seed  Random seed.
-    @param steps     Sampling steps.  @param width  Image width.  @param height  Image height.
-    @param upscale   Also save a fast 2x copy (4x-UltraSharp).  @param prefix  Output prefix "<date>/<name>".
-    @param pose      Uploaded image name: its body pose (DWPose skeleton) steers the picture (union ControlNet).
-    @param face      Uploaded image name: this face is kept (IPAdapter FaceID Plus v2, needs InsightFace).
-    @param fix_faces Redraw detected faces (FaceDetailer).  @param fix_hands  Redraw detected hands.
-    @param hires     Also save a detailed 2x copy (Ultimate SD Upscale: tiles redrawn).
-    @param pose_strength  How strictly the pose is followed (0.3-1.0).  @param face_weight  How strongly the face is kept.
-    @param prof      Model settings from profiles.json (default model when None).
-    @param save_base Also save the image before repair/upscale ("<name>_base"); default: when repairing or upscaling.
-    @return Workflow in ComfyUI API format.
-    """
-    prof = prof or profile(PROFILES.get("default_sdxl", "realvis"))
-    if prof["arch"] != "sdxl":
-        raise ValueError(f"sdxl() needs an SDXL model, got {prof['name']} ({prof['arch']})")
-    S, K, C = prof["sampler"], prof["scheduler"], prof["cfg"]
-    wf = {
-        "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": prof["file"]}},
-        "5": {"class_type": "EmptyLatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
-        "6": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 1], "text": prompt}},
-        "7": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["4", 1], "text": negative}},
-    }
-    model, pos, neg = ["4", 0], ["6", 0], ["7", 0]
-    if face:
-        wf.update({
-            "20": {"class_type": "IPAdapterUnifiedLoaderFaceID", "inputs": {"model": model, "preset": "FACEID PLUS V2",
-                   "lora_strength": 0.6, "provider": "CUDA"}},
-            "21": {"class_type": "LoadImage", "inputs": {"image": face}},
-            "22": {"class_type": "IPAdapterFaceID", "inputs": {"model": ["20", 0], "ipadapter": ["20", 1], "image": ["21", 0],
-                   "weight": face_weight, "weight_faceidv2": 1.0, "weight_type": "linear", "combine_embeds": "concat",
-                   "start_at": 0.0, "end_at": 1.0, "embeds_scaling": "V only"}},
-        })
-        model = ["22", 0]
-    cpos, cneg = pos, neg
-    if pose:
-        wf.update({
-            "30": {"class_type": "LoadImage", "inputs": {"image": pose}},
-            "31": _dwpose(["30", 0], "enable"),
-            "32": {"class_type": "ControlNetLoader", "inputs": {"control_net_name": POSE_CN}},
-            "33": {"class_type": "SetUnionControlNetType", "inputs": {"control_net": ["32", 0], "type": "openpose"}},
-            "34": {"class_type": "ControlNetApplyAdvanced", "inputs": {"positive": pos, "negative": neg, "control_net": ["33", 0],
-                   "image": ["31", 0], "strength": pose_strength, "start_percent": 0.0, "end_percent": 0.75, "vae": ["4", 2]}},
-            "35": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_pose", "images": ["31", 0]}},
-        })
-        cpos, cneg = ["34", 0], ["34", 1]
-    wf.update({
-        "3": {"class_type": "KSampler", "inputs": {"seed": seed, "steps": steps, "cfg": C, "sampler_name": S,
-              "scheduler": K, "denoise": 1.0, "model": model, "positive": cpos, "negative": cneg, "latent_image": ["5", 0]}},
-        "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
-    })
-    image = ["8", 0]
-    if save_base if save_base is not None else (fix_faces or fix_hands or hires):   # keep the original next to the repaired one
-        wf["14"] = {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_base", "images": image}}
-    if fix_faces:   # repairs use the plain prompts (no pose steering on the crops) and the face-keeping model
-        wf["40"] = {"class_type": "UltralyticsDetectorProvider", "inputs": {"model_name": FACE_DET}}
-        wf["41"] = {"class_type": "FaceDetailer", "inputs": detailer(image, model, pos, neg, ["40", 0], seed, 0.35, prof)}
-        image = ["41", 0]
-    if fix_hands:
-        wf["42"] = {"class_type": "UltralyticsDetectorProvider", "inputs": {"model_name": HAND_DET}}
-        wf["43"] = {"class_type": "FaceDetailer", "inputs": detailer(image, model, pos, neg, ["42", 0], seed, 0.45, prof)}
-        image = ["43", 0]
-    wf["9"] = {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix, "images": image}}
-    if upscale or hires:
-        wf["10"] = {"class_type": "UpscaleModelLoader", "inputs": {"model_name": "4x-UltraSharp.safetensors"}}
-    if upscale:
-        wf.update({
-            "11": {"class_type": "ImageUpscaleWithModel", "inputs": {"upscale_model": ["10", 0], "image": image}},
-            "12": {"class_type": "ImageScaleBy", "inputs": {"image": ["11", 0], "upscale_method": "lanczos", "scale_by": 0.5}},
-            "13": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_upscaled", "images": ["12", 0]}},
-        })
-    if hires:
-        wf.update({
-            "50": {"class_type": "UltimateSDUpscale", "inputs": {"image": image, "model": model, "positive": pos, "negative": neg,
-                   "vae": ["4", 2], "upscale_by": 2.0, "seed": seed, "steps": 20, "cfg": C, "sampler_name": S,
-                   "scheduler": K, "denoise": 0.2, "upscale_model": ["10", 0], "mode_type": "Linear", "tile_width": 1024,
-                   "tile_height": 1024, "mask_blur": 12, "tile_padding": 48, "seam_fix_mode": "None", "seam_fix_denoise": 1.0,
-                   "seam_fix_width": 64, "seam_fix_mask_blur": 8, "seam_fix_padding": 16, "force_uniform_tiles": True,
-                   "tiled_decode": False, "batch_size": 1}},
-            "51": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_hires", "images": ["50", 0]}},
-        })
-    return wf
-
-
-def _loaders(prof, clip_type):
-    """! @brief Model, text encoder and VAE loader nodes "1","2","3" for the newer (non-SDXL) architectures. """
-    return {"1": {"class_type": "UNETLoader", "inputs": {"unet_name": prof["file"], "weight_dtype": "default"}},
-            "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": prof["text_encoder"], "type": clip_type, "device": "default"}},
-            "3": {"class_type": "VAELoader", "inputs": {"vae_name": prof["vae"]}}}
-
-
-def _finish(wf, prof, seed, steps, model, pos, neg, latent, prefix, upscale):
-    """! @brief KSampler + decode + save (+ optional fast 2x copy) shared by the newer architectures. """
-    wf.update({
-        "8": {"class_type": "KSampler", "inputs": {"seed": seed, "steps": steps, "cfg": prof["cfg"], "sampler_name": prof["sampler"],
-              "scheduler": prof["scheduler"], "denoise": 1.0, "model": model, "positive": pos, "negative": neg, "latent_image": latent}},
-        "9": {"class_type": "VAEDecode", "inputs": {"samples": ["8", 0], "vae": ["3", 0]}},
-        "10": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix, "images": ["9", 0]}},
-    })
-    if upscale:
-        wf.update({
-            "11": {"class_type": "UpscaleModelLoader", "inputs": {"model_name": "4x-UltraSharp.safetensors"}},
-            "12": {"class_type": "ImageUpscaleWithModel", "inputs": {"upscale_model": ["11", 0], "image": ["9", 0]}},
-            "13": {"class_type": "ImageScaleBy", "inputs": {"image": ["12", 0], "upscale_method": "lanczos", "scale_by": 0.5}},
-            "14": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_upscaled", "images": ["13", 0]}},
-        })
-    return wf
-
-
-def flux3(prompt, seed, steps, width, height, prefix, prof, refs=(), upscale=False, megapixels=1.0):
-    """!
-    @brief FLUX 3 Image Klein (distilled) text-to-image, or editing when reference images are given (BFL/Comfy template:
-           CFG 1, references through ReferenceMultiLatent, the output takes the first reference's size).
-    @param prompt  The full (expanded) caption.  @param refs  Uploaded image names (first = <ref_image_0>).
-    @return Workflow in ComfyUI API format.
-    """
-    wf = _loaders(prof, "flux3")
-    wf.update({"4": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": prompt}},
-               "5": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["4", 0]}}})
-    if not refs:
-        wf["6"] = {"class_type": "EmptyFlux2LatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}}
-        return _finish(wf, prof, seed, steps, ["1", 0], ["4", 0], ["5", 0], ["6", 0], prefix, upscale)
-    rml = {"positive": ["4", 0], "negative": ["5", 0], "vae": ["3", 0], "resolution": "resize", "resolution.megapixels": megapixels}
-    for i, name in enumerate(refs):
-        wf[f"2{i}0"] = {"class_type": "LoadImage", "inputs": {"image": name}}
-        rml[f"images.image{i}"] = [f"2{i}0", 0]
-    wf["7"] = {"class_type": "ReferenceMultiLatent", "inputs": rml}
-    edit = dict(prof, sampler=prof.get("edit_sampler", prof["sampler"]))
-    return _finish(wf, edit, seed, steps, ["1", 0], ["7", 0], ["7", 1], ["7", 2], prefix, upscale)
-
-
-def anima(prompt, negative, seed, steps, width, height, prefix, prof, pose=None, pose_strength=0.8, upscale=False):
-    """!
-    @brief Anima text-to-image (illustration/anime), optionally steered by a pose (DWPose skeleton -> LLLite pose patch).
-    @return Workflow in ComfyUI API format.
-    """
-    wf = _loaders(prof, "stable_diffusion")
-    wf.update({"4": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": prompt}},
-               "5": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": negative}},
-               "6": {"class_type": "EmptyLatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}}})
-    model = ["1", 0]
-    if pose:
-        wf.update({
-            "30": {"class_type": "LoadImage", "inputs": {"image": pose}},
-            "31": _dwpose(["30", 0]),
-            "32": {"class_type": "ModelPatchLoader", "inputs": {"name": prof["pose_patch"]}},
-            "33": {"class_type": "AnimaLLLiteApply", "inputs": {"model": model, "model_patch": ["32", 0], "image": ["31", 0],
-                   "strength": pose_strength, "start_percent": 0.0, "end_percent": 1.0}},
-            "35": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_pose", "images": ["31", 0]}},
-        })
-        model = ["33", 0]
-    return _finish(wf, prof, seed, steps, model, ["4", 0], ["5", 0], ["6", 0], prefix, upscale)
-
-
-def zimage(prompt, seed, steps, width, height, prefix, prof, upscale=False):
-    """!
-    @brief Z-Image Turbo text-to-image (8 steps, CFG 1, AuraFlow sampling shift 3 - official template).
-    @return Workflow in ComfyUI API format.
-    """
-    wf = _loaders(prof, "lumina2")
-    wf.update({"4": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": prompt}},
-               "5": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["4", 0]}},
-               "6": {"class_type": "EmptySD3LatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
-               "7": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["1", 0], "shift": prof.get("shift", 3.0)}}})
-    return _finish(wf, prof, seed, steps, ["7", 0], ["4", 0], ["5", 0], ["6", 0], prefix, upscale)
-
-
-def moss(prompt, negative, seed, steps, width, height, prefix, prof, upscale=False):
-    """!
-    @brief MOSS-Image text-to-image (OpenMOSS; Comfy template image_moss_image_t2i: 25 steps, CFG 2.5, er_sde, simple,
-           Qwen3.5-9B text encoder, FLUX.2 small VAE). Good at legible text in images.
-    @return Workflow in ComfyUI API format.
-    """
-    wf = _loaders(prof, "moss_image")
-    wf.update({"4": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": prompt}},
-               "5": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": negative}},
-               "6": {"class_type": "EmptyFlux2LatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}}})
-    return _finish(wf, prof, seed, steps, ["1", 0], ["4", 0], ["5", 0], ["6", 0], prefix, upscale)
-
-
-def fibo2(prompt, seed, steps, width, height, prefix, prof, refs=(), upscale=False):
-    """!
-    @brief Fibo 2.0 (Bria) text-to-image, or editing with up to 4 reference images (Comfy template
-           image_fibo2_edit_turbo_pe: TextEncodeFibo2 makes both conditionings and the latent; empty negative = the
-           null caption it was trained with). With references the result size is Fibo's trained bucket for the
-           first image (about 1 MP); without, width x height.
-    @param refs  Uploaded image names (<image_1>, <image_2> ... in the instruction).
-    @return Workflow in ComfyUI API format.
-    """
-    wf = _loaders(prof, "fibo2")
-    enc = {"clip": ["2", 0], "prompt": prompt, "negative_prompt": "", "vae": ["3", 0],
-           "width": 0 if refs else width, "height": 0 if refs else height, "batch_size": 1}
-    for i, name in enumerate(refs):
-        wf[f"2{i}0"] = {"class_type": "LoadImage", "inputs": {"image": name}}
-        enc[f"images.image_{i + 1}"] = [f"2{i}0", 0]
-    wf["4"] = {"class_type": "TextEncodeFibo2", "inputs": enc}
-    return _finish(wf, prof, seed, steps, ["1", 0], ["4", 0], ["4", 1], ["4", 2], prefix, upscale)
-
-
-POSE_PROMPT = ("wide full body photo of a person {d}, entire body from head to feet in frame, space around the figure, "
-               "plain light grey studio background, even soft light")
-
-
-def _dwpose(image, scale_stick="disable"):
-    """! @brief DWPose skeleton node (body, hands, face) for an image link. """
-    return {"class_type": "DWPreprocessor", "inputs": {"image": image, "detect_hand": "enable", "detect_body": "enable",
-            "detect_face": "enable", "resolution": 1024, "bbox_detector": "yolox_l.onnx",
-            "pose_estimator": "dw-ll_ucoco_384.onnx", "scale_stick_for_xinsr_cn": scale_stick}}
-
-
-def pose_wf(description, seed, width, height, prefix, src=None):
-    """!
-    @brief A pose for ControlNet: from a description, Z-Image makes a plain full-body photo of a person in that pose and
-           DWPose turns it into a skeleton; from a photo (src), only the skeleton is made. Saves "<name>" (the photo,
-           the best input for --pose) and "<name>_pose" (the skeleton picture).
-    @param src  Uploaded photo name, or None to generate one from the description.
-    @return Workflow in ComfyUI API format.
-    """
-    if src:
-        return {"30": {"class_type": "LoadImage", "inputs": {"image": src}}, "31": _dwpose(["30", 0]),
-                "35": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_pose", "images": ["31", 0]}}}
-    p = profile("zimage")
-    wf = zimage(POSE_PROMPT.format(d=description), seed, p["steps"], width, height, prefix, p)
-    wf.update({"31": _dwpose(["9", 0]),
-               "35": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_pose", "images": ["31", 0]}}})
-    return wf
-
-
-def use_skeleton(wf):
-    """!
-    @brief The --pose picture is already a skeleton (from ai gen pose or another tool): skip DWPose and feed it
-           straight to the pose control (and do not save it again). @return the workflow, changed in place
-    """
-    if "31" in wf and wf["31"]["class_type"] == "DWPreprocessor":
-        del wf["31"]
-        wf.pop("35", None)
-        for node in wf.values():
-            for k, v in node["inputs"].items():
-                if v == ["31", 0]:
-                    node["inputs"][k] = ["30", 0]
-    return wf
 
 
 def is_skeleton(path, flag=False):
@@ -837,33 +452,6 @@ def models_report():
         if missing and not p.get("optional"):
             rc = 1
     return rc
-
-
-def wan(prompt, negative, seed, steps, frames, prefix):
-    """!
-    @brief Wan 2.2 5B (GGUF Q8) text-to-video workflow, 640x352 at 24 fps, saved as animated WebP.
-    @param prompt  What happens.  @param negative  What to avoid.  @param seed  Random seed.
-    @param steps   Sampling steps.  @param frames  Length (4n+1, e.g. 33 = ~1.4 s, 121 = 5 s).
-    @param prefix  Output prefix "<date>/<name>".
-    @return Workflow in ComfyUI API format.
-    """
-    return {
-        "1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": "Wan2.2-TI2V-5B-Q8_0.gguf"}},
-        "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
-              "type": "wan", "device": "default"}},
-        "3": {"class_type": "VAELoader", "inputs": {"vae_name": "wan2.2_vae.safetensors"}},
-        "4": {"class_type": "ModelSamplingSD3", "inputs": {"shift": 8.0, "model": ["1", 0]}},
-        "5": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": prompt}},
-        "6": {"class_type": "CLIPTextEncode", "inputs": {"clip": ["2", 0], "text": negative}},
-        "7": {"class_type": "Wan22ImageToVideoLatent", "inputs": {"vae": ["3", 0], "width": 640, "height": 352,
-              "length": frames, "batch_size": 1}},
-        "8": {"class_type": "KSampler", "inputs": {"seed": seed, "steps": steps, "cfg": 5.0, "sampler_name": "uni_pc",
-              "scheduler": "simple", "denoise": 1.0, "model": ["4", 0], "positive": ["5", 0],
-              "negative": ["6", 0], "latent_image": ["7", 0]}},
-        "9": {"class_type": "VAEDecode", "inputs": {"samples": ["8", 0], "vae": ["3", 0]}},
-        "10": {"class_type": "SaveAnimatedWEBP", "inputs": {"images": ["9", 0], "filename_prefix": prefix,
-               "fps": 24.0, "lossless": False, "quality": 85, "method": "default"}},
-    }
 
 
 def gpu_used():
@@ -1487,44 +1075,6 @@ def lora_keys_dropped(since):
     return sum(1 for l in r.stdout.splitlines() if "lora key not loaded" in l or "NOT LOADED" in l)
 
 
-QUALITY = {"normal": {"resolution": 1024, "faces": 300000, "texture": 2048},     # ~10 GB peak expected: headroom
-           "high": {"resolution": 1536, "faces": 700000, "texture": 4096}}       # the template's own; 10.5 GB measured
-
-
-def glb_stats(path):
-    """!
-    @brief Reads a GLB's header (no extra tools): mesh, triangles, vertices, materials, textures. Never raises: a
-           missing, truncated or malformed file gives {"valid": False, "error": why}. @return dict
-    """
-    try:
-        size = os.path.getsize(path)
-        with open(path, "rb") as f:
-            head = f.read(20)
-            n = int.from_bytes(head[12:16], "little")
-            if len(head) < 20 or head[:4] != b"glTF" or head[16:20] != b"JSON":
-                return {"valid": False, "error": "not a GLB file"}
-            if int.from_bytes(head[8:12], "little") > size or 20 + n > size:
-                return {"valid": False, "error": "truncated (file shorter than its header says)"}
-            j = json.loads(f.read(n))
-        acc, tri, verts = j.get("accessors", []), 0, 0
-
-        def count(i):                                  # an accessor's count; a bad index is an error, not acc[-1]
-            if not isinstance(i, int) or not 0 <= i < len(acc) or not isinstance(acc[i].get("count"), int):
-                raise IndexError(f"accessor {i} out of range")
-            return acc[i]["count"]
-        for m in j.get("meshes", []):
-            for p in m.get("primitives", []):
-                verts += count(p["attributes"]["POSITION"])
-                tri += count(p["indices"]) // 3 if "indices" in p else 0
-        mats = [sorted(k for k in ("baseColorTexture", "metallicRoughnessTexture") if k in m.get("pbrMetallicRoughness", {}))
-                + (["normalTexture"] if "normalTexture" in m else []) + (["occlusionTexture"] if "occlusionTexture" in m else [])
-                for m in j.get("materials", [])]
-        return {"valid": True, "meshes": len(j.get("meshes", [])), "triangles": int(tri), "vertices": int(verts),
-                "material_maps": mats, "textures": len(j.get("textures", [])), "size_mb": round(size / 1e6, 1)}
-    except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError) as e:
-        return {"valid": False, "error": f"malformed GLB: {type(e).__name__}: {str(e)[:150]}"}
-
-
 def gen3d(a):
     """!
     @brief ai gen 3d --image PHOTO: a textured 3D model (GLB) from one picture - or, for a multi-view model, from up to
@@ -1591,24 +1141,6 @@ def job_3d(wf, uploads, info, timeout, log=print):
     files = files + extra
     job_state(status, outputs=files, error=None if status == "succeeded" else err or status)
     return status, files, err
-
-
-EXIT = {"succeeded": 0, "failed": 1, "check_failed": 2, "check_skipped": 3}
-
-
-def check_status(glb_info, blender_present, blender_rc=None, mesh=None, renders=0, imgcheck_rc=None):
-    """!
-    @brief The verdict on a generated 3D model from its required checks: a valid GLB with triangles; with Blender
-           installed, a successful Blender run whose result says ok, 4 renders, and img-check passing all of them.
-           Without Blender the model is usable but unchecked ("check_skipped"). @return status (see EXIT)
-    """
-    if not (glb_info.get("valid") and glb_info.get("triangles", 0) > 0):
-        return "failed"
-    if not blender_present:
-        return "check_skipped"
-    if blender_rc != 0 or not isinstance(mesh, dict) or not mesh.get("ok") or renders < 4 or imgcheck_rc != 0:
-        return "check_failed"
-    return "succeeded"
 
 
 def handover_ok(blender):

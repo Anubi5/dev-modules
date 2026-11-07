@@ -18,6 +18,7 @@ import uuid
 from fetch_assets import sha256
 from validate_contract import load_contract
 from chat_service import chat_state, stop_chat, start_chat
+from source_integrity import verify_source
 
 
 MOD = Path(__file__).resolve().parent
@@ -86,12 +87,10 @@ def execute(args):
     models = json.loads((MOD / "models.json").read_text())
     installed = json.loads((MOD / "app/installed.json").read_text())
     source = Path((MOD / "app/source-path.txt").read_text().strip())
-    source_revision = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
-    if source_revision != models["source"]["revision"]:
-        raise RuntimeError("Installed UniRig source revision drifted")
+    source_revision = models["source"]["revision"]
+    source_tree_sha256 = verify_source(source, source_revision)
     if len(installed["checkpoints"]) != len(models["weights"]["files"]):
         raise RuntimeError("Installed checkpoint list is incomplete")
-    subprocess.run(["git", "-C", str(source), "diff", "--quiet"], check=True)
     input_path = args.input.expanduser().resolve()
     if not input_path.is_file() or input_path.suffix.lower() != ".glb":
         raise ValueError("Expected an existing input .glb")
@@ -122,6 +121,7 @@ def execute(args):
         ("torch", "torchvision", "bpy", "numpy", "flash-attn", "transformers", "spconv-cu121")}
     record["module_code_sha256"] = {p.name: sha256(p) for p in MOD.glob("*.py")}
     record["profile_sha256"] = sha256(MOD/"profile.json")
+    record["source_tree_sha256"] = source_tree_sha256
     record["models_manifest_sha256"] = sha256(MOD/"models.json")
     record["dependency_lock_sha256"] = sha256(MOD/"requirements.lock")
     record["checkpoint_sha256"] = {row["path"]: row["sha256"] for row in models["weights"]["files"]}

@@ -21,6 +21,16 @@ Profiles remain in `profiles.json` and recipes in `recipes/`; the catalogue has 
 shared owner, with per-request profile copies. `gen.py` re-exports existing names
 for compatibility while internal builders call their own component functions.
 
+`generation.models.package(name, kind)` resolves a version-1 declarative model
+package into a capability, architecture and detached settings. Existing image/3D
+profiles retain their namespace; `video_models` holds video packages and
+`default_video` chooses the default. A Wan package declares its model/encoder/VAE,
+sampling settings, dimensions and frame rate. Its adapter owns node wiring and
+rejects a different architecture; metadata cannot name Python entry points.
+Adding a compatible video model requires data and the existing model-install
+manifest, not another adapter or dependency environment. `ai gen video ... --model
+NAME` selects such a package; the old no-model command retains its exact graph.
+
 Run the focused offline checks with:
 
 ```bash

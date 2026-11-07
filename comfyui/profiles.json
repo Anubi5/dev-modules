@@ -189,5 +189,23 @@
   "edit_model": "flux3",
   "expander": "qwen3.5-9b",
   "default_sdxl": "juggernaut",
-  "default_3d": "pixal3d"
+  "default_3d": "pixal3d",
+  "schema_version": 1,
+  "default_video": "wan2.2-ti2v-5b",
+  "video_models": {
+    "wan2.2-ti2v-5b": {
+      "kind": "video",
+      "arch": "wan22",
+      "file": "Wan2.2-TI2V-5B-Q8_0.gguf",
+      "text_encoder": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "vae": "wan2.2_vae.safetensors",
+      "width": 640,
+      "height": 352,
+      "fps": 24.0,
+      "shift": 8.0,
+      "cfg": 5.0,
+      "sampler": "uni_pc",
+      "scheduler": "simple"
+    }
+  }
 }

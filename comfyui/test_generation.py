@@ -42,6 +42,50 @@ class GenerationTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "choose one of"):
             gen.apply_recipe(recipe, {"texture": 3000})
 
+    def test_packages_separate_capabilities_and_copy_nested_settings(self):
+        self.assertEqual(models.package(kind="video").architecture, "wan22")
+        self.assertEqual(models.package(kind="3d").kind, "3d")
+        first = models.package("realvis")
+        first.settings["file"] = "changed"
+        self.assertNotEqual(models.package("realvis").settings["file"], "changed")
+        with self.assertRaisesRegex(ValueError, "capability mismatch"):
+            models.package(gen.PROFILES["default_3d"], kind="image")
+
+    def test_incomplete_video_package_fails_before_workflow_construction(self):
+        from unittest.mock import patch
+        with patch.dict(models.PROFILES["video_models"], {"broken": {"kind": "video", "arch": "wan22"}}):
+            with self.assertRaisesRegex(ValueError, "Incomplete model package"):
+                models.package("broken", kind="video")
+
+    def test_video_model_package_is_data_and_cannot_select_python_code(self):
+        from unittest.mock import patch
+        from generation.video import wan
+        profile = models.package(kind="video").settings
+        profile["file"] = "local-alternative.gguf"
+        with patch.dict(models.PROFILES["video_models"], {"alternative": profile}):
+            workflow = wan("prompt", "negative", 1, 20, 33, "test", model="alternative")
+            self.assertEqual(workflow["1"]["inputs"]["unet_name"], "local-alternative.gguf")
+            profile["arch"] = "arbitrary_python_module"
+            with self.assertRaisesRegex(ValueError, "needs architecture wan22"):
+                wan("prompt", "negative", 1, 20, 33, "test", model="alternative")
+
+    def test_video_cli_uses_the_selected_package_without_running_a_service(self):
+        import contextlib
+        import io
+        import tempfile
+        from unittest.mock import patch
+        selected = models.package(kind="video").settings
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.dict(models.PROFILES["video_models"], {"fixture": selected}), \
+             patch.object(sys, "argv", ["gen.py", "video", "a scene", "--model", "fixture", "--seed", "7"]), \
+             patch.object(gen, "OUTPUT", directory), patch.dict(gen.JOB, {}, clear=True), \
+             patch.object(gen, "generate", return_value=(True, ["clip.webp"], None)) as execute, \
+             patch.object(gen, "write_record", return_value=None) as record, \
+             contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(gen.main(), 0)
+            self.assertEqual(execute.call_args.args[0]["1"]["inputs"]["unet_name"], selected["file"])
+            self.assertEqual(record.call_args.args[1]["model"], "fixture")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1590,12 +1590,12 @@ def main():
         limit = a.timeout or (1800 if a.hires or a.fix_hands or a.fix_faces or arch in ("flux3", "fibo2", "moss") else 900)
     else:
         frames = max(5, (a.frames - 1) // 4 * 4 + 1)
-        if a.lora or a.pose_skeleton or a.pose or a.face or a.fix_faces or a.fix_hands or a.hires or a.checkpoint or a.model or a.image:
-            sys.exit("--pose/--face/--fix-faces/--fix-hands/--hires/--checkpoint/--model/--image are for images")
+        if a.lora or a.pose_skeleton or a.pose or a.face or a.fix_faces or a.fix_hands or a.hires or a.checkpoint or a.image:
+            sys.exit("--pose/--face/--fix-faces/--fix-hands/--hires/--checkpoint/--image are for images")
         uploads = []
         neg = a.negative if a.negative is not None else "static, blurry, distorted, low quality, watermark"
-        wf, limit = wan(a.prompt, neg, seed, a.steps or 20, frames, prefix), a.timeout or 3600
-        info = {"kind": "video", "prompt": a.prompt, "negative": neg, "seed": seed, "model": "wan2.2-ti2v-5b",
+        wf, limit = wan(a.prompt, neg, seed, a.steps or 20, frames, prefix, model=a.model), a.timeout or 3600
+        info = {"kind": "video", "prompt": a.prompt, "negative": neg, "seed": seed, "model": a.model or PROFILES.get("default_video", "wan2.2-ti2v-5b"),
                 "steps": a.steps or 20, "frames": frames}
     log = lambda s: print(f"  {s}", flush=True)
     t_start = time.time()

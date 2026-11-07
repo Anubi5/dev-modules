@@ -14,7 +14,7 @@ itself on the next request. Outputs land in COMFY_OUTPUT/<YYYY-MM-DD>/<name>_NNN
 Usage:
   gen.py image "prompt" [--name N] [--negative T] [--seed S] [--steps N] [--size WxH] [--upscale] [--hires]
                [--pose IMG [--pose-strength F]] [--face IMG [--face-weight F]] [--fix-faces] [--fix-hands]
-  gen.py video "prompt" [--name N] [--negative T] [--seed S] [--steps N] [--frames N]
+  gen.py video "prompt" [--model M] [--name N] [--negative T] [--seed S] [--steps N] [--frames N]
 Prints the output file paths (one per line, after "OUTPUT"); exit code 0 on success.
 """
 import argparse
@@ -1019,7 +1019,7 @@ HELP = """ai gen - images, edits and short videos on the local GPU (one job at a
   ai gen pose "description" | --from PHOTO                 a pose for ControlNet: "<name>" (plain full-body photo,
                                                            best for --pose) + "<name>_pose" (the skeleton picture)
       --pose-skeleton      (image) the --pose picture is already a skeleton (files named *_pose_*.png are detected)
-  ai gen video "prompt" [--frames 33]                      Wan 2.2 clip (33 frames ~ 1.4 s, up to 121)
+  ai gen video "prompt" [--frames 33]                      Wan 2.2 clip (33 frames ~ 1.4 s, up to 121)  (--model NAME selects a video package)
   ai gen 3d --image PHOTO [--model pixal3d|trellis2] [--quality normal|high] [--faces N] [--texture 2048]
   ai gen 3d --model pixal3d-mv --image FRONT [--image LEFT --image BACK --image RIGHT]   3D model from up to 4 views
                                                            a textured 3D model (GLB) from one picture; Blender renders
@@ -1454,7 +1454,7 @@ def main():
                     help="edit: the image to change (in ~/work); repeat for extra references (up to 4)")
     ap.add_argument("--no-expand", action="store_true", help="FLUX 3: use the prompt as typed (no caption expansion)")
     ap.add_argument("--name", default="", help="short name for the output files (default: from the prompt)")
-    ap.add_argument("--model", metavar="NAME", help=f"image model: a profile ({', '.join(PROFILES['models'])}; default {PROFILES['default']}) or any model file (ai gen list)")
+    ap.add_argument("--model", metavar="NAME", help=f"image/3D profile or video package: ({', '.join(PROFILES['models'])}; default {PROFILES['default']}) or any model file (ai gen list)")
     ap.add_argument("--style", choices=list(PROFILES["styles"]), default=None, help="image: photo or art (default: per model)")
     ap.add_argument("--negative", default=None, help='what to avoid (default: per model and style; "" = nothing)')
     ap.add_argument("--seed", type=int, default=None)

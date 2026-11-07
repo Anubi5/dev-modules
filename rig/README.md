@@ -10,8 +10,19 @@ chat model was stopped during GPU rigging, a second rig job waited, normal exit
 restored chat, and cancellation/external-watchdog interruption preserved the prior
 service state. Parent SIGKILL left its GPU child holding the lease and its record
 stale; supervised manual cleanup/restoration was required. This does not establish
-automatic crash recovery. Real rotated/asymmetric fixture and updated Unreal
-acceptance remain pending; do not install this revision in production.
+automatic crash recovery.
+
+**Functional asset staging passed for the retained reference; visual quality is
+not accepted.** Real 90/180/270-degree rotations and a controlled asymmetric
+variant passed finishing and FBX/GLB re-imports; wrong-facing and mirrored
+transforms were rejected. These are transformations of one existing rig, not
+independent characters or rotated-input inference tests. Updated Unreal walk/jog
+exports passed all 102 frame checks at unchanged thresholds, with 1.700 m rest
+height and twelve inspected renders. Maximum jog edge p99.9 was 2.472 against
+the 2.5 limit. Visible shoulder/sleeve deformation remains a quality blocker
+(F6); numerical validation does not establish visual acceptance. No executable
+module source changed during these sessions. Do not install this revision in
+production; broader fixture coverage and automatic recovery remain outstanding.
 
 ## Commands
 
@@ -43,7 +54,7 @@ This coordinates cooperating WSL clients; it does not prevent a person from
 manually restarting a service or an unrelated Windows program using the GPU.
 SIGKILL/power loss cannot run restoration: inspect the retained job, confirm its
 children have stopped and run `ai start llama-swap` if restoration is needed.
-Automated stale-job recovery and crash/contended-GPU acceptance remain outstanding.
+Automated stale-job recovery and native crash recovery remain outstanding.
 
 `contract.json` specifies required bone names, an unweighted root above pelvis,
 centimetre units, four normalized influences, UV/material retention, triangle

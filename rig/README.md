@@ -5,9 +5,13 @@ and Blender, with an independent Python environment, pinned checkpoints,
 shared GPU lease and a record for every started job. This branch is staged and
 tested independently of the installed workstation; it has not been merged.
 
-**Batch 1 source corrections are offline-tested only.** Historical GPU/Unreal
-acceptance predates the new chat, orientation, render and source-integrity checks.
-Do not treat it as hardware acceptance of this revision or install it in production.
+**Lifecycle staging passed on one reference at commit `214dcf0`.** A real loaded
+chat model was stopped during GPU rigging, a second rig job waited, normal exit
+restored chat, and cancellation/external-watchdog interruption preserved the prior
+service state. Parent SIGKILL left its GPU child holding the lease and its record
+stale; supervised manual cleanup/restoration was required. This does not establish
+automatic crash recovery. Real rotated/asymmetric fixture and updated Unreal
+acceptance remain pending; do not install this revision in production.
 
 ## Commands
 

@@ -1,9 +1,15 @@
 # Rig
 
+**EXPERIMENTAL — manual use. F6: OPEN — DEFERRED.** Reference numerical
+acceptance remains valid; visual quality and generalization to other characters
+are not established. F6 is deliberately deferred and does not block experimental
+development. Automatic crash recovery remains a limit for unattended operation.
+Keep the recorded quality limits; do not treat a numerical pass as visual signoff.
+
 Local humanoid rigging with [UniRig](https://github.com/VAST-AI-Research/UniRig)
 and Blender, with an independent Python environment, pinned checkpoints,
-shared GPU lease and a record for every started job. This branch is staged and
-tested independently of the installed workstation; it has not been merged.
+shared GPU lease and a record for every started job. Repository updates do not
+automatically install or replace the workstation's existing module.
 
 **Lifecycle staging passed on one reference at commit `214dcf0`.** A real loaded
 chat model was stopped during GPU rigging, a second rig job waited, normal exit
@@ -19,10 +25,10 @@ transforms were rejected. These are transformations of one existing rig, not
 independent characters or rotated-input inference tests. Updated Unreal walk/jog
 exports passed all 102 frame checks at unchanged thresholds, with 1.700 m rest
 height and twelve inspected renders. Maximum jog edge p99.9 was 2.472 against
-the 2.5 limit. Visible shoulder/sleeve deformation remains a quality blocker
-(F6); numerical validation does not establish visual acceptance. No executable
-module source changed during these sessions. Do not install this revision in
-production; broader fixture coverage and automatic recovery remain outstanding.
+the 2.5 limit. Visible shoulder/sleeve deformation remains a known quality
+limitation (F6: OPEN — DEFERRED); numerical validation does not establish visual
+acceptance. No executable module source changed during these sessions. Broader
+fixture coverage and automatic recovery remain outstanding.
 
 The F6 investigation traced the visible tears to joint smoothing on disconnected
 UV/normal-split vertices: coincident copies start with equal weights and diverge
@@ -31,8 +37,8 @@ reference's triangles and face-corner UV data and closes the tears in controlled
 retained-pose renders, but **is not an accepted fix**: walk/jog p99.9 stretch reaches
 2.678/4.403 against the unchanged 2.5 limit. Post-smoothing weight matching and a
 512-iteration welded profile also fail existing gates. These candidates were
-rejected; executable module code is unchanged. F6 remains open; do not merge or
-install a visually improved candidate that fails the numerical contract.
+rejected; executable module code is unchanged. F6 is OPEN — DEFERRED. Those failed
+candidates are not part of the experimental module and must not replace it.
 
 ## Commands
 

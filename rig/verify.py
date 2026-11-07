@@ -9,6 +9,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from validate_contract import load_contract, validate_summary
+from orientation import verify_facing, verify_named_sides
 
 
 def main():
@@ -61,6 +62,16 @@ def main():
                    requested_height_m=args.height, uv_layers=min(len(o.data.uv_layers) for o in meshes),
                    materials=min(len(o.data.materials) for o in meshes))
     summary["errors"] = validate_summary(summary, load_contract())
+    try:
+        positions = {b.name: arm.matrix_world @ b.head_local for b in bones}
+        summary["orientation"] = verify_facing(
+            [positions["ball_"+s] - positions["foot_"+s] for s in ("l", "r")],
+            [positions["thigh_"+s] for s in ("l", "r")],
+            [o.matrix_world.to_3x3().determinant() for o in [arm] + meshes],
+        )
+        verify_named_sides(positions)
+    except (ValueError, KeyError) as error:
+        summary["errors"].append("Orientation re-import check failed: " + str(error))
     if args.renders:
         report = json.loads(args.renders.read_text())
         summary["render_checks"] = []

@@ -35,6 +35,8 @@ def parser():
     p.add_argument("--height", type=float, default=1.7)
     p.add_argument("--seed", type=int, default=12345)
     p.add_argument("--smooth-iterations", type=int)
+    p.add_argument("--facing", choices=("-y", "+x", "+y", "-x"), default="-y",
+                   help="Declared input facing in Blender coordinates; verified against the limited UniRig heel reference")
     return p
 
 
@@ -114,7 +116,7 @@ def execute(args):
                   contract=contract["id"], contract_sha256=sha256(MOD/"contract.json"),
                   source_revision=source_revision, input_sha256=sha256(input_path),
                   seed=args.seed, settings=dict(triangles=triangles, height_m=args.height,
-                  smooth_iterations=smooth, profile=profile["id"]), stages=[], outputs={},
+                  smooth_iterations=smooth, profile=profile["id"], input_facing=args.facing), stages=[], outputs={},
                   unreal_animation_validation="not_run", peak_vram_mib=0)
     record["runtime_versions"] = {name: importlib.metadata.version(name) for name in
         ("torch", "torchvision", "bpy", "numpy", "flash-attn", "transformers", "spconv-cu121")}
@@ -243,7 +245,8 @@ def execute(args):
                  "--source="+str(skin),"--target="+str(prepared),"--output="+str(rigged)], rigged)
             prefix = output/"model"
             step("finish", [blender,"-b","--factory-startup","--disable-autoexec","--python-exit-code","1",
-                 "--python",MOD/"finish.py","--",rigged,prefix,str(args.height),"--smooth-joints","--smooth-iterations",str(smooth)], output/"model_unreal.fbx")
+                 "--python",MOD/"finish.py","--",rigged,prefix,str(args.height),"--smooth-joints","--smooth-iterations",str(smooth),
+                 "--facing="+args.facing], output/"model_unreal.fbx")
             lines = (logs/"finish.log").read_text(errors="replace").splitlines()
             finishes = [json.loads(line[len("RIG-FINISH "):]) for line in lines if line.startswith("RIG-FINISH ")]
             if len(finishes) != 1 or not finishes[0]["ok"]:

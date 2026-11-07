@@ -6,6 +6,8 @@ import json, math, sys
 from pathlib import Path
 import bpy
 from mathutils import Matrix, Vector
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from orientation import verify_facing
 
 args = sys.argv[sys.argv.index("--") + 1:]
 src, prefix = args[:2]; height = float(args[2]) if len(args) > 2 else 1.70
@@ -42,15 +44,34 @@ rc = kids(root)
 spine0 = max(rc, key=lambda c: head[c.name].z)
 legs = [c for c in rc if c is not spine0 and head[c.name].z < head[root.name].z + 0.02]
 names = {root.name: "pelvis"}
-# facing: toes point forward
+# This UniRig reference ends at the heel. Require declared facing to agree with
+# both heel segments before assigning semantic left/right; never infer from toes.
 toes = []
 for l in legs:
     ch, _ = chain(l)
     if len(ch) >= 4:
         toes.append(head[ch[3].name] - head[ch[2].name])
 toe = sum(toes, Vector()) if toes else Vector(); toe.z = 0
-fwd = Vector((0, -1, 0))            # glTF front (+Z) is Blender -Y; Pixal3D models face it (renders confirm)
 report["toe_direction"] = [round(x, 3) for x in (toe.normalized() if toe.length > 1e-6 else toe)]
+input_facing = next((a.split("=", 1)[1] for a in args if a.startswith("--facing=")), "-y")
+try:
+    orientation = verify_facing(toes, [head[b.name] for b in legs],
+                               [o.matrix_world.to_3x3().determinant() for o in [arm] + meshes], input_facing)
+except ValueError as error:
+    report.update(ok=False, problems=[str(error)], orientation={"status": "unsupported", "input_facing": input_facing})
+    print("RIG-FINISH " + json.dumps(report), flush=True)
+    sys.exit(2)
+report["orientation"] = orientation
+tops = {o for o in [arm] + meshes}
+while any(o.parent for o in tops):
+    tops = {o.parent or o for o in tops}
+rotation = Matrix.Rotation(orientation["yaw_radians"], 4, "Z")
+for o in tops:
+    o.matrix_world = rotation @ o.matrix_world
+bpy.context.view_layer.update()
+W = arm.matrix_world
+head = {b.name: W @ b.head_local for b in B}
+fwd = Vector((0, -1, 0))  # Verified input is now normalized to the contract frame.
 right = fwd.cross(up).normalized()
 centre = head[root.name]
 side = lambda b: "r" if (head[b.name] - centre).dot(right) > 0 else "l"

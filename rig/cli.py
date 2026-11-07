@@ -17,6 +17,7 @@ import uuid
 
 from fetch_assets import sha256
 from validate_contract import load_contract
+from chat_service import chat_state, stop_chat, start_chat
 
 
 MOD = Path(__file__).resolve().parent
@@ -178,9 +179,9 @@ def execute(args):
         monitor.stop.set()
         if monitor.thread.is_alive(): monitor.thread.join(timeout=6)
         if was_active:
-            restored = subprocess.run(["systemctl", "--user", "start", "llama-swap"]).returncode == 0
-            record["chat_restored"] = restored
-            if not restored: raise RuntimeError("Chat service failed to restart")
+            record["chat_restored"] = False
+            start_chat()
+            record["chat_restored"] = True
 
     try:
         record["status"] = "verifying_assets"; save()
@@ -213,8 +214,10 @@ def execute(args):
         record["preparation"] = json.loads(Path(str(prepared)+".json").read_text())
         with gpu_lease(restore_chat) as lease_fd:
             env["AI_GPU_LOCK_FD"] = str(lease_fd)
-            was_active = subprocess.run(["systemctl", "--user", "is-active", "--quiet", "llama-swap"]).returncode == 0
+            was_active = chat_state() == "active"
             record["chat_was_active"] = was_active
+            save()  # Preserve the recovery obligation before stopping anything.
+            stop_chat()
             step("free_gpu", ["ai", "free"])
             monitor.thread.start()
             record["status"] = "running"; save()

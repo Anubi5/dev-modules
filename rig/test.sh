@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
-PYTHONDONTWRITEBYTECODE=1 python3 "$HERE/test_contract.py"
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s "$HERE" -p 'test_*.py'
 PYTHONDONTWRITEBYTECODE=1 python3 "$HERE/cli.py" --help >/dev/null
 if [ "${1:-}" = --full ]; then
   : "${RIG_TEST_INPUT:?set RIG_TEST_INPUT to a fixed adult fictional humanoid GLB fixture}"

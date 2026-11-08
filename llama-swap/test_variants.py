@@ -21,6 +21,21 @@ with patch.dict(sys.modules,huggingface_hub=stub):
 
 
 class VariantTests(unittest.TestCase):
+    def test_agent_inherits_the_exact_daily_projector_for_local_vision(self):
+        projector=self.ro/'daily/mmproj.gguf';projector.write_bytes(b'projector fixture')
+        self.base['mmproj']=True
+        record=dict(self.record,mmproj=str(projector))
+        (self.state/'models.json').write_text(json.dumps({'daily':record}))
+        self.assertEqual(self.resolve([self.base,self.agent]),0)
+        records=json.loads((self.state/'models.json').read_text())
+        self.assertEqual(records['agent']['mmproj'],str(projector))
+        self.assertEqual(records['agent']['files'],records['daily']['files'])
+        with patch.object(make_config,'AI',str(self.root)):
+            text=make_config.build({'chat':[self.base,self.agent]},records)
+        self.assertEqual(text.count('--mmproj '+str(projector)),2)
+        self.assertIn('-c 32768',text);self.assertIn('-c 65536',text)
+        self.assertEqual(text.count('- "default"'),1)
+
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name);self.ro=self.root/'ro';self.state=self.root/'state'

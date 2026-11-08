@@ -25,6 +25,10 @@ jobs:
         run: python3 -m unittest discover -s comfyui -p 'test_generation.py'
       - name: Producer JSON and real CLI parsing (offline)
         run: python3 -m unittest discover -s comfyui -p 'test_producer.py'
+      - name: Inspection does not persist state
+        run: python3 -m unittest discover -s comfyui -p 'test_cli_inspection.py'
+      - name: Public model command dispatch
+        run: bash _tests/catalogue_dispatch_test.sh
       - name: Model helper placement and data preservation (offline)
         run: python3 -m unittest discover -s comfyui -p 'test_helpers.py'
       - name: Family registry and read-only model catalogue (offline)

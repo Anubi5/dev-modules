@@ -251,7 +251,7 @@ def main(argv=None):
             components={str((args.root/component).resolve()) for package in report['packages'] for component in package['components']}
             # Unrecognized files and standalone GGUF/LoRA files stay visible. A missing
             # registry reference is never evidence that a file is unused or disposable.
-            visible=[row for row in report['files'] if args.all or row['path'] not in components]
+            visible=[row for row in report['files'] if args.all or row.get('kind')=='download-staging' or row['path'] not in components]
             for row in visible:
                 if row.get('kind')=='download-staging':print(f"failed download  {row['bytes']} bytes  {row['path']}")
                 else:print(f"{row['status']:<16} {row['id']}")

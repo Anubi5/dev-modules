@@ -24,15 +24,12 @@ CODE_FORMATS = (".pt", ".pth", ".bin", ".ckpt", ".pkl")   # pickle-based: can ru
 
 
 def confirm_download():
-    """Flush the visible line through the output pipeline; read the controlling terminal."""
+    """Flush a complete prompt line before reading normal interactive stdin."""
     print('Download this pinned file? Type DOWNLOAD:',flush=True)
-    try:terminal_in=open('/dev/tty','r',encoding='utf-8')
-    except OSError:
-        if not sys.stdin.isatty():
-            print('No interactive terminal; download refused',flush=True);return False
-        return input().strip()=='DOWNLOAD'
-    with terminal_in:
-        return terminal_in.readline().strip()=='DOWNLOAD'
+    if not sys.stdin.isatty():
+        print('No interactive terminal; download refused',flush=True);return False
+    try:return input().strip()=='DOWNLOAD'
+    except EOFError:return False
 
 
 def sha256(path):

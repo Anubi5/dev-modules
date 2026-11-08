@@ -123,26 +123,20 @@ class DownloadTests(unittest.TestCase):
             rig.acquire('repo','1'*40,self.row,self.root/'probe.gguf',self.spec['download_policy'])
         self.assertEqual((self.root/'probe.gguf').read_bytes(),self.data)
 
-    def test_prompt_fallback_has_a_flushed_newline(self):
+    def test_prompt_has_a_flushed_newline_before_reading_stdin(self):
         for module in (comfy,llama,rig):
-            with patch('builtins.open',side_effect=OSError('no controlling tty')),patch.object(sys.stdin,'isatty',return_value=True), \
-                 patch('builtins.input',return_value='NO'),contextlib.redirect_stdout(io.StringIO()) as output:
-                self.assertFalse(module.confirm_download())
-            self.assertTrue(output.getvalue().endswith('Type DOWNLOAD:\n'))
-
-    def test_prompt_uses_controlling_terminal_when_pipeline_stdin_is_not_a_tty(self):
-        class Terminal(io.StringIO):
-            def close(self):pass
-        for module in (comfy,llama,rig):
-            answer=Terminal('NO\n')
-            original_read=answer.readline
             with contextlib.redirect_stdout(io.StringIO()) as output:
                 def read():
-                    self.assertTrue(output.getvalue().endswith('Type DOWNLOAD:\n'))
-                    return original_read()
-                with patch('builtins.open',return_value=answer),patch.object(answer,'readline',side_effect=read),patch.object(sys.stdin,'isatty',return_value=False):
+                    self.assertTrue(output.getvalue().endswith('Type DOWNLOAD:\n'));return 'NO'
+                with patch.object(sys.stdin,'isatty',return_value=True),patch('builtins.input',side_effect=read):
                     self.assertFalse(module.confirm_download())
-            self.assertEqual(answer.tell(),3)
+
+    def test_prompt_refuses_redirected_input_and_eof(self):
+        for module in (comfy,llama,rig):
+            with patch.object(sys.stdin,'isatty',return_value=False),patch('builtins.input') as read:
+                self.assertFalse(module.confirm_download());read.assert_not_called()
+            with patch.object(sys.stdin,'isatty',return_value=True),patch('builtins.input',side_effect=EOFError):
+                    self.assertFalse(module.confirm_download())
 
 
 if __name__=='__main__':unittest.main()

@@ -26,26 +26,15 @@ def main():
     socket.create_connection=forbidden
     spec=importlib.util.spec_from_file_location('owner_prompt_fetch',path)
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
-    try:
-        with open('/dev/tty','r'):terminal=True
-    except OSError:terminal=sys.stdin.isatty()
+    terminal=sys.stdin.isatty()
     if not terminal:
         print('EVA_PROMPT_RESULT '+json.dumps(dict(status='SKIPPED',reason='No interactive terminal reached WSL',fixture=str(root))),flush=True);return 3
     offered=[];confirmed=[];answers=[];original=module.confirm_download
     # EOF also refuses a download, but is not an owner-entered decline.
     import builtins
-    class ObservedTerminal:
-        def __init__(self,stream):self.stream=stream
-        def __enter__(self):return self
-        def __exit__(self,*args):self.stream.close()
-        def readline(self):
-            answer=self.stream.readline();answers.append(answer);return answer
-    def observed_open(path,*args,**kwargs):
-        stream=builtins.open(path,*args,**kwargs)
-        return ObservedTerminal(stream) if str(path)=='/dev/tty' else stream
     def observed_input(*args):
         answer=builtins.input(*args);answers.append(answer);return answer
-    module.open=observed_open;module.input=observed_input
+    module.input=observed_input
     def observe():
         offered.append(True);answer=original();confirmed.append(answer);return answer
     module.confirm_download=observe

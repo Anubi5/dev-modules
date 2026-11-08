@@ -7,10 +7,55 @@ from pathlib import Path
 import re
 import sys
 
-from generation import registry
+from generation import registry, builders, video
 
 EXTENSIONS = {'.safetensors','.gguf','.ckpt','.pt','.pth','.bin','.onnx'}
 HERE = Path(__file__).resolve().parent
+CAPABILITIES = {'llm','vlm','image','video','3d','upscaling'}
+
+
+def format_info(path):
+    """Bounded, non-executing format inspection. Never unpickle a checkpoint.
+
+    Headers describe a container, not a supported model architecture or ability.
+    Full integrity remains the explicit verify operation.
+    """
+    size=path.stat().st_size; suffix=path.suffix.lower()
+    result=dict(name=suffix.lstrip('.'),status='unverified',completeness='unknown')
+    try:
+        with path.open('rb') as stream:
+            if suffix=='.gguf':
+                header=stream.read(24)
+                if len(header)!=24 or header[:4]!=b'GGUF' or int.from_bytes(header[4:8],'little') not in (2,3):
+                    raise ValueError('Invalid or unsupported GGUF header')
+                result.update(status='recognized',completeness='header-only',version=int.from_bytes(header[4:8],'little'))
+            elif suffix=='.safetensors':
+                prefix=stream.read(8); length=int.from_bytes(prefix,'little')
+                if len(prefix)!=8 or not 2<=length<=min(16*1024**2,size-8):
+                    raise ValueError('Invalid or oversized safetensors header')
+                metadata=json.loads(stream.read(length))
+                if not isinstance(metadata,dict): raise ValueError('Invalid tensor metadata')
+                spans=[]
+                for name,tensor in metadata.items():
+                    if name=='__metadata__': continue
+                    start,end=tensor['data_offsets']
+                    if type(start) is not int or type(end) is not int or not 0<=start<=end<=size-8-length:
+                        raise ValueError('Tensor data is truncated or offsets invalid')
+                    spans.append((start,end))
+                spans.sort()
+                if not spans or any(left[1]>right[0] for left,right in zip(spans,spans[1:])):
+                    raise ValueError('Empty or overlapping tensor data')
+                result.update(status='recognized',completeness='declared-ranges-present')
+    except (ValueError,KeyError,TypeError,AttributeError) as error:
+        result.update(status='invalid',completeness='invalid',reason=str(error))
+    return result
+
+
+def tags(metadata):
+    values=metadata.get('capability_tags',[])
+    if not isinstance(values,list) or any(value not in CAPABILITIES for value in values):
+        raise ValueError('Invalid owning-package capability tags')
+    return sorted(set(values))
 
 
 def sha256(path):
@@ -63,7 +108,7 @@ def inventory(root):
                              components=['comfy/'+part['folder']+'/'+part['file'] for part in p['parts'].values()],
                              description=p.get('description',name),defaults=p.get('defaults',{}),capabilities=p.get('capabilities',{})))
     legacy=json.loads((HERE/'profiles.json').read_text())
-    for name,p in dict(legacy['models'],**legacy.get('video_models',{})).items():
+    for name,p in dict(legacy['models'],**legacy.get('video_models',{}),**legacy.get('assets',{})).items():
         references={p[key] for key in ['file','text_encoder','vae'] if isinstance(p.get(key),str)}
         if p.get('kind')=='3d':
             from generation.graph import apply_recipe
@@ -91,6 +136,8 @@ def inventory(root):
         packages.append(dict(id='unirig',kind='rig',status='needs-something' if missing else 'ready',missing=missing,
                              components=rig,experimental=True))
     # Installed local chat selections are metadata; never invoke a server or discover executable code.
+    declared_chat=HERE.parent/'llama-swap/models.json'
+    declared_specs={row['id']:row for row in json.loads(declared_chat.read_text())['chat']} if declared_chat.exists() else {}
     resolved=Path.home()/'.local/share/modules/llama-swap/models/models.json'
     if resolved.exists():
         source=resolved.parents[1]/'models.json'
@@ -106,6 +153,44 @@ def inventory(root):
             packages.append(dict(id=name,kind='chat',status='needs-something' if missing else 'ready',missing=missing,
                                  components=paths,experimental=True,description=effective.get('name',name),
                                  context_tokens=int(context[1]) if context else None,weights_from=spec.get('weights_from')))
+    # Enrich the existing view additively; no second inventory or serving registry.
+    family_metadata=registry.packages()
+    legacy_metadata=dict(legacy['models'],**legacy.get('video_models',{}),**legacy.get('assets',{}))
+    by_path={str(Path(row['path']).resolve()):row for row in files}
+    for row in files:
+        row.update(format=format_info(Path(row['path'])),capability_tags=[],packages=[],runnable=False,
+                   identification='declared-pin' if row['expected_sha256'] else 'unknown',
+                   compatibility='no reviewed serving package')
+    for package in packages:
+        name=package['id']
+        metadata=family_metadata.get(name,legacy_metadata.get(name,{}))
+        if package['kind']=='chat':
+            spec=declared_specs.get(name,specs.get(name,{}))
+            metadata=dict(declared_specs.get(spec.get('weights_from'),specs.get(spec.get('weights_from'),{})),**spec)
+        if package['kind']=='rig': metadata={}
+        package['capability_tags']=tags(metadata)
+        package['formats']=[]; invalid=[]
+        for component in package['components']:
+            row=by_path.get(str((root/component).resolve()))
+            if not row: continue
+            row['packages'].append(name)
+            row['identification']='declared-package'
+            row['capability_tags']=sorted(set(row['capability_tags']+package['capability_tags']))
+            package['formats'].append(row['format']['name'])
+            if row['format']['status']=='invalid': invalid.append(row['id'])
+        package['formats']=sorted(set(package['formats']))
+        supported=(name in family_metadata or package['kind'] in ('chat','rig','upscaling')
+                   or (package['kind']=='image' and metadata.get('arch') in builders.BUILTINS)
+                   or (package['kind']=='video' and metadata.get('arch') in video.ARCHITECTURES)
+                   or (package['kind']=='3d' and bool(metadata.get('workflow'))))
+        package['completeness']='missing-components' if package['missing'] else 'invalid-format' if invalid else 'declared-components-present'
+        package['compatibility']='invalid component format' if invalid else 'requires a reviewed family adapter' if not supported else 'reviewed package; hardware acceptance separate'
+        package['runnable']=package['status']=='ready' and supported and not invalid and package['kind']!='upscaling'
+        for component in package['components']:
+            row=by_path.get(str((root/component).resolve()))
+            if row:
+                row['compatibility']='component of '+', '.join(row['packages'])
+                # A component is not an independently runnable model.
     return dict(schema='local-ai.models/1',root=str(root),packages=packages,files=files,discovery_read_only=True)
 
 

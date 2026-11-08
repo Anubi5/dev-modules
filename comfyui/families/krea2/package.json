@@ -227,5 +227,8 @@
     "revision": "588feaf955b08b9ac4723eeb751752ab045dba71",
     "workflow": "https://github.com/Comfy-Org/workflow_templates/blob/main/templates/image_krea2_turbo_t2i_int8.json"
   },
-  "experimental": true
+  "experimental": true,
+  "capability_tags": [
+    "image"
+  ]
 }

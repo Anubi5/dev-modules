@@ -1,5 +1,6 @@
 """Video workflow construction; no execution or GPU ownership."""
 from .models import package
+ARCHITECTURES=frozenset({'wan22'})
 
 
 def wan(prompt, negative, seed, steps, frames, prefix, model=None):
@@ -11,7 +12,7 @@ def wan(prompt, negative, seed, steps, frames, prefix, model=None):
     @return Workflow in ComfyUI API format.
     """
     selected = package(model, kind="video")
-    if selected.architecture != "wan22":
+    if selected.architecture not in ARCHITECTURES:
         raise ValueError("Wan video adapter needs architecture wan22, got " + selected.architecture)
     prof = selected.settings
     return {

@@ -18,9 +18,50 @@ import tempfile
 import uuid
 
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")    # the Xet downloader can hang after a file is complete
-from huggingface_hub import HfApi, hf_hub_download
+def HfApi(*args, **kwargs):
+    from huggingface_hub import HfApi as implementation
+    return implementation(*args, **kwargs)
+
+
+def hf_hub_download(*args, **kwargs):
+    from huggingface_hub import hf_hub_download as implementation
+    return implementation(*args, **kwargs)
 
 CODE_FORMATS = (".pt", ".pth", ".bin", ".ckpt", ".pkl")   # pickle-based: can run code when loaded
+
+
+def declarations(listing):
+    """Single models.txt parser for planning, acquisition and catalogue pins."""
+    rows=[]
+    for line in Path(listing).read_text().splitlines():
+        if not line.strip() or line.lstrip().startswith('#'):continue
+        fields=line.split();repo,want,folder=fields[:3];tags=fields[3:]
+        sha=next((x[7:] for x in tags if x.startswith('sha256:')),None)
+        size=next((int(x[6:]) for x in tags if x.startswith('bytes:')),None)
+        name=next((x for x in tags if x!='optional' and not x.startswith(('sha256:','bytes:'))),Path(want).name)
+        if (Path(folder).is_absolute() or '..' in Path(folder).parts or '\\' in folder or ':' in folder
+                or Path(name).name!=name or '\\' in name or ':' in name):raise ValueError('Unsafe declared model path')
+        if size is not None and size<=0:raise ValueError('Declared bytes must be positive')
+        rows.append(dict(repo=repo,want=want,folder=folder,name=name,sha256=sha,bytes=size,optional='optional' in tags))
+    return rows
+
+
+def download_plan(listing=None, root=None):
+    here=Path(__file__).resolve().parent;root=Path(root or os.environ.get('MODELS_MOUNT','/models'))
+    policies=json.loads((here/'download_licenses.json').read_text());sizes={}
+    for package in sorted(here.glob('families/*/package.json')):
+        for part in json.loads(package.read_text())['parts'].values():sizes[(part['folder']+'/'+part['file'],part['sha256'].lower())]=part['bytes']
+    files=[]
+    for row in declarations(listing or here/'models.txt'):
+        rel=row['folder']+'/'+row['name'];target=root/'comfy'/rel
+        if not target.resolve().is_relative_to(root.resolve()):raise ValueError('Unsafe model path')
+        if target.is_file():continue
+        policy=policies.get(row['repo'],{});sha=row['sha256']
+        size=row['bytes'] if row['bytes'] is not None else sizes.get((rel,(sha or '').lower()))
+        eligible=bool(re.fullmatch('[a-fA-F0-9]{64}',sha or '')) and type(size) is int and size>0 and policy.get('approved') is True and bool(policy.get('license')) and not policy.get('gated') and row['want'] not in policy.get('manual_files',[])
+        origin=row['repo'] if row['repo'].startswith('https://') else row['repo']+'/'+row['want']
+        files.append(dict(path='comfy/'+rel,bytes=size,source=origin,licence=policy.get('license'),sha256=sha.lower() if sha else None,eligible=eligible,reason=None if eligible else 'Manual copy: incomplete or restricted declaration'))
+    return dict(schema=1,files=files)
 
 
 def approved_download(sha):
@@ -168,6 +209,11 @@ def main():
            "<https URL> <file name> <folder> sha256:<hex>" lines (direct download, checksum required) and
            downloads only what is missing. @return exit code
     """
+    if '--plan' in sys.argv or '--json' in sys.argv:
+        import argparse
+        parser=argparse.ArgumentParser();parser.add_argument('--plan',action='store_true',required=True);parser.add_argument('--json',action='store_true',required=True)
+        parser.add_argument('--models-root');parser.add_argument('--list')
+        args=parser.parse_args();print(json.dumps(download_plan(args.list,args.models_root)));return 0
     requested_verify = '--verify-only' in sys.argv
     if requested_verify: sys.argv.remove('--verify-only')
     verify_only = requested_verify or os.environ.get('DEV_MODEL_OPERATION')!='approved' or bool(os.environ.get('DEV_UNATTENDED'))
@@ -180,14 +226,8 @@ def main():
     if verify_only: rw = None
     os.makedirs(own, exist_ok=True)
     failed = 0
-    for line in Path(lst).read_text().splitlines():
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        parts = line.split()
-        repo, want, folder = parts[:3]
-        sha = next((x[7:] for x in parts[3:] if x.startswith("sha256:")), None)
-        optional = "optional" in parts[3:]                # missing = that model is just not available, not an error
-        name = next((x for x in parts[3:] if not x.startswith("sha256:") and x != "optional"), os.path.basename(want))
+    for row in declarations(lst):
+        repo,want,folder,sha,optional,name=(row[key] for key in ('repo','want','folder','sha256','optional','name'))
         on_d = os.path.join(ro, folder, name)
         old = os.path.join(old_root, folder, name) if old_root else None
         if old and os.path.exists(old) and os.path.exists(on_d):   # two copies: same content (hash) or a conflict

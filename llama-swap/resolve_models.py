@@ -27,9 +27,30 @@ sys.stdout.reconfigure(line_buffering=True)            # show progress in the li
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")       # plain HTTPS with resume copes better with flaky links
 os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "60")
 from pathlib import Path
-from huggingface_hub import HfApi, hf_hub_download as _hf_download  # noqa: E402
+api = None
 
-api = HfApi()
+
+def _hf_download(*args, **kwargs):
+    from huggingface_hub import hf_hub_download
+    return hf_hub_download(*args, **kwargs)
+
+
+def declarations(path):
+    return json.loads(Path(path).read_text())
+
+
+def download_plan(config=None, root=None):
+    config=Path(config or Path(__file__).with_name('models.json'))
+    root=Path(root or os.environ.get('MODELS_MOUNT','/models'));files=[]
+    for spec in declarations(config)['chat']:
+        for row in spec.get('pinned_files',[]):
+            rel='llm/'+spec['id']+'/'+row['file'];target=root/rel
+            if not target.resolve().is_relative_to(root.resolve()):raise ValueError('Unsafe declared model path')
+            if target.is_file():continue
+            policy=spec.get('download_policy',{});sha=row.get('sha256');size=row.get('bytes')
+            eligible=bool(re.fullmatch('[a-fA-F0-9]{64}',sha or '')) and bool(re.fullmatch('[a-fA-F0-9]{40}',spec.get('revision',''))) and bool(spec.get('repo')) and type(size) is int and size>0 and policy.get('approved') is True and bool(policy.get('license')) and not policy.get('gated')
+            files.append(dict(path=rel,bytes=size,source=spec.get('repo','')+'@'+spec.get('revision','')+'/'+row['file'],licence=policy.get('license'),sha256=sha.lower() if sha else None,eligible=eligible,reason=None if eligible else 'Manual copy: incomplete or restricted declaration'))
+    return dict(schema=1,files=files)
 
 
 def approved_download(sha):
@@ -69,6 +90,10 @@ def find_repo(spec):
     @param spec  One entry of models.json "chat".
     @return Repository id, or None if nothing matches.
     """
+    global api
+    if api is None:
+        from huggingface_hub import HfApi
+        api=HfApi()
     if spec.get("repo"):
         try:
             api.model_info(spec["repo"])
@@ -311,14 +336,18 @@ def main():
     @brief Command-line entry point; exit code 0 only if every item is available.
     """
     ap = argparse.ArgumentParser()
-    ap.add_argument("--config", required=True, help="models.json")
+    ap.add_argument("--config", default=str(Path(__file__).with_name('models.json')), help="models.json")
+    ap.add_argument('--plan',action='store_true');ap.add_argument('--json',action='store_true');ap.add_argument('--models-root')
     ap.add_argument("--out", help="--media: ComfyUI model root")
     ap.add_argument("--media", action="store_true", help="ComfyUI files instead of chat models")
     ap.add_argument("--state", help="in-distro folder for the record (models.json)")
     ap.add_argument("--ro", default="/models/llm", help="chat models on D:, read-only")
     ap.add_argument("--rw", help="the same folder writable (only during dev mod add|update from Windows)")
     a = ap.parse_args()
-    cfg = json.load(open(a.config))
+    if a.plan or a.json:
+        if not(a.plan and a.json):ap.error('Use --plan --json together')
+        print(json.dumps(download_plan(a.config,a.models_root)));return
+    cfg = declarations(a.config)
     rw = a.rw if a.rw and os.path.isdir(a.rw) and os.access(a.rw, os.W_OK) else None
     n = media_models(cfg["media"], a.out) if a.media else chat_models(cfg["chat"], a.state, a.ro, rw)
     print(f"\n{n} item(s) failed" if n else "\nall items available")

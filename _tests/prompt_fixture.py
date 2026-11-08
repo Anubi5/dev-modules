@@ -28,7 +28,6 @@ def main():
         root=Path(tempfile.mkdtemp(prefix='eva-windows-approval-'));root.chmod(0o700)
         module=root/'source/comfyui';module.mkdir(parents=True)
         (module/'fetch_models.py').write_text(bundle['fetch'])
-        (root/'planner.py').write_text(bundle['planner'])
         (root/'weights').mkdir();(root/'state').mkdir()
         repo='https://fixture.invalid/missing-test.safetensors'
         (module/'models.txt').write_text(repo+' missing-test.safetensors checkpoints sha256:'+SHA+'\n')
@@ -40,7 +39,7 @@ def main():
     if not root.name.startswith('eva-windows-approval-') or root.parent!=Path(tempfile.gettempdir()).resolve():
         raise ValueError('Unexpected fixture root')
     if mode=='plan':
-        print(json.dumps(load('approval_plan',root/'planner.py').plan(root/'source',['comfyui'],root/'weights')));return 0
+        print(json.dumps(load('approval_plan',root/'source/comfyui/fetch_models.py').download_plan(root/'source/comfyui/models.txt',root/'weights')));return 0
     if mode=='apply':
         approvals=sys.argv[3:]
         if any(len(value)!=64 or any(c not in '0123456789abcdef' for c in value) for value in approvals):raise ValueError('Invalid hash argument')

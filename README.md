@@ -29,7 +29,25 @@ model files go there, never into the module folder), `LLM_PORT` (the model-servi
 
 ## Adding a model or a ComfyUI node
 That is not a new module: add a line to the module's list (`llama-swap/models.json`, `comfyui/models.txt`,
-`comfyui/nodes.txt`), push, then `dev mod update <module>` - only what is missing is fetched.
+`comfyui/nodes.txt`), push, then `dev mod update <module>`. The target source is
+fetched first; missing model files require a reviewed pin, byte size and licence,
+and exact Windows DOWNLOAD approval. Ordinary updates and unattended runs do not
+receive model approval.
+
+## Module-owned download plans
+
+A module that manages model files supplies `model-plan.sh`, which invokes its own
+fetcher with `--plan --json`. The hook emits `{ "schema": 1, "files": [...] }`;
+each missing file reports path, bytes, source, licence, sha256, eligible and an
+optional reason. Planning reads declarations only: no downloads, model execution,
+state/configuration writes or installs. A module without managed files needs no
+hook. A new module requires no core parser change.
+
+The core fetches the configured module revision, retains a clean detached source
+checkout, aggregates hook results and returns the exact source revision. Windows
+asks once and passes approved SHA-256 arguments plus that revision. Execution
+uses the same checkout even if another fetch advances the source cache. Existing
+code/data are preserved; retained source checkouts are not automatically deleted.
 
 ## New module
 Copy `_template/`, fill it in (or ask Claude/Codex to, from the tool's README), push, `dev mod add <name>`.

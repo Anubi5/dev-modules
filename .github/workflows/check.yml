@@ -41,6 +41,8 @@ jobs:
         run: bash _tests/models_test.sh
       - name: Model acquisition requires owner consent (offline fixtures)
         run: python3 -B _tests/download_policy_test.py
+      - name: Module-owned read-only plans and non-package size declarations
+        run: python3 -B _tests/model_plan_test.py
       - name: Synthetic approval fixture backend (offline, not PC acceptance)
         run: python3 -B _tests/approval_fixture_test.py
       - name: Model publication and failure preservation (disposable fixtures)

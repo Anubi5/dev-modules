@@ -67,11 +67,9 @@ def sha256(path):
 
 def declared_pins():
     pins={}
-    for line in (HERE/'models.txt').read_text().splitlines():
-        if not line.strip() or line.lstrip().startswith('#'): continue
-        fields=line.split(); name=next((x for x in fields[3:] if x!='optional' and not x.startswith('sha256:')),Path(fields[1]).name)
-        pin=next((x[7:].lower() for x in fields[3:] if x.startswith('sha256:')),None)
-        if pin: pins['comfy/'+fields[2]+'/'+name]=pin
+    from fetch_models import declarations
+    for row in declarations(HERE/'models.txt'):
+        if row['sha256']:pins['comfy/'+row['folder']+'/'+row['name']]=row['sha256'].lower()
     for package in registry.packages().values():
         for part in package['parts'].values(): pins['comfy/'+part['folder']+'/'+part['file']]=part['sha256']
     helpers=HERE/'helper_models.json'

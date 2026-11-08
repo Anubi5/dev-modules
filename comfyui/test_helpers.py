@@ -118,6 +118,7 @@ class DownloadTests(unittest.TestCase):
         spec=importlib.util.spec_from_file_location('fixture_fetch', Path(__file__).with_name('fetch_models.py'))
         with patch.dict(sys.modules, huggingface_hub=stub):
             self.fetch=importlib.util.module_from_spec(spec); spec.loader.exec_module(self.fetch)
+        self.fetch.HfApi=stub.HfApi;self.fetch.hf_hub_download=stub.hf_hub_download
         self.calls=[]
 
     def download(self, repo, filename, **kwargs):

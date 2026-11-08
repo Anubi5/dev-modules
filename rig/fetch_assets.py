@@ -9,6 +9,25 @@ import sys
 import tempfile
 
 
+def declarations(module):
+    return (json.loads((module/'models.json').read_text()),json.loads((module/'architecture.json').read_text()))
+
+
+def download_plan(module=None, root=None):
+    module=Path(module or os.environ.get('MOD',Path(__file__).resolve().parent))
+    root=Path(root or os.environ.get('MODELS_MOUNT','/models'));manifest,architecture=declarations(module);files=[]
+    weights=manifest['weights']
+    entries=[(row,weights,root/'rig'/row['path'],'rig/'+row['path']) for row in weights['files']]
+    entries.append((architecture,architecture,module/'app/architecture/opt350m/config.json','rig/architecture/'+architecture['path']))
+    for row,owner,target,relative in entries:
+        if Path(row['path']).is_absolute() or '..' in Path(row['path']).parts or '\\' in row['path']:raise ValueError('Unsafe declared model path')
+        if target.is_file():continue
+        policy=owner.get('download_policy',{});sha=row.get('sha256');size=row.get('bytes')
+        eligible=bool(re.fullmatch('[a-fA-F0-9]{64}',sha or '')) and bool(re.fullmatch('[a-fA-F0-9]{40}',owner.get('revision',''))) and type(size) is int and size>0 and policy.get('approved') is True and bool(policy.get('license')) and not policy.get('gated')
+        files.append(dict(path=relative,bytes=size,source=owner['repository']+'@'+owner['revision']+'/'+row['path'],licence=policy.get('license'),sha256=sha.lower() if sha else None,eligible=eligible,reason=None if eligible else 'Manual copy: incomplete or restricted declaration'))
+    return dict(schema=1,files=files)
+
+
 def approved_download(sha):
     """Only argument-derived approvals from the Windows plan may authorize bytes."""
     if os.environ.get('DEV_MODEL_OPERATION') != 'approved' or os.environ.get('DEV_UNATTENDED'):
@@ -53,8 +72,12 @@ def sha256(path):
 
 
 def main():
+    if '--plan' in sys.argv or '--json' in sys.argv:
+        import argparse
+        parser=argparse.ArgumentParser();parser.add_argument('--plan',action='store_true',required=True);parser.add_argument('--json',action='store_true',required=True);parser.add_argument('--models-root');parser.add_argument('--module')
+        args=parser.parse_args();print(json.dumps(download_plan(args.module,args.models_root)));return
     module = Path(os.environ["MOD"])
-    manifest = json.loads((module / "models.json").read_text())
+    manifest,architecture = declarations(module)
     root = Path(os.environ.get("RIG_MODELS_ROOT", str(Path(os.environ.get("MODELS_MOUNT", "/models")) / "rig")))
     write_root = os.environ.get("RIG_MODELS_WRITE_ROOT")
     if not write_root and os.environ.get("MODELS_RW"):
@@ -72,7 +95,6 @@ def main():
             raise SystemExit("Pinned model missing or checksum mismatch: " + row["path"])
         installed["checkpoints"].append({"path": str(target), "sha256": row["sha256"]})
         print("Verified", row["path"], flush=True)
-    architecture = json.loads((module / "architecture.json").read_text())
     destination = module / "app/architecture/opt350m/config.json"
     if not destination.is_file() or sha256(destination) != architecture["sha256"]:
         cache = Path(os.environ.get("RIG_ASSET_CACHE", str(Path.home() / ".cache/huggingface/hub")))

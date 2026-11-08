@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import sys
 
-from generation import registry
+from generation import registry, builders, video
 
 EXTENSIONS = {'.safetensors','.gguf','.ckpt','.pt','.pth','.bin','.onnx'}
 HERE = Path(__file__).resolve().parent
@@ -179,9 +179,13 @@ def inventory(root):
             package['formats'].append(row['format']['name'])
             if row['format']['status']=='invalid': invalid.append(row['id'])
         package['formats']=sorted(set(package['formats']))
+        supported=(name in family_metadata or package['kind'] in ('chat','rig','upscaling')
+                   or (package['kind']=='image' and metadata.get('arch') in builders.BUILTINS)
+                   or (package['kind']=='video' and metadata.get('arch') in video.ARCHITECTURES)
+                   or (package['kind']=='3d' and bool(metadata.get('workflow'))))
         package['completeness']='missing-components' if package['missing'] else 'invalid-format' if invalid else 'declared-components-present'
-        package['compatibility']='invalid component format' if invalid else 'reviewed package; hardware acceptance separate'
-        package['runnable']=package['status']=='ready' and not invalid and package['kind']!='upscaling'
+        package['compatibility']='invalid component format' if invalid else 'requires a reviewed family adapter' if not supported else 'reviewed package; hardware acceptance separate'
+        package['runnable']=package['status']=='ready' and supported and not invalid and package['kind']!='upscaling'
         for component in package['components']:
             row=by_path.get(str((root/component).resolve()))
             if row:

@@ -134,5 +134,21 @@ class CatalogueTests(unittest.TestCase):
         self.assertEqual(row['format']['status'],'unverified')
         self.assertFalse(row['runnable'])
 
+    def test_unknown_architecture_does_not_gain_execution_from_complete_files(self):
+        source=Path(self.temp.name)/'module';source.mkdir()
+        header=json.dumps({'weight':{'data_offsets':[0,4]}}).encode()
+        path=self.fixture('comfy/diffusion_models/fixture.safetensors')
+        path.write_bytes(len(header).to_bytes(8,'little')+header+b'data')
+        (source/'models.txt').write_text('fixture/repo fixture.safetensors diffusion_models sha256:'+catalogue.sha256(path))
+        (source/'profiles.json').write_text(json.dumps({'models':{
+            'unsupported':{'arch':'new-unreviewed-architecture','file':path.name,'capability_tags':['image']},
+            'supported':{'arch':'sdxl','file':path.name,'capability_tags':['image']}}}))
+        with patch.object(catalogue,'HERE',source),patch.object(registry,'packages',return_value={}):
+            report=catalogue.inventory(self.root)
+        self.assertTrue(catalogue.select(report,'supported')['runnable'])
+        unknown=catalogue.select(report,'unsupported')
+        self.assertFalse(unknown['runnable'])
+        self.assertIn('reviewed family',unknown['compatibility'])
+
 
 if __name__=='__main__':unittest.main()

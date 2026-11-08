@@ -16,19 +16,25 @@ class CatalogueTests(unittest.TestCase):
     def test_default_text_hides_components_but_preserves_unknown_and_missing_packages(self):
         package=dict(id='fixture',status='needs-something',components=['comfy/component.gguf'])
         files=[dict(id=name,path=str(self.root/name),status='untested',expected_sha256=pin)
-               for name,pin in [('comfy/component.gguf','1'*64),('unrecognized.gguf',None)]]
+               for name,pin in [('comfy/component.gguf','1'*64),('standalone-pinned.gguf','2'*64),('unrecognized.gguf',None)]]
         report=dict(schema='local-ai.models/1',packages=[package],files=files)
         with patch.object(catalogue,'inventory',return_value=report):
             with contextlib.redirect_stdout(io.StringIO()) as output:
                 self.assertEqual(catalogue.main(['list','--root',str(self.root)]),0)
             self.assertIn('fixture',output.getvalue())
             self.assertIn('unrecognized.gguf',output.getvalue())
+            self.assertIn('standalone-pinned.gguf',output.getvalue())
             self.assertNotIn('comfy/component.gguf',output.getvalue())
             with contextlib.redirect_stdout(io.StringIO()) as output:
                 self.assertEqual(catalogue.main(['list','--all','--root',str(self.root)]),0)
             self.assertIn('comfy/component.gguf',output.getvalue())
+            self.assertIn('standalone-pinned.gguf',output.getvalue())
+            self.assertIn('unrecognized.gguf',output.getvalue())
             with contextlib.redirect_stdout(io.StringIO()) as output:
                 self.assertEqual(catalogue.main(['list','--json']),0)
+            self.assertEqual(json.loads(output.getvalue()),report)
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(catalogue.main(['list','--all','--json']),0)
             self.assertEqual(json.loads(output.getvalue()),report)
 
     def setUp(self):

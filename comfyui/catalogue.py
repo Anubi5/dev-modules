@@ -151,7 +151,7 @@ def main(argv=None):
             components={str((args.root/component).resolve()) for package in report['packages'] for component in package['components']}
             # Unrecognized files and standalone GGUF/LoRA files stay visible. A missing
             # registry reference is never evidence that a file is unused or disposable.
-            visible=[row for row in report['files'] if args.all or (row['path'] not in components and not row['expected_sha256'])]
+            visible=[row for row in report['files'] if args.all or row['path'] not in components]
             for row in visible: print(f"{row['status']:<16} {row['id']}")
             hidden=len(report['files'])-len(visible)
             if hidden: print(f"{hidden} declared component file(s) hidden; use --all for details")

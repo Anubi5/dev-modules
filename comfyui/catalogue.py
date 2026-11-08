@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import sys
 
 from generation import registry
@@ -59,7 +60,8 @@ def inventory(root):
         packages.append(dict(id=name,kind=p['kind'],architecture=p['architecture'],status='needs-something' if missing else 'ready',
                              missing=missing,integrity='use verify for full SHA-256 checking',experimental=p.get('experimental',True),
                              licence=p.get('licence',{}),package_sha256=p['sha256'],
-                             components=['comfy/'+part['folder']+'/'+part['file'] for part in p['parts'].values()]))
+                             components=['comfy/'+part['folder']+'/'+part['file'] for part in p['parts'].values()],
+                             description=p.get('description',name),defaults=p.get('defaults',{}),capabilities=p.get('capabilities',{})))
     legacy=json.loads((HERE/'profiles.json').read_text())
     for name,p in dict(legacy['models'],**legacy.get('video_models',{})).items():
         references={p[key] for key in ['file','text_encoder','vae'] if isinstance(p.get(key),str)}
@@ -81,7 +83,8 @@ def inventory(root):
             if not path.is_file() or not path.resolve().is_relative_to(root): missing.append(key)
         packages.append(dict(id=name,kind=p.get('kind','image'),architecture=p.get('arch'),
             status='needs-something' if missing else 'ready',missing=missing,components=components,
-            experimental=True,integrity='use verify for full SHA-256 checking'))
+            experimental=True,integrity='use verify for full SHA-256 checking',description=p.get('about',name),
+            defaults={key:p[key] for key in ['steps','cfg','sampler','scheduler','style','fps'] if key in p}))
     rig=[key for key in pins if key.startswith('rig/')]
     if rig:
         missing=[key for key in rig if not (root/key).is_file() or not (root/key).resolve().is_relative_to(root)]
@@ -90,12 +93,19 @@ def inventory(root):
     # Installed local chat selections are metadata; never invoke a server or discover executable code.
     resolved=Path.home()/'.local/share/modules/llama-swap/models/models.json'
     if resolved.exists():
+        source=resolved.parents[1]/'models.json'
+        specs={p['id']:p for p in json.loads(source.read_text())['chat']} if source.exists() else {}
         for name,p in json.loads(resolved.read_text()).items():
             paths=p.get('files') or ([p['file']] if p.get('file') else [])
             if not paths: continue
             missing=[str(path) for path in map(Path,paths) if not path.is_file() or not path.resolve().is_relative_to(root)]
+            spec=specs.get(name,{})
+            if not spec:missing.append('No current reviewed serving entry')
+            effective=dict(specs.get(spec.get('weights_from'),{}),**spec)
+            context=re.search(r'(?:^|\s)(?:-c|--ctx-size)\s+(\d+)',effective.get('args',''))
             packages.append(dict(id=name,kind='chat',status='needs-something' if missing else 'ready',missing=missing,
-                                 components=paths,experimental=True))
+                                 components=paths,experimental=True,description=effective.get('name',name),
+                                 context_tokens=int(context[1]) if context else None,weights_from=spec.get('weights_from')))
     return dict(schema='local-ai.models/1',root=str(root),packages=packages,files=files,discovery_read_only=True)
 
 

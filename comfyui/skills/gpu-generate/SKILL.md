@@ -9,6 +9,12 @@ description: Read this BEFORE making any image or video - generate or edit image
 The user asks for a picture, illustration, concept art, texture, reference image or short video clip.
 
 ## Procedure
+Before choosing a model, read `ai models list --json`, then `ai models show <id> --json`
+for the relevant capability, description, defaults, required files and missing parts.
+This is the same read-only inventory used by humans; do not maintain a second list
+of installed models. `ready` means declared components are present, not visual/GPU
+acceptance. Discovery never installs/downloads; missing components need an explicit
+owner action. Use `ai models verify <id>` only when a full content check is needed.
 1. Write a concrete prompt: subject, setting, style, lighting, camera. Add a negative prompt only if needed (the default
    one already removes the plastic "AI" look). For photos, describe it like a photographer: "RAW photo", lens (35mm,
    50mm, 85mm), real light (window light, overcast, golden hour), "natural skin texture", "film grain"; keep colours
@@ -20,16 +26,11 @@ The user asks for a picture, illustration, concept art, texture, reference image
      - `--face <image>`: keep the face from a picture with ONE clear face. `--face-weight 0.3-1.2` (0.65; above ~0.8 faces get gaunt and distorted).
      - `--fix-faces` / `--fix-hands`: redraw faces / hands in more detail (use for people, especially full-body shots).
      - `--hires`: also save a detailed 2x copy (slow); `--upscale`: a fast 2x copy.
-     - Which model (leave `--model` out unless there is a reason; defaults were picked by a side-by-side test):
-       plain photo/scene/product -> default (zimage); with --pose/--face/--fix-*/--hires -> juggernaut automatically
-       (`--model realvis` for close-up portraits with --face); text in the image, posters, complex multi-part scenes
-       -> `--model flux3` (or `--model moss` for posters/signs/infographics with exact wording); anime/illustration
-       -> `--model anima` (`--style art` for other artwork).
-     - `--model <name>` (each brings its own tuned settings; `ai gen models` shows which are ready):
-       realvis = photoreal portraits; the SDXL family (realvis, juggernaut, sdxl-base) is the only one with `--face`/`--fix-*`/`--hires`; juggernaut = natural
-       documentary photos; sdxl-base = general/artistic; flux3 = follows long prompts, renders text, best composition
-       (prompt is expanded automatically; optional - may not be installed); zimage = fast photoreal (8 steps);
-       anima = anime/illustration (danbooru-style tags or plain text, `--pose` works); anima-turbo = fast anime drafts.
+     - Leave `--model` out unless the user requests a model or the shared inventory
+       gives a reason to select another. `--model <id>` uses that package's tuned
+       defaults; choose by the inventory's capability/description, not a hardcoded
+       catalogue in this skill. Unsupported options fail before generation; consult
+       `ai gen --help` and the selected model's metadata rather than guessing.
      - `--lora <part of a name>[:0.8]`: a LoRA the owner put into D:\AI\models\comfy\loras (style, character, detail);
        up to 4. Find them with `ai gen list loras --json` (file, trigger, strength, base, `tested_with`), one in detail with
        `ai gen show <name> --json`, and whether it fits a model with `ai gen check --model <m> --lora <name>` (headers

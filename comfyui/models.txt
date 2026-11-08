@@ -1,63 +1,65 @@
-# ComfyUI model files: <huggingface repo> <file or path in the repo> <ComfyUI folder> [save as] [sha256:<hex>]
+# ComfyUI model files: <huggingface repo> <file or path in the repo> <ComfyUI folder> [save as] [sha256:<hex>] [bytes:<integer>]
+# Declared byte sizes are matched to public upstream file metadata by repository, exact filename and LFS SHA-256.
+# Unknown sizes stay manual-only; planning never queries the network or invents a size.
 # Every declaration carries a sha256 (CI checks it). Download licences: download_licenses.json.
-# Files live in D:\AI\models\comfy (= /models/comfy, read-only); missing ones are downloaded there by dev mod add|update (Windows).
-stabilityai/stable-diffusion-xl-base-1.0 sd_xl_base_1.0.safetensors checkpoints sha256:31e35c80fc4829d14f90153f4c74cd59c90b779f6afe05a74cd6120b893f7e5b
+# Files live in D:\AI\models\comfy (= /models/comfy, read-only); only explicitly approved missing pins may be downloaded by dev mod add|update (Windows).
+stabilityai/stable-diffusion-xl-base-1.0 sd_xl_base_1.0.safetensors checkpoints sha256:31e35c80fc4829d14f90153f4c74cd59c90b779f6afe05a74cd6120b893f7e5b bytes:6938078334
 # Photoreal SDXL fine-tune used by ai gen (openrail++); works with every SDXL ControlNet / IPAdapter / detailer here
-SG161222/RealVisXL_V5.0 RealVisXL_V5.0_fp16.safetensors checkpoints sha256:6a35a7855770ae9820a3c931d4964c3817b6d9e3c6f9c4dabb5b3a94e5643b80
+SG161222/RealVisXL_V5.0 RealVisXL_V5.0_fp16.safetensors checkpoints sha256:6a35a7855770ae9820a3c931d4964c3817b6d9e3c6f9c4dabb5b3a94e5643b80 bytes:6938065488
 # Juggernaut XL "Ragnarok" (KandooAI / RunDiffusion; CivitAI only) - ai gen image ... --checkpoint juggernaut
 https://civitai.com/api/download/models/1759168?fileId=1659952 juggernautXL_ragnarok.safetensors checkpoints sha256:DD08FA32F98D05A2443CA1419E46DF1575A0811F6E3B246D9DD47FF20F5EB66A
 Comfy-Org/Wan_2.2_ComfyUI_Repackaged wan2.2_vae.safetensors vae sha256:e40321bd36b9709991dae2530eb4ac303dd168276980d3e9bc4b6e2b75fed156
 Comfy-Org/Wan_2.2_ComfyUI_Repackaged umt5_xxl_fp8_e4m3fn_scaled.safetensors text_encoders sha256:c3355d30191f1f066b26d93fba017ae9809dce6c627dda5f6a66eaa651204f68
-QuantStack/Wan2.2-TI2V-5B-GGUF Wan2.2-TI2V-5B-Q8_0.gguf diffusion_models sha256:57bece983817ab2f957546683bb670f13be7d99022d45674840cd999a050ea8f
-Kim2091/UltraSharp 4x-UltraSharp.safetensors upscale_models sha256:36a340b5509b699d2c06cb445ddc1d3d39199ac734d889ed6d7915f60e05bcbc
+QuantStack/Wan2.2-TI2V-5B-GGUF Wan2.2-TI2V-5B-Q8_0.gguf diffusion_models sha256:57bece983817ab2f957546683bb670f13be7d99022d45674840cd999a050ea8f bytes:5400179040
+Kim2091/UltraSharp 4x-UltraSharp.safetensors upscale_models sha256:36a340b5509b699d2c06cb445ddc1d3d39199ac734d889ed6d7915f60e05bcbc bytes:66864028
 # Pose / depth / edges: one SDXL ControlNet for all control types (use "SetUnionControlNetType" or Apply ControlNet)
-xinsir/controlnet-union-sdxl-1.0 diffusion_pytorch_model_promax.safetensors controlnet controlnet-union-sdxl-promax.safetensors sha256:9fae2e50cb431bfcbe05822b59ec2228df545ef27f711dea8949e9f4ed9f7cdc
+xinsir/controlnet-union-sdxl-1.0 diffusion_pytorch_model_promax.safetensors controlnet controlnet-union-sdxl-promax.safetensors sha256:9fae2e50cb431bfcbe05822b59ec2228df545ef27f711dea8949e9f4ed9f7cdc bytes:2513342408
 # Consistent faces: IPAdapter (face reference image) + FaceID Plus v2 (stronger, uses InsightFace) + the CLIP vision encoder
-h94/IP-Adapter models/image_encoder/model.safetensors clip_vision CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors sha256:6ca9667da1ca9e0b0f75e46bb030f7e011f44f86cbfb8d5a36590fcd7507b030
-h94/IP-Adapter sdxl_models/ip-adapter-plus-face_sdxl_vit-h.safetensors ipadapter sha256:677ad8860204f7d0bfba12d29e6c31ded9beefdf3e4bbd102518357d31a292c1
-h94/IP-Adapter-FaceID ip-adapter-faceid-plusv2_sdxl.bin ipadapter sha256:c6945d82b543700cc3ccbb98d363b837e9c596281607857c74b713a876daf5fb
-h94/IP-Adapter-FaceID ip-adapter-faceid-plusv2_sdxl_lora.safetensors loras sha256:f24b4bb2dad6638a09c00f151cde84991baf374409385bcbab53c1871a30cb7b
+h94/IP-Adapter models/image_encoder/model.safetensors clip_vision CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors sha256:6ca9667da1ca9e0b0f75e46bb030f7e011f44f86cbfb8d5a36590fcd7507b030 bytes:2528373448
+h94/IP-Adapter sdxl_models/ip-adapter-plus-face_sdxl_vit-h.safetensors ipadapter sha256:677ad8860204f7d0bfba12d29e6c31ded9beefdf3e4bbd102518357d31a292c1 bytes:847517512
+h94/IP-Adapter-FaceID ip-adapter-faceid-plusv2_sdxl.bin ipadapter sha256:c6945d82b543700cc3ccbb98d363b837e9c596281607857c74b713a876daf5fb bytes:1487555181
+h94/IP-Adapter-FaceID ip-adapter-faceid-plusv2_sdxl_lora.safetensors loras sha256:f24b4bb2dad6638a09c00f151cde84991baf374409385bcbab53c1871a30cb7b bytes:371842896
 # Face / hand repair (FaceDetailer): detectors
-Bingsu/adetailer face_yolov8m.pt ultralytics/bbox sha256:717923c19b3f4bbf5250b728f1fa6b2cb72a33aed1d236ea9caf0e21ad943e5f
-Bingsu/adetailer hand_yolov8s.pt ultralytics/bbox sha256:70b540063fbc385736d8258970744a4afbc4cbf7932134bae3b24cdadeadec06
+Bingsu/adetailer face_yolov8m.pt ultralytics/bbox sha256:717923c19b3f4bbf5250b728f1fa6b2cb72a33aed1d236ea9caf0e21ad943e5f bytes:52026019
+Bingsu/adetailer hand_yolov8s.pt ultralytics/bbox sha256:70b540063fbc385736d8258970744a4afbc4cbf7932134bae3b24cdadeadec06 bytes:22507643
 # --- FLUX 3 Image Klein (distilled, INT8) - general images + ai edit. Gated on Hugging Face (FLUX Kommunity License,
 #     non-commercial): accept it at huggingface.co/black-forest-labs/flux-3-image-klein-comfy and put the 3 files into
 #     D:\AI\models\comfy\{diffusion_models,text_encoders,vae}; they are checked against these checksums.
-black-forest-labs/flux-3-image-klein-comfy diffusion_models/flux3-image-klein-int8-convrot.safetensors diffusion_models sha256:847d8933548afd93df4af2cac2498e70891bf28d9dae06d695f536992e168fe2 optional
-black-forest-labs/flux-3-image-klein-comfy text_encoders/qwen3vl_4b_int8_convrot.safetensors text_encoders sha256:32de113cbf8282b02cbff0794b637b9d6676da09314a1db5a30bcea9bf4ee01c optional
-black-forest-labs/flux-3-image-klein-comfy vae/flux2-vae.safetensors vae sha256:868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3 optional
+black-forest-labs/flux-3-image-klein-comfy diffusion_models/flux3-image-klein-int8-convrot.safetensors diffusion_models sha256:847d8933548afd93df4af2cac2498e70891bf28d9dae06d695f536992e168fe2 optional bytes:5827874779
+black-forest-labs/flux-3-image-klein-comfy text_encoders/qwen3vl_4b_int8_convrot.safetensors text_encoders sha256:32de113cbf8282b02cbff0794b637b9d6676da09314a1db5a30bcea9bf4ee01c optional bytes:4858559240
+black-forest-labs/flux-3-image-klein-comfy vae/flux2-vae.safetensors vae sha256:868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3 optional bytes:336211292
 # --- Anima (CircleStone Labs, non-commercial licence for the weights; images may be used commercially) - illustration/anime
-circlestone-labs/Anima split_files/diffusion_models/anima-aesthetic-v1.1.safetensors diffusion_models sha256:3c1868387a3a1ff504bbb87c33678321965ead381fcf87afbd0264daa600c082
-circlestone-labs/Anima split_files/diffusion_models/anima-turbo-v1.1.safetensors diffusion_models sha256:fba11953276b57edf59d1dc4f1857ac05aa079c56f982b4d7c20298d57d3f7eb
-circlestone-labs/Anima split_files/text_encoders/qwen_3_06b_base.safetensors text_encoders sha256:cd2a512003e2f9f3cd3c32a9c3573f820bb28c940f73c57b1ddaa983d9223eba
-circlestone-labs/Anima split_files/vae/qwen_image_vae.safetensors vae sha256:a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f
-Comfy-Org/Anima-LLLite model_patches/anima-lllite-pose-1.safetensors model_patches sha256:ddb543be5e74ce8ca79ae45807aa0c1328a4888e00706727c6fd7100dde7c864
-Comfy-Org/Anima-LLLite model_patches/anima-lllite-depth-1.safetensors model_patches sha256:81357e51cd59874b4fbdda1eb3117aa73eafe36cc7efb9cf80a152d6bc8d0602
-Comfy-Org/Anima-LLLite model_patches/anima-lllite-lineart-1.safetensors model_patches sha256:1abfde93493445390632788339627c37c69c7792aef1e8104cf15ea5f2d379e9
+circlestone-labs/Anima split_files/diffusion_models/anima-aesthetic-v1.1.safetensors diffusion_models sha256:3c1868387a3a1ff504bbb87c33678321965ead381fcf87afbd0264daa600c082 bytes:4182230656
+circlestone-labs/Anima split_files/diffusion_models/anima-turbo-v1.1.safetensors diffusion_models sha256:fba11953276b57edf59d1dc4f1857ac05aa079c56f982b4d7c20298d57d3f7eb bytes:4182230656
+circlestone-labs/Anima split_files/text_encoders/qwen_3_06b_base.safetensors text_encoders sha256:cd2a512003e2f9f3cd3c32a9c3573f820bb28c940f73c57b1ddaa983d9223eba bytes:1192135096
+circlestone-labs/Anima split_files/vae/qwen_image_vae.safetensors vae sha256:a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f bytes:253806246
+Comfy-Org/Anima-LLLite model_patches/anima-lllite-pose-1.safetensors model_patches sha256:ddb543be5e74ce8ca79ae45807aa0c1328a4888e00706727c6fd7100dde7c864 bytes:23310040
+Comfy-Org/Anima-LLLite model_patches/anima-lllite-depth-1.safetensors model_patches sha256:81357e51cd59874b4fbdda1eb3117aa73eafe36cc7efb9cf80a152d6bc8d0602 bytes:7864128
+Comfy-Org/Anima-LLLite model_patches/anima-lllite-lineart-1.safetensors model_patches sha256:1abfde93493445390632788339627c37c69c7792aef1e8104cf15ea5f2d379e9 bytes:7787888
 # --- Z-Image Turbo (Tongyi-MAI, Apache 2.0) - fast photoreal, 8 steps; INT8 model + FP8 text encoder fit 12 GB
-Comfy-Org/Z-Image-Turbo split_files/diffusion_models/z_image_turbo_int8_convrot.safetensors diffusion_models sha256:be517ebd47c912a5626a588e1aeea43e6be4a43c0cdcd2b48a2a780d9f358635
-Comfy-Org/Z-Image-Turbo split_files/text_encoders/qwen_3_4b_fp8_mixed.safetensors text_encoders sha256:72450b19758172c5a7273cf7de729d1c17e7f434a104a00167624cba94f68f15
-Comfy-Org/Z-Image-Turbo split_files/vae/ae.safetensors vae sha256:afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38
+Comfy-Org/Z-Image-Turbo split_files/diffusion_models/z_image_turbo_int8_convrot.safetensors diffusion_models sha256:be517ebd47c912a5626a588e1aeea43e6be4a43c0cdcd2b48a2a780d9f358635 bytes:6201001296
+Comfy-Org/Z-Image-Turbo split_files/text_encoders/qwen_3_4b_fp8_mixed.safetensors text_encoders sha256:72450b19758172c5a7273cf7de729d1c17e7f434a104a00167624cba94f68f15 bytes:5631994051
+Comfy-Org/Z-Image-Turbo split_files/vae/ae.safetensors vae sha256:afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38 bytes:335304388
 # --- MOSS-Image SFT (OpenMOSS, Apache 2.0) - legible text in images (posters, signs, infographics); INT8 model + 4-bit
 #     Qwen3.5-9B text encoder (Comfy template image_moss_image_t2i). ai gen image --model moss
-Comfy-Org/MOSS-Image diffusion_models/moss_image_sft_int8_convrot.safetensors diffusion_models sha256:b4d1475bc7eeffd7b809e82ea13a1fba1fb85c4e18365af3813722faa5c0fe4f
-Comfy-Org/MOSS-Image text_encoders/qwen3.5_9b_w4a8_gptq.safetensors text_encoders sha256:4cc6a1543ad2061806da46f35f90cadb4801dcba246c44782cf42ec0feb6407c
-Comfy-Org/MOSS-Image vae/flux2-vae_small.safetensors vae sha256:d8d52ba036475f5fb07c8b435e176d3d97ebfa82f0d1a1c317f9cc1e25bd013b
+Comfy-Org/MOSS-Image diffusion_models/moss_image_sft_int8_convrot.safetensors diffusion_models sha256:b4d1475bc7eeffd7b809e82ea13a1fba1fb85c4e18365af3813722faa5c0fe4f bytes:5413698958
+Comfy-Org/MOSS-Image text_encoders/qwen3.5_9b_w4a8_gptq.safetensors text_encoders sha256:4cc6a1543ad2061806da46f35f90cadb4801dcba246c44782cf42ec0feb6407c bytes:7343591088
+Comfy-Org/MOSS-Image vae/flux2-vae_small.safetensors vae sha256:d8d52ba036475f5fb07c8b435e176d3d97ebfa82f0d1a1c317f9cc1e25bd013b bytes:249521340
 # --- Fibo 2.0 Edit Turbo (Bria; weights CC BY-NC 4.0, non-commercial) - edits with up to 4 reference images, 4 steps.
 #     ai gen edit --model fibo2. Text encoder and VAE are the same files FLUX 3 uses (same checksums).
-Comfy-Org/Fibo-2.0 diffusion_models/fibo2_edit_turbo_int8_convrot.safetensors diffusion_models sha256:1f6fa7c499191f405467123f655f11762661eaa5bd479d1da8f161398ef72c3b
-Comfy-Org/Fibo-2.0 text_encoders/qwen3vl_4b_int8_convrot.safetensors text_encoders sha256:32de113cbf8282b02cbff0794b637b9d6676da09314a1db5a30bcea9bf4ee01c
-Comfy-Org/Fibo-2.0 vae/flux2-vae.safetensors vae sha256:868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3
+Comfy-Org/Fibo-2.0 diffusion_models/fibo2_edit_turbo_int8_convrot.safetensors diffusion_models sha256:1f6fa7c499191f405467123f655f11762661eaa5bd479d1da8f161398ef72c3b bytes:8408562474
+Comfy-Org/Fibo-2.0 text_encoders/qwen3vl_4b_int8_convrot.safetensors text_encoders sha256:32de113cbf8282b02cbff0794b637b9d6676da09314a1db5a30bcea9bf4ee01c bytes:4858559240
+Comfy-Org/Fibo-2.0 vae/flux2-vae.safetensors vae sha256:868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3 bytes:336211292
 
 # Image to 3D (trial, optional): Pixal3D (MIT) + TRELLIS.2 (MIT) - native ComfyUI nodes, int8 weights for 12 GB.
 # The image encoders are Meta DINOv3 (DINOv3 licence: worldwide, royalty-free). Helpers: BiRefNet background
 # removal (MIT), MoGe-2 camera estimation (MIT). DINOv3 remains a manual licence action.
 # 3D pins: the SHA-256 the PC recorded, each equal to the file's Hugging Face LFS hash (checked 2026-11-05)
-Comfy-Org/Pixal3D diffusion_models/pixal3d_int8_convrot.safetensors diffusion_models optional sha256:4621eac3b715484f79303c7152af641fe0b2b14f4d0e3d394fd6922d00f955ec
-Comfy-Org/Pixal3D diffusion_models/pixal3d_multiview_int8_convrot.safetensors diffusion_models optional sha256:6b1eb3328930d921d3b57508d9c46cceec1c174dcedeebc14f176ab67d49f477
-Comfy-Org/Pixal3D clip_vision/dino_v3_L_naf_fp32.safetensors clip_vision optional sha256:4ad2ec4e0879a5b5b04cd97325cc37da954a7b6edca5170b86510f17f2b2290f
-Comfy-Org/Pixal3D vae/trellis_2_shape_vae_bf16.safetensors vae optional sha256:de0cb4949a76c59ee5c091a995a69bcc8c51d5aeda939f0c641a50d2a72341f4
-Comfy-Org/Pixal3D vae/trellis_2_texture_vae_bf16.safetensors vae optional sha256:714e5ebf094a610e12a8e3b5175c18a62f37f6ea4218acb6073644456b73ab0e
-Comfy-Org/BiRefNet background_removal/birefnet.safetensors background_removal optional sha256:9ab37426bf4de0567af6b5d21b16151357149139362e6e8992021b8ce356a154
-Comfy-Org/MoGe geometry_estimation/moge_2_vitl_normal_fp16.safetensors geometry_estimation optional sha256:cb1a692d03235671e959e81360d7b4d9f44aefadb1f852d6ca6aa17799d5e31f
-Comfy-Org/TRELLIS.2 diffusion_models/trellis_2_int8_convrot.safetensors diffusion_models optional sha256:d01952ad137213f6a868f86b6b877026276f84af5eec23069217475a0bad3a31
+Comfy-Org/Pixal3D diffusion_models/pixal3d_int8_convrot.safetensors diffusion_models optional sha256:4621eac3b715484f79303c7152af641fe0b2b14f4d0e3d394fd6922d00f955ec bytes:5584555824
+Comfy-Org/Pixal3D diffusion_models/pixal3d_multiview_int8_convrot.safetensors diffusion_models optional sha256:6b1eb3328930d921d3b57508d9c46cceec1c174dcedeebc14f176ab67d49f477 bytes:5584555824
+Comfy-Org/Pixal3D clip_vision/dino_v3_L_naf_fp32.safetensors clip_vision optional sha256:4ad2ec4e0879a5b5b04cd97325cc37da954a7b6edca5170b86510f17f2b2290f bytes:1215214176
+Comfy-Org/Pixal3D vae/trellis_2_shape_vae_bf16.safetensors vae optional sha256:de0cb4949a76c59ee5c091a995a69bcc8c51d5aeda939f0c641a50d2a72341f4 bytes:1095844024
+Comfy-Org/Pixal3D vae/trellis_2_texture_vae_bf16.safetensors vae optional sha256:714e5ebf094a610e12a8e3b5175c18a62f37f6ea4218acb6073644456b73ab0e bytes:948461364
+Comfy-Org/BiRefNet background_removal/birefnet.safetensors background_removal optional sha256:9ab37426bf4de0567af6b5d21b16151357149139362e6e8992021b8ce356a154 bytes:444473596
+Comfy-Org/MoGe geometry_estimation/moge_2_vitl_normal_fp16.safetensors geometry_estimation optional sha256:cb1a692d03235671e959e81360d7b4d9f44aefadb1f852d6ca6aa17799d5e31f bytes:661859924
+Comfy-Org/TRELLIS.2 diffusion_models/trellis_2_int8_convrot.safetensors diffusion_models optional sha256:d01952ad137213f6a868f86b6b877026276f84af5eec23069217475a0bad3a31 bytes:5253048192

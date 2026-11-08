@@ -1,0 +1,230 @@
+{
+  "schema": "local-ai.family/1",
+  "name": "krea2",
+  "kind": "image",
+  "architecture": "krea2",
+  "parts": {
+    "model": {
+      "folder": "diffusion_models",
+      "file": "krea2_turbo_int8_convrot.safetensors",
+      "bytes": 13492686496,
+      "sha256": "8e4eeda70dd5037ab1ba2bef6b417f9f901e26093117cf397f741fc1fdaaf3f1"
+    },
+    "text_encoder": {
+      "folder": "text_encoders",
+      "file": "qwen3vl_4b_fp8_scaled.safetensors",
+      "bytes": 5242467968,
+      "sha256": "54bd5144df0bbc25dd6ccadfcb826b521445a1b06ae5a42570bdd2974ca87094"
+    },
+    "vae": {
+      "folder": "vae",
+      "file": "qwen_image_vae.safetensors",
+      "bytes": 253806246,
+      "sha256": "a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f"
+    }
+  },
+  "defaults": {
+    "steps": 8,
+    "cfg": 1.0,
+    "sampler": "euler",
+    "scheduler": "simple",
+    "style": "photo"
+  },
+  "capabilities": {
+    "negative": false
+  },
+  "recipe": {
+    "workflow": {
+      "1": {
+        "class_type": "UNETLoader",
+        "inputs": {
+          "unet_name": "krea2_turbo_int8_convrot.safetensors",
+          "weight_dtype": "default"
+        }
+      },
+      "2": {
+        "class_type": "CLIPLoader",
+        "inputs": {
+          "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
+          "type": "krea2",
+          "device": "default"
+        }
+      },
+      "3": {
+        "class_type": "VAELoader",
+        "inputs": {
+          "vae_name": "qwen_image_vae.safetensors"
+        }
+      },
+      "4": {
+        "class_type": "CLIPTextEncode",
+        "inputs": {
+          "clip": [
+            "2",
+            0
+          ],
+          "text": ""
+        }
+      },
+      "5": {
+        "class_type": "ConditioningZeroOut",
+        "inputs": {
+          "conditioning": [
+            "4",
+            0
+          ]
+        }
+      },
+      "6": {
+        "class_type": "EmptyLatentImage",
+        "inputs": {
+          "width": 1024,
+          "height": 1024,
+          "batch_size": 1
+        }
+      },
+      "8": {
+        "class_type": "KSampler",
+        "inputs": {
+          "seed": 1,
+          "steps": 8,
+          "cfg": 1.0,
+          "sampler_name": "euler",
+          "scheduler": "simple",
+          "denoise": 1.0,
+          "model": [
+            "1",
+            0
+          ],
+          "positive": [
+            "4",
+            0
+          ],
+          "negative": [
+            "5",
+            0
+          ],
+          "latent_image": [
+            "6",
+            0
+          ]
+        }
+      },
+      "9": {
+        "class_type": "VAEDecode",
+        "inputs": {
+          "samples": [
+            "8",
+            0
+          ],
+          "vae": [
+            "3",
+            0
+          ]
+        }
+      },
+      "10": {
+        "class_type": "SaveImage",
+        "inputs": {
+          "filename_prefix": "krea2",
+          "images": [
+            "9",
+            0
+          ]
+        }
+      }
+    },
+    "inputs": {
+      "model": {
+        "set": [
+          [
+            "1",
+            "unet_name"
+          ]
+        ]
+      },
+      "text_encoder": {
+        "set": [
+          [
+            "2",
+            "clip_name"
+          ]
+        ]
+      },
+      "vae": {
+        "set": [
+          [
+            "3",
+            "vae_name"
+          ]
+        ]
+      },
+      "prompt": {
+        "set": [
+          [
+            "4",
+            "text"
+          ]
+        ]
+      },
+      "seed": {
+        "set": [
+          [
+            "8",
+            "seed"
+          ]
+        ]
+      },
+      "steps": {
+        "set": [
+          [
+            "8",
+            "steps"
+          ]
+        ],
+        "min": 1,
+        "max": 60
+      },
+      "width": {
+        "set": [
+          [
+            "6",
+            "width"
+          ]
+        ],
+        "min": 512,
+        "max": 1536
+      },
+      "height": {
+        "set": [
+          [
+            "6",
+            "height"
+          ]
+        ],
+        "min": 512,
+        "max": 1536
+      },
+      "prefix": {
+        "set": [
+          [
+            "10",
+            "filename_prefix"
+          ]
+        ]
+      }
+    }
+  },
+  "licence": {
+    "name": "Krea 2 Community License v1",
+    "source": "https://www.krea.ai/krea-2-licensing",
+    "aup": "https://www.krea.ai/krea-2-use-policy",
+    "scope": "worldwide; attended personal non-commercial use; manual review required"
+  },
+  "source": {
+    "repository": "Comfy-Org/Krea-2",
+    "revision": "588feaf955b08b9ac4723eeb751752ab045dba71",
+    "workflow": "https://github.com/Comfy-Org/workflow_templates/blob/main/templates/image_krea2_turbo_t2i_int8.json"
+  },
+  "experimental": true
+}

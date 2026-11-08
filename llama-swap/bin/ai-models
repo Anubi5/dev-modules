@@ -1,3 +1,8 @@
 #!/usr/bin/env bash
-## @brief "ai models": lists the chat models.
+## @brief No arguments lists chat models; list/show/verify uses the shared read-only inventory.
+case "${1:-}" in
+  list|show|verify)
+    command -v ai-model-catalogue >/dev/null || { echo 'CHECK shared model inventory needs the comfyui module' >&2; exit 1; }
+    exec ai-model-catalogue "$@" ;;
+esac
 curl -s "http://127.0.0.1:${LLM_PORT:-8080}/v1/models" | python3 -c 'import json,sys; [print("  "+m["id"]) for m in json.load(sys.stdin)["data"]]'

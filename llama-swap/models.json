@@ -1,5 +1,5 @@
 {
-  "_comment": "Models for the dev distro. chat = llama.cpp models behind llama-swap (files in <ModelsWin>\\llm\\<id>; 'local_copy': true would also keep a copy inside the distro - unused: the owner keeps every model only on D: and accepts slower loading, ~2.5x slower answers for the 35B MoE); media = ComfyUI files (kept in <ModelsWin>\\comfy). Find a repo either by 'repo' (pinned) or by 'search' + 'must' (most-downloaded match). 'quant' = preferred file quantisations, first match wins. 'args' = extra llama-server flags ({moe} = tuned expert offload). 'vision' loads the image projector. 'ttl' = seconds idle before unload.",
+  "_comment": "Models for the dev distro. chat = llama.cpp models behind llama-swap (files in <ModelsWin>\\llm\\<id>; 'local_copy': true would also keep a copy inside the distro - unused: the owner keeps every model only on D: and accepts slower loading, ~2.5x slower answers for the 35B MoE); media = ComfyUI files (kept in <ModelsWin>\\comfy). Find a repo either by 'repo' (pinned) or by 'search' + 'must' (most-downloaded match). 'quant' = preferred file quantisations, first match wins. 'args' = extra llama-server flags ({moe} = tuned expert offload). 'vision' loads the image projector. 'ttl' = seconds idle before unload. weights_from = reuse the named model's existing D: files without copying or downloading; context/hardware settings remain a separate server entry.",
   "chat": [
     {
       "id": "qwen3.5-9b",
@@ -23,6 +23,13 @@
       "ttl": 300,
       "alias": "default",
       "long_prompt_test": true
+    },
+    {
+      "id": "qwen3.5-9b-agent",
+      "name": "Qwen3.5 9B agent (64K context, shared daily weights)",
+      "weights_from": "qwen3.5-9b",
+      "args": "-c 65536 -ctk q8_0 -ctv q8_0",
+      "ttl": 300
     },
     {
       "id": "gemma4-12b",

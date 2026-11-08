@@ -38,9 +38,13 @@ def build(cfg, files):
     """
     server = f"{AI}/app/bin/llama-server --host 127.0.0.1 --port ${{PORT}} --jinja"
     lines = ["healthCheckTimeout: 600", "logLevel: info", "models:"]
+    by_id = {spec['id']: spec for spec in cfg['chat']}
     for spec in cfg["chat"]:
         if spec["id"] not in files:
             continue
+        if spec.get('weights_from'):
+            base = {key: value for key, value in by_id[spec['weights_from']].items() if key != 'alias'}
+            spec = dict(base, **spec)  # Inherit hardware/vision settings, never steal the daily model's aliases.
         local = files[spec["id"]]
         place = "--fit on" if spec.get("fit") else "-ngl 99"   # fit: llama.cpp splits GPU/RAM itself (untuned models)
         cmd = f"{server} {place} -m {local['file']} {spec.get('args', '').replace('{moe}', moe_value(spec))}"

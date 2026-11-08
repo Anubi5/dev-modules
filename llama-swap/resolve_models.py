@@ -13,6 +13,7 @@ Usage:
   resolve_models.py --config models.json --media --out /models-rw/comfy
 """
 import argparse
+import copy
 import json
 import os
 import re
@@ -194,6 +195,12 @@ def upgrade_record(old, spec):
     return dict(old, files=parts, quant=spec["quant"])
 
 
+def save_manifest(path, manifest):
+    with open(path+'.pending','w') as stream:
+        json.dump(manifest, stream, indent=2)
+    os.replace(path+'.pending',path)
+
+
 def chat_models(specs, state, ro, rw=None):
     """!
     @brief Resolves every chat model and writes <state>/models.json with the paths to load each file from.
@@ -204,11 +211,34 @@ def chat_models(specs, state, ro, rw=None):
     """
     os.makedirs(state, exist_ok=True)
     manifest_path = os.path.join(state, "models.json")
-    manifest = json.load(open(manifest_path)) if os.path.exists(manifest_path) else {}
+    manifest = {}
+    if os.path.exists(manifest_path):
+        with open(manifest_path) as stream: manifest = json.load(stream)
     failed = 0
-    for spec in specs:
+    by_id = {spec['id']: spec for spec in specs}
+    if len(by_id) != len(specs):
+        print('CHECK duplicate chat model IDs; nothing resolved')
+        return 1
+    resolved = set()
+    # Weight variants may reference one ordinary model, irrespective of list order.
+    for spec in sorted(specs, key=lambda row: bool(row.get('weights_from'))):
         try:
             print(f"\n[{spec['id']}]")
+            source = spec.get('weights_from')
+            if source:
+                if source not in resolved or by_id[source].get('weights_from'):
+                    raise RuntimeError('weights_from must reference a successfully resolved ordinary model')
+                entry = copy.deepcopy(manifest[source])
+                paths = entry['files'] + ([entry['mmproj']] if entry.get('mmproj') else [])
+                root = os.path.realpath(ro)
+                if any(not os.path.isfile(p) or os.path.commonpath([root, os.path.realpath(p)]) != root for p in paths):
+                    raise RuntimeError('Shared weights must already exist in the canonical read-only model store')
+                entry['weights_from'] = source
+                manifest[spec['id']] = entry
+                save_manifest(manifest_path, manifest)
+                resolved.add(spec['id'])
+                print('  reuses the existing files of '+source+' (no copy or download)')
+                continue
             old = upgrade_record(manifest.get(spec["id"], {}), spec)
 
             def rel(p):   # "<id>/<file>" of a recorded path, whether it is on D: or inside the distro
@@ -227,7 +257,8 @@ def chat_models(specs, state, ro, rw=None):
                         entry["mmproj"] = place(rel(old["mmproj"]), ro, rw, state)   # small, read once
                     if not spec.get("mmproj") or entry.get("mmproj"):
                         manifest[spec["id"]] = entry
-                        json.dump(manifest, open(manifest_path, "w"), indent=2)
+                        resolved.add(spec['id'])
+                        save_manifest(manifest_path, manifest)
                         print(f"  {os.path.basename(entry['file'])}: ready ({old.get('repo')}, {len(entry['files'])} part(s))")
                         continue
                 except RuntimeError as e:
@@ -249,7 +280,8 @@ def chat_models(specs, state, ro, rw=None):
                 if mm:
                     entry["mmproj"] = place(f"{spec['id']}/{mm[0]}", ro, rw, state, repo)
             manifest[spec["id"]] = entry
-            json.dump(manifest, open(manifest_path, "w"), indent=2)
+            resolved.add(spec['id'])
+            save_manifest(manifest_path, manifest)
         except Exception as e:
             print(f"  {spec['id']} FAILED: {str(e)[:200]}"); failed += 1
     for d, _, _ in sorted(os.walk(state), reverse=True):          # empty model folders left after the move

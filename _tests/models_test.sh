@@ -57,4 +57,5 @@ rm "$Q/root/comfy/checkpoints/renamed.safetensors"
 if MOD="$Q" MODELS_MOUNT="$Q/root" bash "$Q/check.sh" > "$Q/out" 2>&1; then no "comfy quick test missed absent required file"
 else ok "comfy quick test: missing required renamed file still fails"; fi
 bash "$R/_tests/reverse_test.sh" || no "reverse-tools scoped readiness"
+python3 -B -m unittest discover -s "$R/llama-swap" -p 'test_variants.py' || no "shared-weight model variants"
 rm -rf "$T"; exit $fail

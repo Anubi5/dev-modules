@@ -1,4 +1,10 @@
 # llama-swap (model serving)
+
+`qwen3.5-9b-agent` is a separate 65,536-context serving entry for Hermes. It uses
+`weights_from: qwen3.5-9b`, so it resolves to the daily entry's exact D: paths:
+no second GGUF, copy, download or WSL weight cache. The daily entry and its
+`default` alias retain their 32,768 context. Variants may reference one ordinary
+resolved model; missing references and alias chains fail explicitly.
 Provides the core's **model-serving contract**: OpenAI-style API on 127.0.0.1:8080, `POST /api/models/unload`.
 llama.cpp (CUDA) behind [llama-swap](https://github.com/mostlygeek/llama-swap); each model loads on first use and
 unloads when idle. Chat page: http://127.0.0.1:8080/upstream/qwen3.5-9b/ (`dev chat`).

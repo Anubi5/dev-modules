@@ -62,8 +62,11 @@ def exercise(root,source):
                 if error is None or destination.read_bytes()!=owner:raise AssertionError('Existing destination not preserved')
             elif error is None or destination.exists():raise AssertionError('Failed transfer published a destination')
             results[name]=dict(status='PASS',staging='retained',destination='published hard link' if name=='successful_publication' else 'preserved' if destination.exists() else 'absent')
+        except KeyboardInterrupt:
+            results[name]=dict(status='CANCELLED',staging='retained');break
         except Exception as error:results[name]=dict(status='FAIL',error=type(error).__name__+': '+str(error))
-    return dict(status='PASS' if all(row['status']=='PASS' for row in results.values()) else 'FAIL',cases=results,
+    status='CANCELLED' if any(row['status']=='CANCELLED' for row in results.values()) else 'PASS' if all(row['status']=='PASS' for row in results.values()) else 'FAIL'
+    return dict(status=status,cases=results,
                 cleanup='No files deleted; successful and failed staging retained for owner review',network='fake response only')
 
 

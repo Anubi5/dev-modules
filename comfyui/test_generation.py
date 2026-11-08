@@ -15,7 +15,7 @@ class GenerationTests(unittest.TestCase):
     def test_existing_233_workflow_graphs_are_identical(self):
         baseline = json.loads(Path(__file__).with_name("tests").joinpath("workflow-baseline.json").read_text())
         actual = [hashlib.sha256(json.dumps(workflow, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-                  for workflow in gen.all_workflows()]
+                  for workflow in gen.all_workflows(include_packages=False)]
         self.assertEqual(actual, baseline["workflows"])
 
     def test_capabilities_import_without_cli_gpu_or_service_runtime(self):

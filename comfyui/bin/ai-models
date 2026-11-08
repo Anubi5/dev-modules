@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Read-only inventory; no ComfyUI process, model import or download.
+exec python3 ~/.local/share/modules/comfyui/catalogue.py "$@"

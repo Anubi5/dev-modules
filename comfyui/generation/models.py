@@ -9,6 +9,11 @@ from dataclasses import dataclass
 with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "profiles.json")) as stream:
     PROFILES = json.load(stream)
 
+from .registry import profiles as family_profiles
+_families = family_profiles()
+if set(_families) & set(PROFILES['models']): raise ValueError('Family package shadows an existing model profile')
+PROFILES['models'].update(_families)
+
 
 NEGATIVE = PROFILES["styles"]["photo"]["negative"]            # default style; kept as a name for the tests
 

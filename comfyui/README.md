@@ -1,5 +1,13 @@
 # comfyui (image and video generation)
 
+Independent reviewed image families live in `families/`; see its README for the
+package and trust boundary. `ai models list/show/verify` provides the same
+read-only local inventory to humans and Hermes, including copied, unregistered
+GGUFs and LoRAs. Availability and content verification do not establish quality.
+Updates reuse the existing unchanged size/mtime hash record; explicit
+`fetch_models.py --verify-only ...` still forces a full read. No new hash cache
+subsystem is introduced.
+
 Machine callers use `ai gen image "prompt" --json` (also video/edit/pose/3d/rerun).
 Stdout is one `local-ai.producer/1` JSON object with status, exit code, record and
 outputs; progress goes to stderr. Default human output and exit codes are retained.

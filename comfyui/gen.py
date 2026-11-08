@@ -42,6 +42,7 @@ import uuid
 from generation.graph import (apply_recipe, _link, sinks, prune, apply_loras, use_skeleton)  # noqa: E402,F401
 from generation.models import (PROFILES, NEGATIVE, profile, negative_for, arch_base, archs)  # noqa: E402,F401
 from generation.image import (FACE_DET, HAND_DET, POSE_CN, detailer, sdxl, _loaders, _finish, flux3, anima, zimage, moss, fibo2, POSE_PROMPT, _dwpose, pose_wf)  # noqa: E402,F401
+from generation import builders
 from generation.video import (wan)  # noqa: E402,F401
 from generation.mesh import (QUALITY, glb_stats, EXIT, check_status)  # noqa: E402,F401
 
@@ -903,11 +904,16 @@ def _run(wf, timeout, wait, log, uploads, finish):
         chat_resume(paused, log)
 
 
-def all_workflows():
+def all_workflows(include_packages=True):
     """! @brief One workflow per model and option combination (for the schema dump and check_workflows.py). """
     import itertools
     for name in PROFILES["models"]:
         p = profile(name)
+        if p.get('family'):
+            if include_packages:
+                yield builders.registry.build(p,dict(prompt='x',negative='y',seed=1,steps=p['steps'],
+                    width=1024,height=1024,prefix='t'))
+            continue
         if p["arch"] == "sdxl":
             for pose, face, ff, fh, hires, up in itertools.product([None, "p"], [None, "f"], *[[False, True]] * 4):
                 yield sdxl("x", "y", 1, p["steps"], 1024, 1024, up, "t", pose=pose, face=face, fix_faces=ff,
@@ -929,6 +935,7 @@ def all_workflows():
                 yield fibo2("x", 1, p["steps"], 1024, 1024, "t", p, refs=refs, upscale=up)
     for name in PROFILES["models"]:                    # every architecture with two LoRAs chained
         p = profile(name)
+        if p.get('family'): continue
         if p.get("kind") == "3d":
             r = load_recipe(p["workflow"])                 # every picture input given (all views of a multi-view model)
             yield apply_recipe(r, dict(p.get("set", {}), prefix="t", **{k: "x.png" for k, sp in r["inputs"].items() if sp.get("upload")}))
@@ -1568,13 +1575,15 @@ def main():
             a.model = PROFILES.get("default_sdxl", "realvis")    # those tools are SDXL-only
         log0 = lambda t: print(f"  {t}", flush=True)
         prof = find_checkpoint(a.checkpoint, log0) if a.checkpoint else resolve_model(a.model or PROFILES["default"], log0)
+        builders.registry.check_parts(prof, MODELS)
         arch, style = prof["arch"], a.style or prof.get("style", "photo")
-        allowed = {"sdxl": {"pose", "face", "fix_faces", "fix_hands", "hires"}, "anima": {"pose"}}.get(arch, set())
+        capability = builders.capabilities(prof)
+        allowed = capability["features"]
         used = [o for o in ("pose", "face", "fix_faces", "fix_hands", "hires") if getattr(a, o)]
         if [o for o in used if o not in allowed]:
             sys.exit(f"--model {prof['name']} ({arch}) does not support --{', --'.join(o.replace('_', '-') for o in used if o not in allowed)}"
                      " - those work with the SDXL models (realvis, juggernaut, sdxl-base)" + (" and --pose with anima" if arch != "anima" else ""))
-        if a.kind == "edit" and arch not in ("flux3", "fibo2"):
+        if a.kind == "edit" and not capability["edit"]:
             sys.exit("edit needs a FLUX 3 or Fibo 2.0 model (--model flux3 | fibo2)")
         if a.image and a.kind != "edit":
             sys.exit("--image is for edit")
@@ -1584,37 +1593,18 @@ def main():
         neg = a.negative if a.negative is not None else negative_for(prof, style)
         steps = a.steps or prof["steps"]
         loras, prompt, neg, prof, lora_checks = resolve_loras(a, prof, neg, log0)
-        if arch == "sdxl":
-            uploads = [(n, check_input(f)) for n, f in (("30", a.pose), ("21", a.face)) if f]
-            wf = sdxl(prompt, neg, seed, steps, w, h, a.upscale, prefix, pose="pending" if a.pose else None,
-                      face="pending" if a.face else None, fix_faces=a.fix_faces, fix_hands=a.fix_hands, hires=a.hires,
-                      pose_strength=pose_strength, face_weight=a.face_weight, prof=prof)
-            if a.pose and is_skeleton(a.pose, a.pose_skeleton):
-                use_skeleton(wf)
-        elif arch == "anima":
-            uploads = [("30", check_input(a.pose))] if a.pose else []
-            wf = anima(prompt, neg, seed, steps, w, h, prefix, prof, pose="pending" if a.pose else None,
-                       pose_strength=pose_strength, upscale=a.upscale)
-            if a.pose and is_skeleton(a.pose, a.pose_skeleton):
-                use_skeleton(wf)
-        elif arch == "zimage":
-            uploads, neg = [], ""                           # CFG 1: no negative prompt
-            wf = zimage(prompt, seed, steps, w, h, prefix, prof, upscale=a.upscale)
-        elif arch == "flux3":
-            refs = [check_input(f) for f in a.image]
-            if not a.no_expand:
-                prompt = expand_prompt(a.prompt, "edit" if refs else "t2i", w, h, refs, log=log0)
-            uploads, neg = [(f"2{i}0", f) for i, f in enumerate(refs)], ""
-            wf = flux3(prompt, seed, steps, w, h, prefix, prof, refs=["pending"] * len(refs), upscale=a.upscale)
-        elif arch == "moss":
-            uploads = []
-            wf = moss(prompt, neg, seed, steps, w, h, prefix, prof, upscale=a.upscale)
-        elif arch == "fibo2":
-            refs = [check_input(f) for f in a.image]
-            uploads, neg = [(f"2{i}0", f) for i, f in enumerate(refs)], ""
-            wf = fibo2(prompt, seed, steps, w, h, prefix, prof, refs=["pending"] * len(refs), upscale=a.upscale)
-        else:
-            sys.exit(f"--model {prof['name']}: architecture {arch} is not wired into ai gen")
+        uploads = [(node, check_input(getattr(a, option))) for option, node in capability['uploads'].items()
+                   if getattr(a, option)]
+        refs = [check_input(f) for f in a.image]
+        uploads += [(f"2{i}0", f) for i, f in enumerate(refs)]
+        if capability['expand'] and not a.no_expand:
+            prompt = expand_prompt(a.prompt, "edit" if refs else "t2i", w, h, refs, log=log0)
+        if not capability['negative']: neg = ""
+        if a.upscale and not capability['upscale']:
+            sys.exit(f"--model {prof['name']} does not support --upscale")
+        wf = builders.build(prof, dict(prompt=prompt, negative=neg, seed=seed, steps=steps,
+            width=w, height=h, prefix=prefix, pose_strength=pose_strength), a)
+        if a.pose and is_skeleton(a.pose, a.pose_skeleton): use_skeleton(wf)
         apply_loras(wf, loras, arch)
         info = {"kind": a.kind, "prompt": a.prompt, "expanded_prompt": prompt if prompt != a.prompt else None,
                 "negative": neg, "seed": seed, "model": prof["name"], "arch": arch,

@@ -20,12 +20,12 @@ it unloads the chat model through the model-serving contract, runs one fixed wor
 - Pinned on purpose: ComfyUI itself (`COMFY_REF` in `install.sh`), every node (commit in `nodes.txt`) and every Python
   package (`app/constraints.txt`, written after the first install). Upgrade deliberately: raise the commits, or
   `COMFY_UPGRADE=1 dev mod update comfyui` for fresh Python packages. ComfyUI-Manager is not installed.
-- Pickle-based model files (`.pt`, `.pth`, `.bin`) can run code when loaded: their hash is recorded on first fetch and a
-  file that changes later is moved aside (`.quarantined`) instead of being used.
-- Model files live only in D:\AI\models\comfy (read-only inside). Missing ones download straight to D: - that needs
-  D: writable, which only `dev mod add|update comfyui` from Windows turns on (for the length of the run).
+- Pickle-based model files (`.pt`, `.pth`, `.bin`) can run code when loaded. Declared hashes are checked;
+  changed files are refused and preserved for the owner to inspect.
+- Model files live only in D:\AI\models\comfy (read-only inside). Copy missing files there manually;
+  module installation verifies them without downloading, moving or replacing weights.
 - `models.txt` takes Hugging Face lines and direct-download lines (`<https URL> <file> <folder> sha256:<hex>`, e.g. Juggernaut
-  XL Ragnarok from CivitAI); a direct download is kept only if its SHA-256 matches. Models and their tuned settings live in
+  XL Ragnarok from CivitAI); these identify required manually supplied files and hashes, not automatic downloads. Models and their tuned settings live in
   `profiles.json` (`ai gen image ... --model realvis|juggernaut|sdxl-base`, `--style photo|art`); `--checkpoint <file>` uses
   any other SDXL file (checked to be SDXL; without its own profile it gets the `default_sdxl` model's settings). Every result gets a `.json` record (prompt, seed, model, settings, time, memory);
   with repair/upscale options the untouched original is kept as `<name>_base_*`.
@@ -167,14 +167,14 @@ a missing one stops the job with its name and nothing else happens. A LoRA works
 Anima LoRA with anima ...); a mismatched one is ignored by ComfyUI or spoils the image. Prefer `.safetensors`; a
 `.pt`/`.ckpt` file can run code when loaded.
 
-**2. Keep it, with a checksum (fetched on every PC).** Add a line to `models.txt`, push, `dev mod update comfyui`:
+**2. Declare its checksum and copy the file manually.** Add a line to `models.txt`, copy the weights to D:, then run `dev mod update comfyui`:
 ```
 <huggingface repo> <path in the repo> <folder> sha256:<hex>                      # Hugging Face
 <https download URL> <file name> <folder> sha256:<hex>                           # e.g. CivitAI
 ... optional                                                                      # gated / manual download: missing is not an error
 ```
 The SHA-256 is on the file's Hugging Face page ("SHA256") or CivitAI file details. A file whose checksum does not
-match is refused (moved aside as `.quarantined`).
+match is refused and left untouched.
 
 **3. Make it an ai gen model with its own settings.** Add an entry to `profiles.json` (copy one of the same `arch`:
 `sdxl`, `flux3`, `zimage`, `anima`) with the file names and the sampler/scheduler/CFG/steps from the model's card,
@@ -222,8 +222,8 @@ Saves `<name>_*.png`, plus `<name>_pose_*.png` (the detected skeleton) and `<nam
 | Fix faces / hands | `FaceDetailer` with `UltralyticsDetectorProvider` (`bbox/face_yolov8m.pt`, `bbox/hand_yolov8s.pt`), denoise ~0.3 | face/hand detectors |
 | Big sharp output | `Ultimate SD Upscale` (upscale 2x, tile 768/1024, denoise ~0.2) with 4x-UltraSharp | already there |
 
-- Already installed, so they work offline: the DWPose files (`helpers.txt`) and InsightFace's face models. Other
-  preprocessors (depth, canny ...) still fetch their helper file on first use - internet on that once.
+- DWPose and InsightFace helper files are declared in `helper_models.json` and supplied manually on D:.
+  Additional preprocessors need an explicit compatible local helper; do not enable network fetching on first use.
 - 12 GB GPU: SDXL + ControlNet + IPAdapter fits at ~1024 px; run FaceDetailer and upscaling as separate queue runs if memory runs out.
 - ComfyUI runs with `--offline`: the page cannot reach the internet and paid cloud ("partner") nodes are off.
 - Use your own or licensed reference images; FaceID is for consistent fictional characters or people who agreed.

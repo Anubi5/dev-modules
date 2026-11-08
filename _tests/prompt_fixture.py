@@ -31,7 +31,21 @@ def main():
     except OSError:terminal=sys.stdin.isatty()
     if not terminal:
         print('EVA_PROMPT_RESULT '+json.dumps(dict(status='SKIPPED',reason='No interactive terminal reached WSL',fixture=str(root))),flush=True);return 3
-    offered=[];confirmed=[];original=module.confirm_download
+    offered=[];confirmed=[];answers=[];original=module.confirm_download
+    # EOF also refuses a download, but is not an owner-entered decline.
+    import builtins
+    class ObservedTerminal:
+        def __init__(self,stream):self.stream=stream
+        def __enter__(self):return self
+        def __exit__(self,*args):self.stream.close()
+        def readline(self):
+            answer=self.stream.readline();answers.append(answer);return answer
+    def observed_open(path,*args,**kwargs):
+        stream=builtins.open(path,*args,**kwargs)
+        return ObservedTerminal(stream) if str(path)=='/dev/tty' else stream
+    def observed_input(*args):
+        answer=builtins.input(*args);answers.append(answer);return answer
+    module.open=observed_open;module.input=observed_input
     def observe():
         offered.append(True);answer=original();confirmed.append(answer);return answer
     module.confirm_download=observe
@@ -39,8 +53,10 @@ def main():
     sys.argv=[str(path),'--allow-downloads',str(root/'models.txt'),str(weights),str(weights),str(root/'state')]
     print('OWNER CHECK: verify the file/size/source/licence and visible Type DOWNLOAD: prompt. Type NO, then Enter. No actual downloads are possible.',flush=True)
     code=module.main()
-    passed=bool(offered) and confirmed==[False] and not calls and not list(weights.rglob('*')) and code==1
+    owner_declined=len(answers)==1 and answers[0].strip()=='NO'
+    passed=bool(offered) and confirmed==[False] and owner_declined and not calls and not list(weights.rglob('*')) and code==1
     result=dict(status='PASS' if passed else 'FAIL',offered=bool(offered),declined=confirmed==[False],
+                owner_typed_no=owner_declined,input_eof=answers==[''],
                 download_calls=len(calls),weight_files_created=len(list(weights.rglob('*'))),fetch_exit=code,
                 source_sha256=hashlib.sha256(source.encode()).hexdigest(),fixture=str(root))
     print('EVA_PROMPT_RESULT '+json.dumps(result),flush=True)

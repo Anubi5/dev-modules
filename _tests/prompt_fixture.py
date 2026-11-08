@@ -46,6 +46,7 @@ def main():
     passed=bool(offered) and confirmed==[False] and owner_declined and not calls and not list(weights.rglob('*')) and code==1
     result=dict(status='PASS' if passed else 'FAIL',offered=bool(offered),declined=confirmed==[False],
                 owner_typed_no=owner_declined,input_eof=answers==[''],
+                input_codepoints=[ord(char) for char in answers[0][:16]] if answers else [],
                 download_calls=len(calls),weight_files_created=len(list(weights.rglob('*'))),fetch_exit=code,
                 source_sha256=hashlib.sha256(source.encode()).hexdigest(),fixture=str(root))
     print('EVA_PROMPT_RESULT '+json.dumps(result),flush=True)

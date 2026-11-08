@@ -226,7 +226,7 @@ def main():
                     raise RuntimeError("direct downloads need a sha256:<hex> in the list")
                 print(f"  downloading {name} from {repo.split('/')[2]} (checksum pinned)", flush=True)
                 fetch_url(repo, dst, sha)
-                check_hash(dst, own, sha, key=os.path.abspath(on_d))   # record it as checked
+                if not check_hash(dst, own, sha, key=os.path.abspath(on_d),quarantine=False):failed+=1
             except Exception as e:
                 print(f"  CHECK {name}: {e}"); failed += 1
             continue
@@ -242,7 +242,7 @@ def main():
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             if os.path.exists(dst): raise RuntimeError('Destination appeared during download; preserved')
             os.link(path, dst) # atomic no-clobber publication; retain staging for owner review
-            if not check_hash(dst, own, sha, key=os.path.abspath(on_d)):
+            if not check_hash(dst, own, sha, key=os.path.abspath(on_d),quarantine=False):
                 failed += 1
         except Exception as e:
             gated = "gated" in type(e).__name__.lower() or "401" in str(e) or "403" in str(e)

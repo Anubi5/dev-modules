@@ -93,6 +93,8 @@ def write(path, kind, files, coordinates=None, numerical="not_run", source=None)
     rows = []
     for role, file in files:
         file = Path(file).resolve()
+        if kind == 'rig' and file.suffix.lower() != '.fbx':
+            raise ValueError('New rig manifests are FBX-only; keep other formats in the producer record')
         relative = file.relative_to(path.parent).as_posix()
         rows.append(dict(role=role, path=relative, bytes=file.stat().st_size, sha256=digest(file)))
     data = dict(schema=ASSET_SCHEMA, kind=kind, files=rows, coordinates=coordinates,

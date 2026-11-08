@@ -1,5 +1,14 @@
 # Rig
 
+`ai rig model.glb --json` exposes a single `local-ai.producer/1` result on stdout;
+progress goes to stderr. Human output remains the default. The character runner
+requires this interface and creates an FBX-only rig hand-off; the producer record
+retains the GLB and Blender outputs separately.
+
+`bash rig/test.sh --full` runs offline checks first. Without `RIG_TEST_INPUT` it
+prints an explicit GPU-acceptance skip and succeeds; a supplied missing/empty
+fixture fails. Set that variable deliberately to run the real reference case.
+
 **EXPERIMENTAL — manual use. F6: OPEN — DEFERRED.** Reference numerical
 acceptance remains valid; visual quality and generalization to other characters
 are not established. F6 is deliberately deferred and does not block experimental

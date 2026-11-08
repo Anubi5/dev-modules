@@ -39,11 +39,15 @@ class ContractTests(unittest.TestCase):
         with self.assertRaises(ValueError): contracts.validate(data, self.root)
 
     def test_rig_is_experimental_and_manifest_is_not_overwritten(self):
-        data = contracts.write(self.root/"rig.asset.json", "rig", [("model", self.file)],
+        rig_file = self.root/'rig.fbx'; rig_file.write_bytes(b'fixture')
+        data = contracts.write(self.root/"rig.asset.json", "rig", [("model", rig_file)],
                                dict(units="cm", up="+Z", forward="+X"), numerical="passed")
         self.assertTrue(data["experimental"])
         self.assertEqual(data["validation"]["visual"], "not_established")
         with self.assertRaises(ValueError): contracts.write(self.path, "image", [("model", self.file)])
+        with self.assertRaisesRegex(ValueError, 'FBX-only'):
+            contracts.write(self.root/'wrong-rig.asset.json', 'rig', [('model', self.file)],
+                            dict(units='cm', up='+Z', forward='+X'))
 
     def test_retained_producer_record_is_part_of_integrity_check(self):
         record = self.root/"record.json"; record.write_text("{}")

@@ -1,4 +1,17 @@
 # comfyui (image and video generation)
+
+Machine callers use `ai gen image "prompt" --json` (also video/edit/pose/3d/rerun).
+Stdout is one `local-ai.producer/1` JSON object with status, exit code, record and
+outputs; progress goes to stderr. Default human output and exit codes are retained.
+
+Model weights are owner-supplied data under `D:\AI\models`. The installer verifies
+declared generation files without fetching or moving them. Helper requirements
+are pinned in `helper_models.json`: DWPose uses `comfy/controlnet_aux/yzd-v/DWPose/`,
+InsightFace uses `comfy/insightface/models/buffalo_l/`. ComfyUI's native
+`--models-directory` and DWPose's environment path select the read-only share.
+Missing or conflicting helpers stop startup. A deliberate module update retires
+only declared, byte-identical legacy helper duplicates after all files verify;
+it never replaces a D: file. Staged acceptance leaves installed copies untouched.
 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) with SDXL (photoreal RealVisXL V5.0 for `ai gen`, DPM++ SDE Karras, CFG 4.5) + 4x-UltraSharp and Wan 2.2 5B video (GGUF).
 Page: http://127.0.0.1:8188 (`dev comfy`). Agents use `ai gen image|video "prompt"` (skill `gpu-generate`):
 it unloads the chat model through the model-serving contract, runs one fixed workflow, frees the GPU.

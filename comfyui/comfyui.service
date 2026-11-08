@@ -7,7 +7,12 @@ WorkingDirectory=%h/.local/share/modules/comfyui/app/ComfyUI
 # the models on D: (WSL's Windows-file bridge) fail now and then mid-job ("HostBuffer.read_file_slice failed").
 # memtest.py compares both settings; a one-off override goes in ~/.config/comfyui/override.env (COMFY_MEM=...).
 Environment=COMFY_MEM=--disable-pinned-memory
+Environment=COMFY_MODELS=/models/comfy
+Environment=AUX_ANNOTATOR_CKPTS_PATH=/models/comfy/controlnet_aux
+Environment=HF_HUB_OFFLINE=1
+Environment=TRANSFORMERS_OFFLINE=1
 EnvironmentFile=-%h/.config/comfyui/override.env
-ExecStart=%h/.local/share/modules/comfyui/app/ComfyUI/.venv/bin/python main.py --listen 127.0.0.1 --port 8188 --offline --output-directory %h/work/outputs/comfy --input-directory %h/work/inputs --temp-directory %h/work/scratch/comfy --user-directory %h/work/comfyui $COMFY_MEM
+ExecStartPre=%h/.local/share/modules/comfyui/app/ComfyUI/.venv/bin/python %h/.local/share/modules/comfyui/helper_models.py --root ${COMFY_MODELS}
+ExecStart=%h/.local/share/modules/comfyui/app/ComfyUI/.venv/bin/python main.py --models-directory ${COMFY_MODELS} --listen 127.0.0.1 --port 8188 --offline --output-directory %h/work/outputs/comfy --input-directory %h/work/inputs --temp-directory %h/work/scratch/comfy --user-directory %h/work/comfyui $COMFY_MEM
 Restart=on-failure
 RestartSec=5

@@ -53,19 +53,13 @@ roots() {   # model folders, same layout on D: and in the module's own folder (o
     '  background_removal: background_removal' '  geometry_estimation: geometry_estimation'; }
 { echo 'windows:'; echo "  base_path: ${MODELS_MOUNT:-/models}/comfy"; roots; echo 'module:'; echo "  base_path: $MOD/models"; roots; } > extra_model_paths.yaml
 
-say "model files (models.txt) - each download shows its progress"
+say "model files (models.txt) - verifying owner-supplied files on D:"
 # model files live on D: (read-only at /models); D: is writable at /models-rw only while Windows runs "dev mod add|update".
 # Older copies inside the distro ($MOD/models) are moved to D: on the way; the checksum record stays in $MOD/models.
-.venv/bin/python "$MOD/fetch_models.py" "$MOD/models.txt" "${MODELS_MOUNT:-/models}/comfy" "${MODELS_RW:-/models-rw}/comfy" \
+.venv/bin/python "$MOD/fetch_models.py" --verify-only "$MOD/models.txt" "${MODELS_MOUNT:-/models}/comfy" "${MODELS_RW:-/models-rw}/comfy" \
   "$MOD/models" "$MOD/models"
-say "helper models (pose detection, InsightFace faces)"
-# helper models the nodes would fetch on first use - fetched now, so everything works with the internet off
-# files live inside ComfyUI ($C is both where they are looked for and where a missing one is downloaded to)
-.venv/bin/python "$MOD/fetch_models.py" "$MOD/helpers.txt" "$C" "$C" "$C"; rm -rf "$C/_dl"
-I=$C/models/insightface/models/buffalo_l
-if [ ! -f "$I/w600k_r50.onnx" ]; then
-  mkdir -p "$I"; curl -sfL -o "$A/buffalo_l.zip" https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip \
-    && unzip -qo "$A/buffalo_l.zip" -d "$I" && rm -f "$A/buffalo_l.zip" \
-    && { [ ! -d "$I/buffalo_l" ] || { mv "$I"/buffalo_l/* "$I"/ && rmdir "$I/buffalo_l"; }; } || echo "  CHECK InsightFace face models (buffalo_l) not fetched"
-fi
+say "helper models (owner-supplied, hash-pinned, only on D:)"
+# A deliberate module update may retire only byte-identical legacy helper copies,
+# after every declared D: file and every legacy file have verified. No downloads.
+.venv/bin/python "$MOD/helper_models.py" --root "${MODELS_MOUNT:-/models}/comfy" --retire-from "$C"
 echo "ComfyUI ready"

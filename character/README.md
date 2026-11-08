@@ -1,5 +1,15 @@
 # Character
 
+The runner requires `--json` from generation and rig producers. It reads one
+`local-ai.producer/1` result, retains stderr as `producer.log` and stdout as
+`producer.json`, and never discovers records by scraping progress text. Producers
+that do not support this protocol fail explicitly. Prompts after options/`--`
+are accepted by the generator's real argparse parser, including literal dashes.
+
+New rig manifests are **FBX-only**, declaring cm/+Z/+X consumption space. GLB and
+Blender outputs remain in the retained producer record; they are not assigned
+the FBX coordinate declaration. Existing manifests remain readable for history.
+
 Experimental, human-operated composition of the existing image/video, mesh and
 rig commands. Python standard library only; no model installation, service,
 framework or GPU ownership is introduced. Install this module through the normal

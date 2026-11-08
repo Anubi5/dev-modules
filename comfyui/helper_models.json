@@ -1,0 +1,13 @@
+{
+  "schema": "local-ai.helper-models/1",
+  "provenance": "DWPose pins from helpers.txt; buffalo_l hashes from the owner's existing release-v0.7 files. No weights are distributed or downloaded.",
+  "files": [
+    {"path":"controlnet_aux/yzd-v/DWPose/yolox_l.onnx","legacy":"custom_nodes/comfyui_controlnet_aux/ckpts/yzd-v/DWPose/yolox_l.onnx","bytes":216746733,"sha256":"7860ae79de6c89a3c1eb72ae9a2756c0ccfbe04b7791bb5880afabd97855a411"},
+    {"path":"controlnet_aux/yzd-v/DWPose/dw-ll_ucoco_384.onnx","legacy":"custom_nodes/comfyui_controlnet_aux/ckpts/yzd-v/DWPose/dw-ll_ucoco_384.onnx","bytes":134399116,"sha256":"724f4ff2439ed61afb86fb8a1951ec39c6220682803b4a8bd4f598cd913b1843"},
+    {"path":"insightface/models/buffalo_l/1k3d68.onnx","legacy":"models/insightface/models/buffalo_l/1k3d68.onnx","bytes":143607619,"sha256":"df5c06b8a0c12e422b2ed8947b8869faa4105387f199c477af038aa01f9a45cc"},
+    {"path":"insightface/models/buffalo_l/2d106det.onnx","legacy":"models/insightface/models/buffalo_l/2d106det.onnx","bytes":5030888,"sha256":"f001b856447c413801ef5c42091ed0cd516fcd21f2d6b79635b1e733a7109dbf"},
+    {"path":"insightface/models/buffalo_l/det_10g.onnx","legacy":"models/insightface/models/buffalo_l/det_10g.onnx","bytes":16923827,"sha256":"5838f7fe053675b1c7a08b633df49e7af5495cee0493c7dcf6697200b85b5b91"},
+    {"path":"insightface/models/buffalo_l/genderage.onnx","legacy":"models/insightface/models/buffalo_l/genderage.onnx","bytes":1322532,"sha256":"4fde69b1c810857b88c64a335084f1c3fe8f01246c9a191b48c7bb756d6652fb"},
+    {"path":"insightface/models/buffalo_l/w600k_r50.onnx","legacy":"models/insightface/models/buffalo_l/w600k_r50.onnx","bytes":174383860,"sha256":"4c06341c33c2ca1f86781dab0e829f88ad5b64be9fba56e56bc9ebdefc619e43"}
+  ]
+}

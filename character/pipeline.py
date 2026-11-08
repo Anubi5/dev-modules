@@ -66,10 +66,10 @@ def command(stage, inputs):
     if operation == "rig":
         models = [p for kind, p in paths if kind == "mesh" and p.suffix.lower() == ".glb"]
         if len(models) != 1: raise ValueError("Rig stage needs exactly one GLB mesh")
-        args = ["ai", "rig", str(models[0]), "--name", stage["id"]]
+        args = ["ai", "rig", str(models[0]), "--json", "--name", stage["id"]]
     else:
         args = ["ai", "gen", "3d" if operation == "mesh" else operation]
-        args += ["--name", stage["id"]]
+        args += ["--json", "--name", stage["id"]]
         if operation == "mesh":
             images = [p for kind, p in paths if kind == "image"]
             if not images: raise ValueError("Mesh stage needs image inputs")
@@ -86,8 +86,8 @@ def command(stage, inputs):
 
 
 def execute(args, log, environment, timeout, started):
-    with log.open("w", encoding="utf-8") as stream:
-        process = subprocess.Popen(args, stdout=stream, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+    with log.open("w", encoding="utf-8") as stream, log.with_suffix(".json").open("w", encoding="utf-8") as result:
+        process = subprocess.Popen(args, stdout=result, stderr=stream, stdin=subprocess.DEVNULL,
                                    env=environment, start_new_session=True)
         try:
             started(process.pid)
@@ -105,14 +105,11 @@ def execute(args, log, environment, timeout, started):
 
 
 def producer_outputs(log, operation, root):
-    record = None
-    with log.open(encoding="utf-8", errors="replace") as stream:
-        for line in stream:
-            if operation == "rig" and line.startswith("RIG "):
-                record = json.loads(line[4:])["record"]
-            elif line.strip().startswith("record:"):
-                record = line.split("record:", 1)[1].strip()
-    if not record: raise ValueError("Producer returned no record")
+    result = json.loads(log.with_suffix(".json").read_text(encoding="utf-8"))
+    if not isinstance(result, dict) or result.get("schema") != "local-ai.producer/1" or result.get("exit_code") != 0 or result.get("status") != "succeeded":
+        raise ValueError("Producer did not return a successful JSON result")
+    record = result.get("record")
+    if not isinstance(record, str) or not record: raise ValueError("Producer returned no record")
     path = Path(record).resolve()
     if not (path.is_relative_to(Path.home()/"work") or path.is_relative_to(root)):
         raise ValueError("Producer record is outside its work directories")
@@ -123,7 +120,9 @@ def producer_outputs(log, operation, root):
         if not isinstance(checks, dict) or not checks or not all(isinstance(v, dict) and v.get("ok") is True for v in checks.values()):
             raise ValueError("Rig record does not establish numerical acceptance")
         if not isinstance(data.get("outputs"), dict): raise ValueError("Invalid rig output record")
-        files = [path.parent/name for name in data["outputs"] if Path(name).suffix.lower() in EXTENSIONS[operation]]
+        # A rig hand-off is FBX-only. GLB/Blender files remain in the producer
+        # record; they do not share the FBX consumption units/axes declaration.
+        files = [path.parent/name for name in data["outputs"] if Path(name).suffix.lower() == ".fbx"]
     else:
         if operation == "mesh" and not (isinstance(data.get("glb"), dict) and data["glb"].get("valid") is True):
             raise ValueError("Mesh record does not establish GLB validity")

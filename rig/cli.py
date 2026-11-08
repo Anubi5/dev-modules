@@ -1,5 +1,6 @@
 """Local, recorded UniRig pipeline. Heavy inference runs in the module-owned venv."""
 import argparse
+import contextlib
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import importlib.metadata
@@ -22,6 +23,7 @@ from source_integrity import verify_source
 
 
 MOD = Path(__file__).resolve().parent
+RESULT = {}
 
 
 class CheckFailure(RuntimeError):
@@ -31,6 +33,7 @@ class CheckFailure(RuntimeError):
 def parser():
     p = argparse.ArgumentParser(description="Rig a fictional adult humanoid locally; produce checked FBX, GLB and a record")
     p.add_argument("input", type=Path)
+    p.add_argument("--json", action="store_true", help="emit one producer JSON result; progress goes to stderr")
     p.add_argument("--name")
     p.add_argument("--triangles", type=int)
     p.add_argument("--height", type=float, default=1.7)
@@ -277,7 +280,10 @@ def execute(args):
         if monitor.thread.is_alive(): monitor.thread.join(timeout=6)
         record["peak_vram_mib"] = max(record["peak_vram_mib"], monitor.peak)
         save()
-    print("RIG " + json.dumps(dict(status=record["status"], output=str(output), record=str(record_file))), flush=True)
+    RESULT.update(status=record["status"], record=str(record_file),
+                  outputs=[str(output/name) for name in record["outputs"]], error=record.get("error"))
+    if not args.json:
+        print("RIG " + json.dumps(dict(status=record["status"], output=str(output), record=str(record_file))), flush=True)
     return {"succeeded":0, "check_failed":2, "interrupted":130}.get(record["status"], 1)
 
 
@@ -285,12 +291,24 @@ def main():
     def interrupted(signum, frame):
         raise InterruptedError("Signal " + str(signum))
     signal.signal(signal.SIGTERM, interrupted)
-    args = parser().parse_args()
-    try:
-        return execute(args)
-    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
-        print("Rig error:", error, file=sys.stderr)
-        return 1
+    RESULT.clear()
+    structured = "--json" in sys.argv[1:]
+    with contextlib.redirect_stdout(sys.stderr) if structured else contextlib.nullcontext():
+        try:
+            args = parser().parse_args()
+            code = execute(args)
+        except SystemExit as stopped:
+            if not structured: raise
+            code = stopped.code if isinstance(stopped.code, int) else 1
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+            print("Rig error:", error, file=sys.stderr)
+            RESULT.update(error=str(error))
+            code = 1
+    if structured:
+        result = dict(schema="local-ai.producer/1", status="failed", record=None, outputs=[])
+        result.update(RESULT, exit_code=code)
+        print(json.dumps(result), flush=True)
+    return code
 
 
 if __name__ == "__main__":

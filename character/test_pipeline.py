@@ -31,7 +31,9 @@ class PipelineTests(unittest.TestCase):
         record = output/"record.json"
         record.write_text(json.dumps(dict(status="succeeded", outputs={file.name: {}} if operation == "rig" else [str(file)],
             validation_results=dict(fbx=dict(ok=True), glb=dict(ok=True)), glb=dict(valid=True))))
-        log.write_text("RIG "+json.dumps(dict(record=str(record))) if operation == "rig" else "  record: "+str(record))
+        log.write_text("progress only; never parsed for record paths")
+        log.with_suffix(".json").write_text(json.dumps(dict(schema="local-ai.producer/1", status="succeeded",
+                                                          exit_code=0, record=str(record))))
 
     def test_stages_resume_without_repeating_producers_and_handoff_is_hashed(self):
         with patch.object(pipeline, "execute", self.execute):
@@ -39,6 +41,9 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(state["status"], "awaiting_host")
             self.assertEqual(len(self.calls), 2)
             self.assertIn("--facing=-y", self.calls[1])
+            self.assertTrue(all("--json" in args for args in self.calls))
+            rig = contracts.read(self.root/"rig.asset.json")
+            self.assertTrue(all(row["path"].endswith(".fbx") for row in rig["files"]))
             state = pipeline.run(self.plan, self.root, resume=True)
             self.assertEqual(len(self.calls), 2)
             request = self.root/"animation.unreal-request.json"
@@ -78,6 +83,13 @@ class PipelineTests(unittest.TestCase):
     def test_prompt_is_passed_literally_after_option_terminator(self):
         stage = dict(id="image", operation="image", parameters=dict(prompt="--literal prompt", model="fixture"))
         self.assertEqual(pipeline.command(stage, [])[-2:], ["--", "--literal prompt"])
+
+    def test_log_scraping_and_multiple_json_results_are_refused(self):
+        log = self.root/"producer.log"
+        log.write_text('  record: /some/record.json\nRIG {"record":"/some/record.json"}')
+        with self.assertRaises(FileNotFoundError): pipeline.producer_outputs(log, "mesh", self.root)
+        log.with_suffix(".json").write_text('{}\n{}\n')
+        with self.assertRaises(json.JSONDecodeError): pipeline.producer_outputs(log, "mesh", self.root)
 
     def test_abandoned_running_stage_never_replays_automatically(self):
         class ControllerLost(BaseException): pass

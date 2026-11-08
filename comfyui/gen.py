@@ -711,6 +711,34 @@ def jobs_cmd(argv):
 
 
 def entry(fn=None):
+    """Keep human output by default; producers expose one JSON result on stdout."""
+    structured = sys.argv[1:2] and sys.argv[1] in ("image", "video", "edit", "pose", "3d", "rerun") and "--json" in sys.argv[2:]
+    if not structured:
+        return _entry(fn)
+    arguments = sys.argv[:]
+    sys.argv.remove("--json")
+    JOB.pop("result", None)
+    error = None
+    try:
+        with contextlib.redirect_stdout(sys.stderr):
+            try:
+                code = _entry(fn)
+            except SystemExit as stopped:
+                code = stopped.code if isinstance(stopped.code, int) else 1
+                error = None if isinstance(stopped.code, int) else str(stopped.code)
+                if error: print(error, file=sys.stderr)
+            except Exception as failed:
+                code, error = 1, str(failed)
+                print(error, file=sys.stderr)
+        result = dict(schema="local-ai.producer/1", status="failed", record=None, outputs=[], error=error)
+        result.update(JOB.get("result", {}), exit_code=code)
+        print(json.dumps(result), flush=True)
+        return code
+    finally:
+        sys.argv[:] = arguments
+
+
+def _entry(fn=None):
     """!
     @brief Runs a command so that a stop at any point - Ctrl+C, the terminal closing (SIGHUP), a kill (SIGTERM) -
            leaves the job file "interrupted" instead of mid-way (SIGKILL cannot be caught: job_view shows those as
@@ -1001,6 +1029,7 @@ def write_record(files, info, wf=None, status="succeeded", error=None, prefix=No
         rec["workflow"], rec["workflow_sha256"] = os.path.basename(wpath), wf_sha(wf)
     with open(path, "w") as f:
         json.dump(rec, f, indent=1)
+    JOB["result"] = dict(status=status, record=path, outputs=files, error=error or None)
     return path
 
 
@@ -1447,6 +1476,7 @@ def main():
         print(HELP); models_report(); return 0
     ap.add_argument("kind", choices=["image", "video", "edit", "pose", "3d"],
                     help="edit = change an image by instruction; pose = a ControlNet pose (photo + skeleton)")
+    ap.add_argument("--json", action="store_true", help="emit one producer JSON result; progress goes to stderr")
     ap.add_argument("prompt", nargs="?", default="", help="what to make; for edit: what to change; for pose: the pose")
     ap.add_argument("--from", dest="src", metavar="PHOTO", help="pose: make the skeleton from this photo (in ~/work)")
     ap.add_argument("--pose-skeleton", action="store_true", help="image: the --pose picture is already a skeleton")
@@ -1479,7 +1509,9 @@ def main():
     ap.add_argument("--faces", type=int, default=None, help="3d: triangles in the final model (default per --quality)")
     ap.add_argument("--texture", type=int, default=None, help="3d: texture size 1024 | 2048 | 4096 (default per --quality)")
     ap.add_argument("--keep-background", action="store_true", help="3d: the picture is already cut out (no background removal)")
-    a = ap.parse_args()
+    # Optional positional prompts may follow options and '--', including literal
+    # prompts beginning with '-'. Use argparse's supported intermixed parser.
+    a = ap.parse_intermixed_args()
     if a.kind == "3d":
         return gen3d(a)
     # limits for a 12 GB GPU (and against a runaway agent): larger jobs fail or block the GPU for hours

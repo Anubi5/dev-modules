@@ -1,4 +1,5 @@
-# Helper models some nodes fetch on first use - fetched at install, so they work with the internet off.
+# Historical helper download list. The installer now uses helper_models.json
+# to verify owner-supplied D: files; it does not fetch this list or weights.
 # <huggingface repo> <file> <folder inside ComfyUI> [save as] [sha256:<hex>]
 # DWPose (pick bbox_detector yolox_l.onnx and pose_estimator dw-ll_ucoco_384.onnx in the DWPose node: ONNX, no code inside)
 yzd-v/DWPose yolox_l.onnx custom_nodes/comfyui_controlnet_aux/ckpts/yzd-v/DWPose sha256:7860ae79de6c89a3c1eb72ae9a2756c0ccfbe04b7791bb5880afabd97855a411

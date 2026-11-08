@@ -47,7 +47,7 @@ def save_record(rec, known):
     os.replace(rec + ".new", rec)
 
 
-def check_hash(path, own, pinned=None, key=None):
+def check_hash(path, own, pinned=None, key=None, quarantine=True):
     """!
     @brief Integrity check for a model file, present or just downloaded.
            Pinned files (sha256: in the list) must match the pin. Unpinned pickle-based files (can run code when
@@ -73,7 +73,7 @@ def check_hash(path, own, pinned=None, key=None):
         save_record(rec, known)
         return True
     why = "does not match its pinned checksum" if pinned else "changed since it was first fetched"
-    if os.access(os.path.dirname(path), os.W_OK):
+    if quarantine and os.access(os.path.dirname(path), os.W_OK):
         os.replace(path, path + ".quarantined")      # so nothing loads it
         print(f"  CHECK {path} {why} - moved aside as {os.path.basename(path)}.quarantined (delete it to fetch again)")
     else:
@@ -149,9 +149,12 @@ def main():
            "<https URL> <file name> <folder> sha256:<hex>" lines (direct download, checksum required) and
            downloads only what is missing. @return exit code
     """
+    verify_only = '--verify-only' in sys.argv
+    if verify_only: sys.argv.remove('--verify-only')
     lst, ro, rw, own = sys.argv[1:5]
     old_root = sys.argv[5] if len(sys.argv) > 5 else None
     rw = rw if rw != "-" and os.path.isdir(rw) and os.access(rw, os.W_OK) else None
+    if verify_only: rw, old_root = None, None
     os.makedirs(own, exist_ok=True)
     failed = 0
     for line in open(lst):
@@ -178,10 +181,11 @@ def main():
         have = [p for p in (on_d, old) if p and os.path.exists(p)]
         if have:
             print(f"  {folder}/{name}: present{'' if have[0] == on_d else ' (still inside the distro - run dev mod update comfyui from Windows to move it to D:)'}", flush=True)
-            failed += 0 if check_hash(os.path.abspath(have[0]), own, sha) else 1
+            failed += 0 if check_hash(os.path.abspath(have[0]), own, sha, quarantine=not verify_only) else 1
             continue
         if not rw:
-            msg = f"{folder}/{name} is missing - downloads go to D:\\AI\\models, run 'dev mod update comfyui' from Windows"
+            msg = (f"{folder}/{name} is missing - copy it to D:\\AI\\models\\comfy manually" if verify_only else
+                   f"{folder}/{name} is missing - downloads go to D:\\AI\\models, run 'dev mod update comfyui' from Windows")
             print(f"  (optional) {msg}" if optional else f"  CHECK {msg}"); failed += 0 if optional else 1
             continue
         dst = os.path.join(rw, folder, name)

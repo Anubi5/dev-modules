@@ -9,17 +9,21 @@ import sys
 import tempfile
 
 
-def confirm_download():
-    """Flush a complete prompt line before reading normal interactive stdin."""
-    print('Download this pinned file? Type DOWNLOAD:',flush=True)
-    if not sys.stdin.isatty():
-        print('No interactive terminal; download refused',flush=True);return False
-    try:return input().strip()=='DOWNLOAD'
-    except EOFError:return False
+def approved_download(sha):
+    """Only argument-derived approvals from the Windows plan may authorize bytes."""
+    if os.environ.get('DEV_MODEL_OPERATION') != 'approved' or os.environ.get('DEV_UNATTENDED'):
+        return False
+    try:
+        approved = json.loads(os.environ.get('DEV_APPROVED_SHA256', '[]'))
+    except (ValueError, TypeError):
+        return False
+    return (isinstance(approved, list)
+            and all(isinstance(value, str) and re.fullmatch('[a-f0-9]{64}', value) for value in approved)
+            and isinstance(sha, str) and sha.lower() in approved)
 
 
 def acquire(repository,revision,row,destination,policy):
-    if os.environ.get('DEV_MODEL_OPERATION')!='prompt' or os.environ.get('DEV_UNATTENDED'):
+    if os.environ.get('DEV_MODEL_OPERATION')!='approved' or os.environ.get('DEV_UNATTENDED'):
         raise SystemExit('Missing pinned asset; run dev mod update rig for confirmed acquisition, or copy manually')
     if (policy.get('approved') is not True or not policy.get('license') or policy.get('gated')
             or not re.fullmatch('[a-fA-F0-9]{40}',revision)
@@ -27,8 +31,8 @@ def acquire(repository,revision,row,destination,policy):
             or type(row.get('bytes')) is not int or row['bytes']<=0):
         raise SystemExit('Missing reviewed size/hash/licence; gated assets require manual owner acquisition')
     print(f"Missing pinned file: {row['path']}; bytes={row['bytes']}; source={repository}@{revision}; licence={policy['license']}; SHA-256={row['sha256']}",flush=True)
-    if not confirm_download():
-        raise SystemExit('Download not confirmed')
+    if not approved_download(row['sha256']):
+        raise SystemExit('SHA-256 not approved; download refused')
     destination=Path(destination)
     destination.parent.mkdir(parents=True,exist_ok=True)
     staging=tempfile.mkdtemp(prefix='.model-stage-',dir=destination.parent)

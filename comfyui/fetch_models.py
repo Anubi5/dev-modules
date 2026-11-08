@@ -23,13 +23,17 @@ from huggingface_hub import HfApi, hf_hub_download
 CODE_FORMATS = (".pt", ".pth", ".bin", ".ckpt", ".pkl")   # pickle-based: can run code when loaded
 
 
-def confirm_download():
-    """Flush a complete prompt line before reading normal interactive stdin."""
-    print('Download this pinned file? Type DOWNLOAD:',flush=True)
-    if not sys.stdin.isatty():
-        print('No interactive terminal; download refused',flush=True);return False
-    try:return input().strip()=='DOWNLOAD'
-    except EOFError:return False
+def approved_download(sha):
+    """Only argument-derived approvals from the Windows plan may authorize bytes."""
+    if os.environ.get('DEV_MODEL_OPERATION') != 'approved' or os.environ.get('DEV_UNATTENDED'):
+        return False
+    try:
+        approved = json.loads(os.environ.get('DEV_APPROVED_SHA256', '[]'))
+    except (ValueError, TypeError):
+        return False
+    return (isinstance(approved, list)
+            and all(isinstance(value, str) and re.fullmatch('[a-f0-9]{64}', value) for value in approved)
+            and isinstance(sha, str) and sha.lower() in approved)
 
 
 def sha256(path):
@@ -166,7 +170,7 @@ def main():
     """
     requested_verify = '--verify-only' in sys.argv
     if requested_verify: sys.argv.remove('--verify-only')
-    verify_only = requested_verify or os.environ.get('DEV_MODEL_OPERATION')!='prompt' or bool(os.environ.get('DEV_UNATTENDED'))
+    verify_only = requested_verify or os.environ.get('DEV_MODEL_OPERATION')!='approved' or bool(os.environ.get('DEV_UNATTENDED'))
     allow_downloads = '--allow-downloads' in sys.argv
     if allow_downloads: sys.argv.remove('--allow-downloads')
     licences = json.loads(Path(__file__).with_name('download_licenses.json').read_text())
@@ -213,23 +217,9 @@ def main():
             failed += 0 if optional else 1
             continue
         dst = os.path.join(rw, folder, name)
-        try:
-            if repo.startswith('https://'):
-                import requests
-                response=requests.head(repo,allow_redirects=True,timeout=30);response.raise_for_status()
-                size=int(response.headers.get('Content-Length','0'))
-            else:
-                info=HfApi(token=False).model_info(repo,files_metadata=True)
-                if getattr(info,'gated',False):raise ValueError('Gated models require manual owner acquisition')
-                rows=[row for row in info.siblings if row.rfilename==want]
-                if len(rows)!=1:raise ValueError('Need an exact declared upstream file and size')
-                size=rows[0].size
-            if type(size) is not int or size<=0:raise ValueError('Missing reliable file size; use manual copy')
-            print(f"  Missing pinned file: {folder}/{name}; bytes={size}; source={repo}/{want}; licence={policy.get('license')}; SHA-256={sha}",flush=True)
-            if not confirm_download():
-                raise ValueError('Download not confirmed; file preserved/missing')
-        except (OSError,ValueError,EOFError) as error:
-            print(f'  CHECK {name}: {error}');failed += 0 if optional else 1;continue
+        if not approved_download(sha):
+            print(f'  CHECK {name}: SHA-256 not approved; file preserved/missing')
+            failed += 0 if optional else 1;continue
         if repo.startswith("https://"):
             try:
                 if not sha:
@@ -241,7 +231,7 @@ def main():
                 print(f"  CHECK {name}: {e}"); failed += 1
             continue
         try:
-            matches = [f for f in HfApi(token=False).list_repo_files(repo) if f == want or f.endswith("/" + want)]
+            matches = [f for f in HfApi(token=False).list_repo_files(repo) if f == want]
             if len(matches) != 1: raise RuntimeError('Expected exactly one declared upstream file')
             match = matches[0]
             print(f"  downloading {repo} :: {match}", flush=True)

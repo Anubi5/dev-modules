@@ -32,13 +32,17 @@ from huggingface_hub import HfApi, hf_hub_download as _hf_download  # noqa: E402
 api = HfApi()
 
 
-def confirm_download():
-    """Flush a complete prompt line before reading normal interactive stdin."""
-    print('Download this pinned file? Type DOWNLOAD:',flush=True)
-    if not sys.stdin.isatty():
-        print('No interactive terminal; download refused',flush=True);return False
-    try:return input().strip()=='DOWNLOAD'
-    except EOFError:return False
+def approved_download(sha):
+    """Only argument-derived approvals from the Windows plan may authorize bytes."""
+    if os.environ.get('DEV_MODEL_OPERATION') != 'approved' or os.environ.get('DEV_UNATTENDED'):
+        return False
+    try:
+        approved = json.loads(os.environ.get('DEV_APPROVED_SHA256', '[]'))
+    except (ValueError, TypeError):
+        return False
+    return (isinstance(approved, list)
+            and all(isinstance(value, str) and re.fullmatch('[a-f0-9]{64}', value) for value in approved)
+            and isinstance(sha, str) and sha.lower() in approved)
 
 
 def download(repo, filename, **kw):
@@ -145,7 +149,7 @@ def place(rel, ro, rw, legacy, repo=None, local=False, declaration=None):
     if have_old:
         print('  Legacy weight preserved; copy manually to D: for '+rel)
         return old
-    if not repo or not rw or os.environ.get('DEV_MODEL_OPERATION')!='prompt' or os.environ.get('DEV_UNATTENDED'):
+    if not repo or not rw or os.environ.get('DEV_MODEL_OPERATION')!='approved' or os.environ.get('DEV_UNATTENDED'):
         raise RuntimeError(rel+' is missing; run dev mod update llama-swap for confirmed pinned acquisition, or copy manually')
     if declaration is None:raise RuntimeError('Missing declared pins/licence; copy manually')
     spec,row=declaration;policy=spec.get('download_policy',{})
@@ -156,8 +160,8 @@ def place(rel, ro, rw, legacy, repo=None, local=False, declaration=None):
         raise RuntimeError('Missing reviewed size/hash/licence/revision; gated models stay manual')
     filename=row['file']
     print(f"  Missing pinned file: {rel}; bytes={row['bytes']}; source={repo}@{spec['revision']}/{filename}; licence={policy['license']}; SHA-256={row['sha256']}",flush=True)
-    if not confirm_download():
-        raise RuntimeError('Download not confirmed')
+    if not approved_download(row['sha256']):
+        raise RuntimeError('SHA-256 not approved; download refused')
     os.makedirs(rw,exist_ok=True)
     staging=tempfile.mkdtemp(prefix='.model-stage-',dir=rw)
     downloaded=download(repo,filename,revision=spec['revision'],local_dir=staging,token=False)

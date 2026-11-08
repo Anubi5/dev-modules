@@ -2,6 +2,7 @@
 import hashlib
 import importlib.util
 import contextlib
+import json
 import io
 import os
 from pathlib import Path
@@ -127,8 +128,7 @@ class DownloadTests(unittest.TestCase):
     def run_fetch(self, flags=(), repo='Bingsu/adetailer', pin=True):
         self.listing.write_text(f'{repo} weights.safetensors checkpoints'+(' sha256:'+self.sha if pin else '')+'\n')
         with patch.object(sys,'argv',['fetch',*flags,str(self.listing),str(self.ro),str(self.ro),str(self.state)]), \
-             patch.dict(os.environ,DEV_MODEL_OPERATION='prompt',DEV_UNATTENDED=''), \
-             patch.object(self.fetch,'confirm_download',return_value=True), \
+             patch.dict(os.environ,DEV_MODEL_OPERATION='approved',DEV_UNATTENDED='',DEV_APPROVED_SHA256=json.dumps([self.sha])), \
              contextlib.redirect_stdout(io.StringIO()):
             return self.fetch.main()
 

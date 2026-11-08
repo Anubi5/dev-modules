@@ -567,6 +567,11 @@ def prepare(log, wait, wf=None):
     @param wf    Workflow to preflight (None: no check).
     @return Error text, or "" when ComfyUI is ready and the GPU is free of chat models.
     """
+    from helper_models import check_workflow
+    try:
+        check_workflow(os.path.join(MODELS, 'comfy'), wf)
+    except (OSError, ValueError) as error:
+        return str(error)
     if not comfy_up():
         subprocess.run(["systemctl", "--user", "start", "comfyui"], stderr=subprocess.DEVNULL)
         for _ in range(90):

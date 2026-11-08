@@ -1,22 +1,22 @@
 # ComfyUI model files: <huggingface repo> <file or path in the repo> <ComfyUI folder> [save as] [sha256:<hex>]
-# Files in formats that can run code when loaded (.bin .pt .pth .ckpt .pkl) must carry a sha256 (CI checks it).
+# Every declaration carries a sha256 (CI checks it). Download licences: download_licenses.json.
 # Files live in D:\AI\models\comfy (= /models/comfy, read-only); missing ones are downloaded there by dev mod add|update (Windows).
-stabilityai/stable-diffusion-xl-base-1.0 sd_xl_base_1.0.safetensors checkpoints
+stabilityai/stable-diffusion-xl-base-1.0 sd_xl_base_1.0.safetensors checkpoints sha256:31e35c80fc4829d14f90153f4c74cd59c90b779f6afe05a74cd6120b893f7e5b
 # Photoreal SDXL fine-tune used by ai gen (openrail++); works with every SDXL ControlNet / IPAdapter / detailer here
-SG161222/RealVisXL_V5.0 RealVisXL_V5.0_fp16.safetensors checkpoints
+SG161222/RealVisXL_V5.0 RealVisXL_V5.0_fp16.safetensors checkpoints sha256:6a35a7855770ae9820a3c931d4964c3817b6d9e3c6f9c4dabb5b3a94e5643b80
 # Juggernaut XL "Ragnarok" (KandooAI / RunDiffusion; CivitAI only) - ai gen image ... --checkpoint juggernaut
 https://civitai.com/api/download/models/1759168?fileId=1659952 juggernautXL_ragnarok.safetensors checkpoints sha256:DD08FA32F98D05A2443CA1419E46DF1575A0811F6E3B246D9DD47FF20F5EB66A
-Comfy-Org/Wan_2.2_ComfyUI_Repackaged wan2.2_vae.safetensors vae
-Comfy-Org/Wan_2.2_ComfyUI_Repackaged umt5_xxl_fp8_e4m3fn_scaled.safetensors text_encoders
-QuantStack/Wan2.2-TI2V-5B-GGUF Wan2.2-TI2V-5B-Q8_0.gguf diffusion_models
-Kim2091/UltraSharp 4x-UltraSharp.safetensors upscale_models
+Comfy-Org/Wan_2.2_ComfyUI_Repackaged wan2.2_vae.safetensors vae sha256:e40321bd36b9709991dae2530eb4ac303dd168276980d3e9bc4b6e2b75fed156
+Comfy-Org/Wan_2.2_ComfyUI_Repackaged umt5_xxl_fp8_e4m3fn_scaled.safetensors text_encoders sha256:c3355d30191f1f066b26d93fba017ae9809dce6c627dda5f6a66eaa651204f68
+QuantStack/Wan2.2-TI2V-5B-GGUF Wan2.2-TI2V-5B-Q8_0.gguf diffusion_models sha256:57bece983817ab2f957546683bb670f13be7d99022d45674840cd999a050ea8f
+Kim2091/UltraSharp 4x-UltraSharp.safetensors upscale_models sha256:36a340b5509b699d2c06cb445ddc1d3d39199ac734d889ed6d7915f60e05bcbc
 # Pose / depth / edges: one SDXL ControlNet for all control types (use "SetUnionControlNetType" or Apply ControlNet)
-xinsir/controlnet-union-sdxl-1.0 diffusion_pytorch_model_promax.safetensors controlnet controlnet-union-sdxl-promax.safetensors
+xinsir/controlnet-union-sdxl-1.0 diffusion_pytorch_model_promax.safetensors controlnet controlnet-union-sdxl-promax.safetensors sha256:9fae2e50cb431bfcbe05822b59ec2228df545ef27f711dea8949e9f4ed9f7cdc
 # Consistent faces: IPAdapter (face reference image) + FaceID Plus v2 (stronger, uses InsightFace) + the CLIP vision encoder
-h94/IP-Adapter models/image_encoder/model.safetensors clip_vision CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors
-h94/IP-Adapter sdxl_models/ip-adapter-plus-face_sdxl_vit-h.safetensors ipadapter
+h94/IP-Adapter models/image_encoder/model.safetensors clip_vision CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors sha256:6ca9667da1ca9e0b0f75e46bb030f7e011f44f86cbfb8d5a36590fcd7507b030
+h94/IP-Adapter sdxl_models/ip-adapter-plus-face_sdxl_vit-h.safetensors ipadapter sha256:677ad8860204f7d0bfba12d29e6c31ded9beefdf3e4bbd102518357d31a292c1
 h94/IP-Adapter-FaceID ip-adapter-faceid-plusv2_sdxl.bin ipadapter sha256:c6945d82b543700cc3ccbb98d363b837e9c596281607857c74b713a876daf5fb
-h94/IP-Adapter-FaceID ip-adapter-faceid-plusv2_sdxl_lora.safetensors loras
+h94/IP-Adapter-FaceID ip-adapter-faceid-plusv2_sdxl_lora.safetensors loras sha256:f24b4bb2dad6638a09c00f151cde84991baf374409385bcbab53c1871a30cb7b
 # Face / hand repair (FaceDetailer): detectors
 Bingsu/adetailer face_yolov8m.pt ultralytics/bbox sha256:717923c19b3f4bbf5250b728f1fa6b2cb72a33aed1d236ea9caf0e21ad943e5f
 Bingsu/adetailer hand_yolov8s.pt ultralytics/bbox sha256:70b540063fbc385736d8258970744a4afbc4cbf7932134bae3b24cdadeadec06
@@ -51,7 +51,7 @@ Comfy-Org/Fibo-2.0 vae/flux2-vae.safetensors vae sha256:868fe7b343cc8f3a19dbcfca
 
 # Image to 3D (trial, optional): Pixal3D (MIT) + TRELLIS.2 (MIT) - native ComfyUI nodes, int8 weights for 12 GB.
 # The image encoders are Meta DINOv3 (DINOv3 licence: worldwide, royalty-free). Helpers: BiRefNet background
-# removal (MIT), MoGe-2 camera estimation (MIT). Safetensors: hashes recorded on download.
+# removal (MIT), MoGe-2 camera estimation (MIT). DINOv3 remains a manual licence action.
 # 3D pins: the SHA-256 the PC recorded, each equal to the file's Hugging Face LFS hash (checked 2026-11-05)
 Comfy-Org/Pixal3D diffusion_models/pixal3d_int8_convrot.safetensors diffusion_models optional sha256:4621eac3b715484f79303c7152af641fe0b2b14f4d0e3d394fd6922d00f955ec
 Comfy-Org/Pixal3D diffusion_models/pixal3d_multiview_int8_convrot.safetensors diffusion_models optional sha256:6b1eb3328930d921d3b57508d9c46cceec1c174dcedeebc14f176ab67d49f477

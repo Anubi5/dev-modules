@@ -1,0 +1,100 @@
+{
+  "Bingsu/adetailer": {
+    "approved": true,
+    "license": "apache-2.0",
+    "source": "https://huggingface.co/Bingsu/adetailer"
+  },
+  "Comfy-Org/Anima-LLLite": {
+    "approved": true,
+    "license": "CircleStone Labs Non-Commercial",
+    "source": "https://huggingface.co/circlestone-labs/Anima/blob/main/LICENSE.md"
+  },
+  "Comfy-Org/BiRefNet": {
+    "approved": true,
+    "license": "mit",
+    "source": "https://huggingface.co/Comfy-Org/BiRefNet"
+  },
+  "Comfy-Org/Fibo-2.0": {
+    "approved": true,
+    "license": "cc-by-nc-4.0",
+    "source": "https://huggingface.co/Comfy-Org/Fibo-2.0"
+  },
+  "Comfy-Org/MOSS-Image": {
+    "approved": true,
+    "license": "apache-2.0",
+    "source": "https://huggingface.co/Comfy-Org/MOSS-Image"
+  },
+  "Comfy-Org/MoGe": {
+    "approved": true,
+    "license": "mit",
+    "source": "https://huggingface.co/Comfy-Org/MoGe"
+  },
+  "Comfy-Org/Pixal3D": {
+    "approved": true,
+    "license": "mit",
+    "manual_files": [
+      "clip_vision/dino_v3_L_naf_fp32.safetensors"
+    ],
+    "source": "https://huggingface.co/Comfy-Org/Pixal3D"
+  },
+  "Comfy-Org/TRELLIS.2": {
+    "approved": true,
+    "license": "mit",
+    "source": "https://huggingface.co/Comfy-Org/TRELLIS.2"
+  },
+  "Comfy-Org/Wan_2.2_ComfyUI_Repackaged": {
+    "approved": true,
+    "license": "apache-2.0",
+    "source": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged"
+  },
+  "Comfy-Org/Z-Image-Turbo": {
+    "approved": true,
+    "license": "apache-2.0",
+    "source": "https://huggingface.co/Comfy-Org/Z-Image-Turbo"
+  },
+  "Kim2091/UltraSharp": {
+    "approved": true,
+    "license": "cc-by-nc-sa-4.0",
+    "source": "https://huggingface.co/Kim2091/UltraSharp"
+  },
+  "QuantStack/Wan2.2-TI2V-5B-GGUF": {
+    "approved": true,
+    "license": "apache-2.0",
+    "source": "https://huggingface.co/QuantStack/Wan2.2-TI2V-5B-GGUF"
+  },
+  "SG161222/RealVisXL_V5.0": {
+    "approved": true,
+    "license": "openrail++",
+    "source": "https://huggingface.co/SG161222/RealVisXL_V5.0"
+  },
+  "black-forest-labs/flux-3-image-klein-comfy": {
+    "approved": false,
+    "license": "other",
+    "source": "https://huggingface.co/black-forest-labs/flux-3-image-klein-comfy"
+  },
+  "circlestone-labs/Anima": {
+    "approved": true,
+    "license": "CircleStone Labs Non-Commercial",
+    "source": "https://huggingface.co/circlestone-labs/Anima/blob/main/LICENSE.md"
+  },
+  "h94/IP-Adapter": {
+    "approved": true,
+    "license": "apache-2.0",
+    "source": "https://huggingface.co/h94/IP-Adapter"
+  },
+  "h94/IP-Adapter-FaceID": {
+    "approved": false,
+    "license": "research-only; manual review required",
+    "source": "https://huggingface.co/h94/IP-Adapter-FaceID"
+  },
+  "stabilityai/stable-diffusion-xl-base-1.0": {
+    "approved": true,
+    "license": "openrail++",
+    "source": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0"
+  },
+  "xinsir/controlnet-union-sdxl-1.0": {
+    "approved": true,
+    "license": "apache-2.0",
+    "source": "https://huggingface.co/xinsir/controlnet-union-sdxl-1.0"
+  }
+}

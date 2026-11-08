@@ -3,12 +3,16 @@
 @file fetch_models.py
 @brief Makes every file in models.txt available on D: (read-only inside at /models/comfy): present there, moved there
        from an older in-distro copy, or downloaded there. Writing to D: needs the writable mount (/models-rw), which
-       only Windows turns on while it runs "dev mod add|update"; without it, missing files are reported, not fetched.
+       only Windows turns on while it runs "dev mod add|update". Downloads additionally require --allow-downloads,
+       a declared hash and a reviewed licence entry. Startup and discovery never invoke the download path.
 Usage: fetch_models.py <models.txt> <read-only root> <writable root or -> <state dir> [<old in-distro root>]
        (helpers.txt: read-only root /nonexistent, writable root = state dir = the node's own folder)
 """
 import hashlib
+import json
 import os
+from pathlib import Path
+import re
 import shutil
 import sys
 
@@ -31,7 +35,7 @@ def load_record(rec):
     """! @brief Reads the .hashes record: "<sha256> <size> <mtime_ns> <path>" (older lines: "<sha256> <path>"). @return {path: (sha, size, mtime)} """
     known = {}
     if os.path.exists(rec):
-        for line in open(rec):
+        for line in Path(rec).read_text().splitlines():
             f = line.rstrip("\n").split(" ", 3)
             if len(f) == 4 and f[1].isdigit() and f[2].isdigit():
                 known[f[3]] = (f[0], int(f[1]), int(f[2]))
@@ -47,7 +51,7 @@ def save_record(rec, known):
     os.replace(rec + ".new", rec)
 
 
-def check_hash(path, own, pinned=None, key=None, quarantine=True):
+def check_hash(path, own, pinned=None, key=None, quarantine=True, force=False):
     """!
     @brief Integrity check for a model file, present or just downloaded.
            Pinned files (sha256: in the list) must match the pin. Unpinned pickle-based files (can run code when
@@ -64,7 +68,7 @@ def check_hash(path, own, pinned=None, key=None, quarantine=True):
     rec = os.path.join(own, ".hashes")
     known, st = load_record(rec), os.stat(path)
     old = known.get(key)
-    if old and old[1:] == (st.st_size, st.st_mtime_ns) and (not pinned or old[0].lower() == pinned.lower()):
+    if not force and old and old[1:] == (st.st_size, st.st_mtime_ns) and (not pinned or old[0].lower() == pinned.lower()):
         return True                                   # checked before, unchanged
     h = sha256(path)
     want = (pinned or (old[0] if old else h)).lower()
@@ -140,6 +144,9 @@ def fetch_url(url, dest, sha):
     if h.hexdigest().lower() != sha.lower():
         os.remove(part)
         raise RuntimeError(f"checksum mismatch (expected {sha[:12]}..., got {h.hexdigest()[:12]}...) - file discarded")
+    if os.path.exists(dest):
+        os.remove(part)
+        raise RuntimeError('Destination appeared during download; preserved')
     os.replace(part, dest)
 
 
@@ -151,13 +158,16 @@ def main():
     """
     verify_only = '--verify-only' in sys.argv
     if verify_only: sys.argv.remove('--verify-only')
+    allow_downloads = '--allow-downloads' in sys.argv
+    if allow_downloads: sys.argv.remove('--allow-downloads')
+    licences = json.loads(Path(__file__).with_name('download_licenses.json').read_text())
     lst, ro, rw, own = sys.argv[1:5]
     old_root = sys.argv[5] if len(sys.argv) > 5 else None
     rw = rw if rw != "-" and os.path.isdir(rw) and os.access(rw, os.W_OK) else None
     if verify_only: rw, old_root = None, None
     os.makedirs(own, exist_ok=True)
     failed = 0
-    for line in open(lst):
+    for line in Path(lst).read_text().splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         parts = line.split()
@@ -181,12 +191,20 @@ def main():
         have = [p for p in (on_d, old) if p and os.path.exists(p)]
         if have:
             print(f"  {folder}/{name}: present{'' if have[0] == on_d else ' (still inside the distro - run dev mod update comfyui from Windows to move it to D:)'}", flush=True)
-            failed += 0 if check_hash(os.path.abspath(have[0]), own, sha, quarantine=not verify_only) else 1
+            failed += 0 if check_hash(os.path.abspath(have[0]), own, sha, quarantine=False,
+                                      force=verify_only or allow_downloads) else 1
             continue
-        if not rw:
+        if not rw or not allow_downloads or verify_only:
             msg = (f"{folder}/{name} is missing - copy it to D:\\AI\\models\\comfy manually" if verify_only else
                    f"{folder}/{name} is missing - downloads go to D:\\AI\\models, run 'dev mod update comfyui' from Windows")
             print(f"  (optional) {msg}" if optional else f"  CHECK {msg}"); failed += 0 if optional else 1
+            continue
+        policy = licences.get(repo, {})
+        if (not sha or not re.fullmatch(r'[0-9a-fA-F]{64}', sha)
+                or not policy.get('approved') or want in policy.get('manual_files', [])):
+            print(f"  {'(optional)' if optional else 'CHECK'} {folder}/{name}: manual copy required; "
+                  "downloads require a declared SHA-256 and reviewed licence approval")
+            failed += 0 if optional else 1
             continue
         dst = os.path.join(rw, folder, name)
         if repo.startswith("https://"):
@@ -200,10 +218,15 @@ def main():
                 print(f"  CHECK {name}: {e}"); failed += 1
             continue
         try:
-            match = [f for f in HfApi().list_repo_files(repo) if f == want or f.endswith("/" + want)][0]
+            matches = [f for f in HfApi(token=False).list_repo_files(repo) if f == want or f.endswith("/" + want)]
+            if len(matches) != 1: raise RuntimeError('Expected exactly one declared upstream file')
+            match = matches[0]
             print(f"  downloading {repo} :: {match}", flush=True)
-            path = hf_hub_download(repo, match, local_dir=os.path.join(rw, "_dl"))
+            path = hf_hub_download(repo, match, local_dir=os.path.join(rw, "_dl"), token=False)
+            if sha256(path).lower() != sha.lower():
+                raise RuntimeError('Downloaded file does not match its pinned checksum; not published')
             os.makedirs(os.path.dirname(dst), exist_ok=True)
+            if os.path.exists(dst): raise RuntimeError('Destination appeared during download; preserved')
             os.replace(path, dst)
             if not check_hash(dst, own, sha, key=os.path.abspath(on_d)):
                 failed += 1

@@ -12,7 +12,6 @@ Environment=AUX_ANNOTATOR_CKPTS_PATH=/models/comfy/controlnet_aux
 Environment=HF_HUB_OFFLINE=1
 Environment=TRANSFORMERS_OFFLINE=1
 EnvironmentFile=-%h/.config/comfyui/override.env
-ExecStartPre=%h/.local/share/modules/comfyui/app/ComfyUI/.venv/bin/python %h/.local/share/modules/comfyui/helper_models.py --root ${COMFY_MODELS}
 ExecStart=%h/.local/share/modules/comfyui/app/ComfyUI/.venv/bin/python main.py --models-directory ${COMFY_MODELS} --listen 127.0.0.1 --port 8188 --offline --output-directory %h/work/outputs/comfy --input-directory %h/work/inputs --temp-directory %h/work/scratch/comfy --user-directory %h/work/comfyui $COMFY_MEM
 Restart=on-failure
 RestartSec=5

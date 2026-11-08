@@ -53,13 +53,13 @@ roots() {   # model folders, same layout on D: and in the module's own folder (o
     '  background_removal: background_removal' '  geometry_estimation: geometry_estimation'; }
 { echo 'windows:'; echo "  base_path: ${MODELS_MOUNT:-/models}/comfy"; roots; echo 'module:'; echo "  base_path: $MOD/models"; roots; } > extra_model_paths.yaml
 
-say "model files (models.txt) - verifying owner-supplied files on D:"
+say "model files (models.txt) - verifying D: files; fetching only pinned, licence-approved declarations"
 # model files live on D: (read-only at /models); D: is writable at /models-rw only while Windows runs "dev mod add|update".
-# Older copies inside the distro ($MOD/models) are moved to D: on the way; the checksum record stays in $MOD/models.
-.venv/bin/python "$MOD/fetch_models.py" --verify-only "$MOD/models.txt" "${MODELS_MOUNT:-/models}/comfy" "${MODELS_RW:-/models-rw}/comfy" \
-  "$MOD/models" "$MOD/models"
+# Only the explicit add/update path grants download permission. Startup and discovery do not call this.
+.venv/bin/python "$MOD/fetch_models.py" --allow-downloads "$MOD/models.txt" "${MODELS_MOUNT:-/models}/comfy" "${MODELS_RW:-/models-rw}/comfy" \
+  "$MOD/models"
 say "helper models (owner-supplied, hash-pinned, only on D:)"
 # A deliberate module update may retire only byte-identical legacy helper copies,
 # after every declared D: file and every legacy file have verified. No downloads.
-.venv/bin/python "$MOD/helper_models.py" --root "${MODELS_MOUNT:-/models}/comfy" --retire-from "$C"
+.venv/bin/python "$MOD/helper_models.py" --root "${MODELS_MOUNT:-/models}/comfy" --allow-missing --retire-from "$C"
 echo "ComfyUI ready"

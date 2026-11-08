@@ -4,13 +4,23 @@ Machine callers use `ai gen image "prompt" --json` (also video/edit/pose/3d/reru
 Stdout is one `local-ai.producer/1` JSON object with status, exit code, record and
 outputs; progress goes to stderr. Default human output and exit codes are retained.
 
-Model weights are owner-supplied data under `D:\AI\models`. The installer verifies
-declared generation files without fetching or moving them. Helper requirements
+Model weights are data under `D:\AI\models`. User-started `dev mod add/update`
+may fetch missing declarations only with a SHA-256 pin and an approved entry in
+`download_licenses.json`. All 41 declarations are pinned. The reviewed policy
+covers personal, non-commercial use; upstream restrictions still apply. Unknown
+licences, gated FLUX, research-only FaceID, the DINOv3 encoder and the CivitAI file
+remain manual downloads. No login or licence acceptance is automated.
+Startup and discovery never download. Helper requirements
 are pinned in `helper_models.json`: DWPose uses `comfy/controlnet_aux/yzd-v/DWPose/`,
 InsightFace uses `comfy/insightface/models/buffalo_l/`. ComfyUI's native
 `--models-directory` and DWPose's environment path select the read-only share.
-Missing or conflicting helpers stop startup. A deliberate module update retires
-only declared, byte-identical legacy helper duplicates after all files verify;
+Missing helpers disable only pose or FaceID. Their workflows check existence and
+size before service/GPU changes. Install/update hashes present helpers and reports
+missing ones; changed files fail without replacement. Explicit full verification:
+`python3 helper_models.py --root /models/comfy`. Generation files can be rehashed
+with `fetch_models.py --verify-only models.txt /models/comfy - models`.
+A deliberate module update retires
+only declared, byte-identical legacy helper duplicates after present files verify;
 it never replaces a D: file. Staged acceptance leaves installed copies untouched.
 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) with SDXL (photoreal RealVisXL V5.0 for `ai gen`, DPM++ SDE Karras, CFG 4.5) + 4x-UltraSharp and Wan 2.2 5B video (GGUF).
 Page: http://127.0.0.1:8188 (`dev comfy`). Agents use `ai gen image|video "prompt"` (skill `gpu-generate`):
@@ -22,10 +32,11 @@ it unloads the chat model through the model-serving contract, runs one fixed wor
   `COMFY_UPGRADE=1 dev mod update comfyui` for fresh Python packages. ComfyUI-Manager is not installed.
 - Pickle-based model files (`.pt`, `.pth`, `.bin`) can run code when loaded. Declared hashes are checked;
   changed files are refused and preserved for the owner to inspect.
-- Model files live only in D:\AI\models\comfy (read-only inside). Copy missing files there manually;
-  module installation verifies them without downloading, moving or replacing weights.
+- Model files live only in D:\AI\models\comfy (read-only inside). Explicit module add/update
+  verifies existing files without replacing them and fetches approved missing declarations
+  through the temporary writable share. Restricted files must be copied manually.
 - `models.txt` takes Hugging Face lines and direct-download lines (`<https URL> <file> <folder> sha256:<hex>`, e.g. Juggernaut
-  XL Ragnarok from CivitAI); these identify required manually supplied files and hashes, not automatic downloads. Models and their tuned settings live in
+  XL Ragnarok from CivitAI); download permission additionally requires reviewed licence approval. Models and their tuned settings live in
   `profiles.json` (`ai gen image ... --model realvis|juggernaut|sdxl-base`, `--style photo|art`); `--checkpoint <file>` uses
   any other SDXL file (checked to be SDXL; without its own profile it gets the `default_sdxl` model's settings). Every result gets a `.json` record (prompt, seed, model, settings, time, memory);
   with repair/upscale options the untouched original is kept as `<name>_base_*`.

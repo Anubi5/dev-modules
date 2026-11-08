@@ -22,7 +22,11 @@
       "args": "-c 32768 -ctk q8_0 -ctv q8_0",
       "ttl": 300,
       "alias": "default",
-      "long_prompt_test": true
+      "long_prompt_test": true,
+      "capability_tags": [
+        "llm",
+        "vlm"
+      ]
     },
     {
       "id": "qwen3.5-9b-agent",
@@ -51,7 +55,10 @@
       ],
       "mmproj": false,
       "args": "-c 16384 -ctk q8_0 -ctv q8_0",
-      "ttl": 300
+      "ttl": 300,
+      "capability_tags": [
+        "llm"
+      ]
     },
     {
       "id": "qwen3.6-35b",
@@ -77,7 +84,11 @@
         16,
         12
       ],
-      "moe_default": 36
+      "moe_default": 36,
+      "capability_tags": [
+        "llm",
+        "vlm"
+      ]
     },
     {
       "id": "coder-7b",
@@ -89,7 +100,10 @@
       "mmproj": false,
       "args": "-c 8192",
       "ttl": 300,
-      "speed_test_only": true
+      "speed_test_only": true,
+      "capability_tags": [
+        "llm"
+      ]
     },
     {
       "id": "embed-gemma2",
@@ -101,7 +115,8 @@
       "mmproj": false,
       "embedding": true,
       "args": "--embeddings -c 2048 -b 2048 -ub 2048",
-      "ttl": 600
+      "ttl": 600,
+      "capability_tags": []
     },
     {
       "id": "lfm2.5-24b",
@@ -115,7 +130,10 @@
       "candidate": true,
       "args": "-c 65536 -ctk q8_0 -ctv q8_0",
       "ttl": 300,
-      "long_prompt_test": true
+      "long_prompt_test": true,
+      "capability_tags": [
+        "llm"
+      ]
     },
     {
       "id": "nemotron-bolt",
@@ -130,7 +148,11 @@
       "candidate": true,
       "args": "-c 32768 -ctk q8_0 -ctv q8_0",
       "ttl": 300,
-      "long_prompt_test": true
+      "long_prompt_test": true,
+      "capability_tags": [
+        "llm",
+        "vlm"
+      ]
     },
     {
       "id": "vision-check",
@@ -143,7 +165,11 @@
       "vision": true,
       "args": "-c 8192",
       "ttl": 120,
-      "vision_only": true
+      "vision_only": true,
+      "capability_tags": [
+        "llm",
+        "vlm"
+      ]
     }
   ]
 }

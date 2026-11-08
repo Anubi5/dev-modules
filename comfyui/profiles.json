@@ -26,7 +26,10 @@
       "steps": 30,
       "about": "photoreal, flattering portraits; best with --face",
       "licence": "openrail++",
-      "source": "huggingface.co/SG161222/RealVisXL_V5.0 (card: DPM++ SDE Karras, 30+ steps)"
+      "source": "huggingface.co/SG161222/RealVisXL_V5.0 (card: DPM++ SDE Karras, 30+ steps)",
+      "capability_tags": [
+        "image"
+      ]
     },
     "juggernaut": {
       "arch": "sdxl",
@@ -40,7 +43,10 @@
       },
       "about": "photoreal, natural documentary look, strong scenes",
       "licence": "see civitai.com/models/133005",
-      "source": "civitai.com/models/133005 (Ragnarok: DPM++ 2M SDE, 30-40 steps, CFG 3-6, start with little negative)"
+      "source": "civitai.com/models/133005 (Ragnarok: DPM++ 2M SDE, 30-40 steps, CFG 3-6, start with little negative)",
+      "capability_tags": [
+        "image"
+      ]
     },
     "sdxl-base": {
       "arch": "sdxl",
@@ -51,7 +57,10 @@
       "steps": 30,
       "about": "original SDXL: general and artistic, weakest at photos",
       "licence": "openrail++",
-      "source": "huggingface.co/stabilityai/stable-diffusion-xl-base-1.0"
+      "source": "huggingface.co/stabilityai/stable-diffusion-xl-base-1.0",
+      "capability_tags": [
+        "image"
+      ]
     },
     "flux3": {
       "arch": "flux3",
@@ -66,7 +75,10 @@
       "optional": true,
       "about": "FLUX 3 Image Klein: prompt-faithful, text in images, edits (ai gen edit); caption expanded by the local model",
       "licence": "FLUX Kommunity License (non-commercial; commercial-output exception for qualifying users)",
-      "source": "huggingface.co/black-forest-labs/flux-3-image-klein-comfy + Comfy template image_flux3_klein_distilled_* (16 steps, CFG 1)"
+      "source": "huggingface.co/black-forest-labs/flux-3-image-klein-comfy + Comfy template image_flux3_klein_distilled_* (16 steps, CFG 1)",
+      "capability_tags": [
+        "image"
+      ]
     },
     "zimage": {
       "arch": "zimage",
@@ -80,7 +92,10 @@
       "shift": 3.0,
       "about": "Z-Image Turbo: fast photoreal, 8 steps",
       "licence": "Apache 2.0",
-      "source": "huggingface.co/Comfy-Org/Z-Image-Turbo + Comfy blueprint Text to Image (Z-Image-Turbo) (8 steps, CFG 1, res_multistep, shift 3)"
+      "source": "huggingface.co/Comfy-Org/Z-Image-Turbo + Comfy blueprint Text to Image (Z-Image-Turbo) (8 steps, CFG 1, res_multistep, shift 3)",
+      "capability_tags": [
+        "image"
+      ]
     },
     "anima": {
       "arch": "anima",
@@ -100,7 +115,10 @@
       },
       "about": "Anima Aesthetic: anime / illustration (tags or plain text), --pose works",
       "licence": "CircleStone Labs non-commercial (weights); outputs usable",
-      "source": "huggingface.co/circlestone-labs/Anima + Comfy template image_anima (30 steps, CFG 4, er_sde, simple)"
+      "source": "huggingface.co/circlestone-labs/Anima + Comfy template image_anima (30 steps, CFG 4, er_sde, simple)",
+      "capability_tags": [
+        "image"
+      ]
     },
     "anima-turbo": {
       "arch": "anima",
@@ -120,7 +138,10 @@
       },
       "about": "Anima Turbo: fast drafts (8-12 steps, CFG 1)",
       "licence": "CircleStone Labs non-commercial (weights); outputs usable",
-      "source": "huggingface.co/circlestone-labs/Anima (Turbo: CFG 1, 8-12 steps)"
+      "source": "huggingface.co/circlestone-labs/Anima (Turbo: CFG 1, 8-12 steps)",
+      "capability_tags": [
+        "image"
+      ]
     },
     "moss": {
       "arch": "moss",
@@ -137,7 +158,10 @@
       },
       "about": "MOSS-Image SFT: legible text in images (posters, signs, infographics), 1-2 MP",
       "licence": "Apache 2.0",
-      "source": "huggingface.co/Comfy-Org/MOSS-Image + Comfy template image_moss_image_t2i (25 steps, CFG 2.5, er_sde, simple)"
+      "source": "huggingface.co/Comfy-Org/MOSS-Image + Comfy template image_moss_image_t2i (25 steps, CFG 2.5, er_sde, simple)",
+      "capability_tags": [
+        "image"
+      ]
     },
     "fibo2": {
       "arch": "fibo2",
@@ -150,7 +174,10 @@
       "steps": 4,
       "about": "Fibo 2.0 Edit Turbo: edits with up to 4 references (ai gen edit --model fibo2), also text-to-image; about 1 MP",
       "licence": "CC BY-NC 4.0 (non-commercial unless you have a Bria agreement)",
-      "source": "huggingface.co/Comfy-Org/Fibo-2.0 + Comfy template image_fibo2_edit_turbo_pe (4 steps, CFG 1, euler, simple, empty negative)"
+      "source": "huggingface.co/Comfy-Org/Fibo-2.0 + Comfy template image_fibo2_edit_turbo_pe (4 steps, CFG 1, euler, simple, empty negative)",
+      "capability_tags": [
+        "image"
+      ]
     },
     "pixal3d": {
       "arch": "pixal3d",
@@ -162,7 +189,10 @@
       },
       "about": "Pixal3D: one picture to a textured 3D model (GLB, PBR); geometry follows the photo closely",
       "licence": "MIT (image encoder: Meta DINOv3 licence)",
-      "source": "huggingface.co/Comfy-Org/Pixal3D (ComfyUI template 3d_pixal3d_trellis2_image_to_model)"
+      "source": "huggingface.co/Comfy-Org/Pixal3D (ComfyUI template 3d_pixal3d_trellis2_image_to_model)",
+      "capability_tags": [
+        "3d"
+      ]
     },
     "trellis2": {
       "arch": "trellis2",
@@ -174,7 +204,10 @@
       },
       "about": "TRELLIS.2 (Microsoft): one picture to a textured 3D model; fallback to pixal3d",
       "licence": "MIT (image encoder: Meta DINOv3 licence)",
-      "source": "huggingface.co/Comfy-Org/TRELLIS.2"
+      "source": "huggingface.co/Comfy-Org/TRELLIS.2",
+      "capability_tags": [
+        "3d"
+      ]
     },
     "pixal3d-mv": {
       "arch": "pixal3d",
@@ -183,7 +216,10 @@
       "workflow": "recipes/multiview-to-3d.json",
       "about": "Pixal3D multi-view: up to 4 views (front, left, back, right - e.g. a character turnaround) to one textured 3D model",
       "licence": "MIT (image encoder: Meta DINOv3 licence)",
-      "source": "huggingface.co/Comfy-Org/Pixal3D (ComfyUI template 3d_pixal3d_multi_views)"
+      "source": "huggingface.co/Comfy-Org/Pixal3D (ComfyUI template 3d_pixal3d_multi_views)",
+      "capability_tags": [
+        "3d"
+      ]
     }
   },
   "edit_model": "flux3",
@@ -205,7 +241,20 @@
       "shift": 8.0,
       "cfg": 5.0,
       "sampler": "uni_pc",
-      "scheduler": "simple"
+      "scheduler": "simple",
+      "capability_tags": [
+        "video"
+      ]
+    }
+  },
+  "assets": {
+    "ultrasharp": {
+      "kind": "upscaling",
+      "file": "4x-UltraSharp.safetensors",
+      "capability_tags": [
+        "upscaling"
+      ],
+      "about": "Declared ComfyUI upscaler component; used by supported image workflows"
     }
   }
 }

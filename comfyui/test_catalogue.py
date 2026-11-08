@@ -94,5 +94,45 @@ class CatalogueTests(unittest.TestCase):
         self.assertFalse(result['files'][0]['pinned'])
         self.assertIn('not GPU',result['meaning'])
 
+    def test_headers_report_format_without_inventing_capabilities_or_serving_entries(self):
+        valid=self.fixture('renamed-image-video-llm.gguf')
+        valid.write_bytes(b'GGUF'+(3).to_bytes(4,'little')+bytes(16))
+        bad=self.fixture('truncated.gguf');bad.write_bytes(b'GGUF')
+        report=catalogue.inventory(self.root)
+        row=catalogue.select(report,valid.name)
+        self.assertEqual(row['format']['status'],'recognized')
+        self.assertEqual(row['capability_tags'],[])
+        self.assertEqual(row['identification'],'unknown')
+        self.assertFalse(row['runnable'])
+        self.assertEqual(catalogue.select(report,bad.name)['format']['completeness'],'invalid')
+
+    def test_declared_new_model_uses_existing_family_without_cli_changes(self):
+        header=json.dumps({'weight':{'dtype':'U8','shape':[4],'data_offsets':[0,4]}}).encode()
+        path=self.fixture('comfy/diffusion_models/new.safetensors')
+        path.write_bytes(len(header).to_bytes(8,'little')+header+b'data')
+        package=dict(kind='image',architecture='existing-family',sha256='1'*64,capability_tags=['image'],
+                     parts={'model':dict(folder='diffusion_models',file=path.name,bytes=path.stat().st_size,sha256=catalogue.sha256(path))})
+        before=path.stat()
+        with patch.object(registry,'packages',return_value={'new-variant':package}):
+            report=catalogue.inventory(self.root)
+        model=catalogue.select(report,'new-variant')
+        self.assertEqual(model['capability_tags'],['image'])
+        self.assertTrue(model['runnable'])
+        self.assertEqual(model['completeness'],'declared-components-present')
+        row=catalogue.select(report,path.name)
+        self.assertEqual(row['identification'],'declared-package')
+        self.assertEqual(row['capability_tags'],['image'])
+        self.assertFalse(row['runnable'])
+        self.assertEqual(path.stat().st_mtime_ns,before.st_mtime_ns)
+        path.write_bytes(path.read_bytes()[:-1])
+        self.assertEqual(catalogue.format_info(path)['status'],'invalid')
+
+    def test_pickle_checkpoints_are_not_deserialized(self):
+        path=self.fixture('hostile.pt')
+        with patch('pickle.load',side_effect=AssertionError('Checkpoint executed')):
+            row=catalogue.select(catalogue.inventory(self.root),path.name)
+        self.assertEqual(row['format']['status'],'unverified')
+        self.assertFalse(row['runnable'])
+
 
 if __name__=='__main__':unittest.main()

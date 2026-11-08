@@ -9,6 +9,23 @@ import sys
 import tempfile
 
 
+def confirm_download():
+    """Use the controlling terminal when stdout is a PowerShell pipeline."""
+    prompt='Download this pinned file? Type DOWNLOAD:'
+    try:
+        terminal_out=open('/dev/tty','w',encoding='utf-8')
+        try:terminal_in=open('/dev/tty','r',encoding='utf-8')
+        except BaseException:terminal_out.close();raise
+    except OSError:
+        if not sys.stdin.isatty():
+            print('No interactive terminal; download refused',flush=True);return False
+        print(prompt,flush=True)
+        return input().strip()=='DOWNLOAD'
+    with terminal_out,terminal_in:
+        print(prompt,file=terminal_out,flush=True)
+        return terminal_in.readline().strip()=='DOWNLOAD'
+
+
 def acquire(repository,revision,row,destination,policy):
     if os.environ.get('DEV_MODEL_OPERATION')!='prompt' or os.environ.get('DEV_UNATTENDED'):
         raise SystemExit('Missing pinned asset; run dev mod update rig for confirmed acquisition, or copy manually')
@@ -18,7 +35,7 @@ def acquire(repository,revision,row,destination,policy):
             or type(row.get('bytes')) is not int or row['bytes']<=0):
         raise SystemExit('Missing reviewed size/hash/licence; gated assets require manual owner acquisition')
     print(f"Missing pinned file: {row['path']}; bytes={row['bytes']}; source={repository}@{revision}; licence={policy['license']}; SHA-256={row['sha256']}",flush=True)
-    if not sys.stdin.isatty() or input('Download this pinned file? Type DOWNLOAD: ').strip()!='DOWNLOAD':
+    if not confirm_download():
         raise SystemExit('Download not confirmed')
     destination=Path(destination)
     destination.parent.mkdir(parents=True,exist_ok=True)
@@ -28,6 +45,7 @@ def acquire(repository,revision,row,destination,policy):
     if sha256(downloaded)!=row['sha256'] or downloaded.stat().st_size!=row['bytes']:
         raise SystemExit('Downloaded file differs from declared pins; staging preserved')
     os.link(downloaded,destination) # preserve any existing destination, including races
+    os.unlink(downloaded) # remove staging name only after verified publication
 
 
 def sha256(path):

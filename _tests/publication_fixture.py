@@ -43,31 +43,36 @@ def exercise(root,source):
         try:
             if name=='destination_exists_refusal':destination.write_bytes(owner)
             real_link=os.link
+            linked=[]
             def racing_link(src,dst):
-                with open(dst,'xb') as stream:stream.write(owner)
-                return real_link(src,dst)
+                if name=='racing_destination_refusal':
+                    with open(dst,'xb') as stream:stream.write(owner)
+                result=real_link(src,dst)
+                linked.append(os.path.samefile(src,dst))
+                return result
             response=Interrupted(data) if name=='interrupted_transfer' else Response(data)
             with patch.object(urllib.request,'urlopen',return_value=response), \
                  patch('socket.create_connection',side_effect=AssertionError('Network forbidden')), \
-                 patch.object(module.os,'link',side_effect=racing_link if name=='racing_destination_refusal' else real_link):
+                 patch.object(module.os,'link',side_effect=racing_link):
                 error=None
                 try:module.fetch_url('https://fixture.invalid/no-network',str(destination),'0'*64 if name=='checksum_failure' else sha)
                 except (OSError,RuntimeError) as caught:error=caught
             staging=list(folder.glob('*.part'))
-            if len(staging)!=1:raise AssertionError('Expected exactly one retained staging fixture')
             if name=='successful_publication':
-                if error or destination.read_bytes()!=data or not os.path.samefile(staging[0],destination):
+                if error or destination.read_bytes()!=data or linked!=[True] or staging:
                     raise AssertionError('Publication did not create a matching hard link')
-            elif name in ('destination_exists_refusal','racing_destination_refusal'):
-                if error is None or destination.read_bytes()!=owner:raise AssertionError('Existing destination not preserved')
-            elif error is None or destination.exists():raise AssertionError('Failed transfer published a destination')
-            results[name]=dict(status='PASS',staging='retained',destination='published hard link' if name=='successful_publication' else 'preserved' if destination.exists() else 'absent')
+            else:
+                if len(staging)!=1:raise AssertionError('Failed staging was not retained')
+                if name in ('destination_exists_refusal','racing_destination_refusal'):
+                    if error is None or destination.read_bytes()!=owner:raise AssertionError('Existing destination not preserved')
+                elif error is None or destination.exists():raise AssertionError('Failed transfer published a destination')
+            results[name]=dict(status='PASS',staging='removed after verified publication' if name=='successful_publication' else 'retained',destination='published hard link' if name=='successful_publication' else 'preserved' if destination.exists() else 'absent')
         except KeyboardInterrupt:
             results[name]=dict(status='CANCELLED',staging='retained');break
         except Exception as error:results[name]=dict(status='FAIL',error=type(error).__name__+': '+str(error))
     status='CANCELLED' if any(row['status']=='CANCELLED' for row in results.values()) else 'PASS' if all(row['status']=='PASS' for row in results.values()) else 'FAIL'
     return dict(status=status,cases=results,
-                cleanup='No files deleted; successful and failed staging retained for owner review',network='fake response only')
+                cleanup='Successful staging name removed; published data and failed staging preserved',network='fake response only')
 
 
 def main():

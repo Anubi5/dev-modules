@@ -23,6 +23,23 @@ from huggingface_hub import HfApi, hf_hub_download
 CODE_FORMATS = (".pt", ".pth", ".bin", ".ckpt", ".pkl")   # pickle-based: can run code when loaded
 
 
+def confirm_download():
+    """Use the controlling terminal when stdout is a PowerShell pipeline."""
+    prompt='Download this pinned file? Type DOWNLOAD:'
+    try:
+        terminal_out=open('/dev/tty','w',encoding='utf-8')
+        try:terminal_in=open('/dev/tty','r',encoding='utf-8')
+        except BaseException:terminal_out.close();raise
+    except OSError:
+        if not sys.stdin.isatty():
+            print('No interactive terminal; download refused',flush=True);return False
+        print(prompt,flush=True)
+        return input().strip()=='DOWNLOAD'
+    with terminal_out,terminal_in:
+        print(prompt,file=terminal_out,flush=True)
+        return terminal_in.readline().strip()=='DOWNLOAD'
+
+
 def sha256(path):
     """! @brief SHA-256 of a file. @param path file @return hex digest """
     h = hashlib.sha256()
@@ -146,6 +163,7 @@ def fetch_url(url, dest, sha):
     if os.path.exists(dest):
         raise RuntimeError('Destination appeared during download; preserved')
     os.link(part, dest)
+    os.unlink(part) # remove only the new staging name; the verified published inode stays
 
 
 def main():
@@ -216,7 +234,7 @@ def main():
                 size=rows[0].size
             if type(size) is not int or size<=0:raise ValueError('Missing reliable file size; use manual copy')
             print(f"  Missing pinned file: {folder}/{name}; bytes={size}; source={repo}/{want}; licence={policy.get('license')}; SHA-256={sha}",flush=True)
-            if not sys.stdin.isatty() or input('Download this pinned file? Type DOWNLOAD: ').strip()!='DOWNLOAD':
+            if not confirm_download():
                 raise ValueError('Download not confirmed; file preserved/missing')
         except (OSError,ValueError,EOFError) as error:
             print(f'  CHECK {name}: {error}');failed += 0 if optional else 1;continue
@@ -244,6 +262,7 @@ def main():
             os.link(path, dst) # atomic no-clobber publication; retain staging for owner review
             if not check_hash(dst, own, sha, key=os.path.abspath(on_d),quarantine=False):
                 failed += 1
+            else:os.unlink(path) # the published hard link keeps the verified data
         except Exception as e:
             gated = "gated" in type(e).__name__.lower() or "401" in str(e) or "403" in str(e)
             why = (f"needs a Hugging Face login: accept its licence on huggingface.co/{repo} and put the file into "

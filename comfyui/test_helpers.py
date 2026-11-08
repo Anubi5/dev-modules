@@ -128,7 +128,7 @@ class DownloadTests(unittest.TestCase):
         self.listing.write_text(f'{repo} weights.safetensors checkpoints'+(' sha256:'+self.sha if pin else '')+'\n')
         with patch.object(sys,'argv',['fetch',*flags,str(self.listing),str(self.ro),str(self.ro),str(self.state)]), \
              patch.dict(os.environ,DEV_MODEL_OPERATION='prompt',DEV_UNATTENDED=''), \
-             patch.object(sys.stdin,'isatty',return_value=True),patch('builtins.input',return_value='DOWNLOAD'), \
+             patch.object(self.fetch,'confirm_download',return_value=True), \
              contextlib.redirect_stdout(io.StringIO()):
             return self.fetch.main()
 

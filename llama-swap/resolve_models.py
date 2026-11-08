@@ -32,6 +32,23 @@ from huggingface_hub import HfApi, hf_hub_download as _hf_download  # noqa: E402
 api = HfApi()
 
 
+def confirm_download():
+    """Use the controlling terminal when stdout is a PowerShell pipeline."""
+    prompt='Download this pinned file? Type DOWNLOAD:'
+    try:
+        terminal_out=open('/dev/tty','w',encoding='utf-8')
+        try:terminal_in=open('/dev/tty','r',encoding='utf-8')
+        except BaseException:terminal_out.close();raise
+    except OSError:
+        if not sys.stdin.isatty():
+            print('No interactive terminal; download refused',flush=True);return False
+        print(prompt,flush=True)
+        return input().strip()=='DOWNLOAD'
+    with terminal_out,terminal_in:
+        print(prompt,file=terminal_out,flush=True)
+        return terminal_in.readline().strip()=='DOWNLOAD'
+
+
 def download(repo, filename, **kw):
     """!
     @brief Downloads one file from Hugging Face, retrying; partial files resume on the next attempt.
@@ -147,7 +164,7 @@ def place(rel, ro, rw, legacy, repo=None, local=False, declaration=None):
         raise RuntimeError('Missing reviewed size/hash/licence/revision; gated models stay manual')
     filename=row['file']
     print(f"  Missing pinned file: {rel}; bytes={row['bytes']}; source={repo}@{spec['revision']}/{filename}; licence={policy['license']}; SHA-256={row['sha256']}",flush=True)
-    if not sys.stdin.isatty() or input('Download this pinned file? Type DOWNLOAD: ').strip()!='DOWNLOAD':
+    if not confirm_download():
         raise RuntimeError('Download not confirmed')
     os.makedirs(rw,exist_ok=True)
     staging=tempfile.mkdtemp(prefix='.model-stage-',dir=rw)
@@ -160,6 +177,7 @@ def place(rel, ro, rw, legacy, repo=None, local=False, declaration=None):
     destination=os.path.join(rw,rel)
     os.makedirs(os.path.dirname(destination),exist_ok=True)
     os.link(downloaded,destination) # fails atomically if any destination already exists
+    os.unlink(downloaded) # published link retains the verified weight
     return on_d
 
 

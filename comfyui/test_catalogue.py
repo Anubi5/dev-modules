@@ -13,6 +13,22 @@ from generation import registry
 
 
 class CatalogueTests(unittest.TestCase):
+    def test_failed_staging_is_visible_with_size_path_and_no_execution(self):
+        direct=self.fixture('comfy/checkpoints/model.'+'a'*32+'.part')
+        cached=self.fixture('llm/.model-stage-fixture/model.gguf')
+        self.fixture('llm/.model-stage-fixture/.cache/huggingface/download/model.metadata')
+        before={str(p):p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+        report=catalogue.inventory(self.root)
+        for path in (direct,cached):
+            row=catalogue.select(report,str(path))
+            self.assertEqual(row['status'],'failed-download');self.assertFalse(row['runnable'])
+            self.assertEqual(row['capability_tags'],[])
+        self.assertFalse(any(row['id'].endswith('.metadata') for row in report['files']))
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(catalogue.main(['list','--root',str(self.root)]),0)
+        self.assertIn('failed download',output.getvalue());self.assertIn(str(len(self.data))+' bytes',output.getvalue())
+        self.assertIn(str(direct),output.getvalue());self.assertIn(str(cached),output.getvalue())
+        self.assertEqual(before,{str(p):p.read_bytes() for p in self.root.rglob('*') if p.is_file()})
     def test_default_text_hides_components_but_preserves_unknown_and_missing_packages(self):
         package=dict(id='fixture',status='needs-something',components=['comfy/component.gguf'])
         files=[dict(id=name,path=str(self.root/name),status='untested',expected_sha256=pin)

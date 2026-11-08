@@ -48,7 +48,7 @@ class DownloadTests(unittest.TestCase):
         argv=['fetch','--allow-downloads',str(listing),str(self.root),str(self.root),str(self.base/'state')]
         with patch.object(sys,'argv',argv),patch.object(comfy,'HfApi',return_value=api) as metadata, \
              patch.object(comfy,'hf_hub_download',side_effect=fetch) as download, \
-             patch.object(sys.stdin,'isatty',return_value=True),patch('builtins.input',return_value=answer) as prompt, \
+             patch.object(comfy,'confirm_download',return_value=answer=='DOWNLOAD') as prompt, \
              contextlib.redirect_stdout(io.StringIO()) as output:
             code=comfy.main()
         return code,download.call_count,prompt.call_count,metadata.call_count,output.getvalue()
@@ -80,14 +80,14 @@ class DownloadTests(unittest.TestCase):
 
     def test_llama_verify_and_declined_acquisition_are_read_only(self):
         with self.assertRaises(RuntimeError):llama.place('fixture/probe.gguf',str(self.root),str(self.root),str(self.base/'legacy'),'repo',declaration=(self.spec,self.row))
-        with patch.dict(os.environ,DEV_MODEL_OPERATION='prompt'),patch.object(sys.stdin,'isatty',return_value=True),patch('builtins.input',return_value='NO'):
+        with patch.dict(os.environ,DEV_MODEL_OPERATION='prompt'),patch.object(llama,'confirm_download',return_value=False):
             with self.assertRaises(RuntimeError):llama.place('fixture/probe.gguf',str(self.root),str(self.root),str(self.base/'legacy'),'repo',declaration=(self.spec,self.row))
         self.assertEqual(self.snapshot(),{})
 
     def test_llama_pins_and_owner_confirmation_precede_download(self):
         def fetch(repo,filename,**kwargs):
             self.assertEqual(kwargs['revision'],self.spec['revision']);path=Path(kwargs['local_dir'])/filename;path.write_bytes(self.data);return str(path)
-        with patch.dict(os.environ,DEV_MODEL_OPERATION='prompt'),patch.object(sys.stdin,'isatty',return_value=True),patch('builtins.input',return_value='DOWNLOAD'),patch.object(llama,'download',side_effect=fetch):
+        with patch.dict(os.environ,DEV_MODEL_OPERATION='prompt'),patch.object(llama,'confirm_download',return_value=True),patch.object(llama,'download',side_effect=fetch):
             llama.place('fixture/probe.gguf',str(self.root),str(self.root),str(self.base/'legacy'),'repo',declaration=(self.spec,self.row))
         self.assertEqual((self.root/'fixture/probe.gguf').read_bytes(),self.data)
 
@@ -119,9 +119,25 @@ class DownloadTests(unittest.TestCase):
             path=Path(kwargs['local_dir'])/self.row['path'];path.write_bytes(self.data);return str(path)
         module=ModuleType('huggingface_hub');module.hf_hub_download=fetch
         with patch.dict(os.environ,DEV_MODEL_OPERATION='prompt'),patch.dict(sys.modules,huggingface_hub=module), \
-             patch.object(sys.stdin,'isatty',return_value=True),patch('builtins.input',return_value='DOWNLOAD'):
+             patch.object(rig,'confirm_download',return_value=True):
             rig.acquire('repo','1'*40,self.row,self.root/'probe.gguf',self.spec['download_policy'])
         self.assertEqual((self.root/'probe.gguf').read_bytes(),self.data)
+
+    def test_prompt_fallback_has_a_flushed_newline(self):
+        for module in (comfy,llama,rig):
+            with patch('builtins.open',side_effect=OSError('no controlling tty')),patch.object(sys.stdin,'isatty',return_value=True), \
+                 patch('builtins.input',return_value='NO'),contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertFalse(module.confirm_download())
+            self.assertTrue(output.getvalue().endswith('Type DOWNLOAD:\n'))
+
+    def test_prompt_uses_controlling_terminal_when_pipeline_stdin_is_not_a_tty(self):
+        class Terminal(io.StringIO):
+            def close(self):pass
+        for module in (comfy,llama,rig):
+            output=Terminal();answer=Terminal('NO\n')
+            with patch('builtins.open',side_effect=[output,answer]),patch.object(sys.stdin,'isatty',return_value=False):
+                self.assertFalse(module.confirm_download())
+            self.assertTrue(output.getvalue().endswith('Type DOWNLOAD:\n'))
 
 
 if __name__=='__main__':unittest.main()

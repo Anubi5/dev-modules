@@ -4,6 +4,11 @@ Independent reviewed image families live in `families/`; see its README for the
 package and trust boundary. `ai models list/show/verify` provides the same
 read-only local inventory to humans and Hermes, including copied, unregistered
 GGUFs and LoRAs. Availability and content verification do not establish quality.
+Text `ai models list` shows logical packages and unresolved/standalone files;
+`--all` includes declared component files. `list --json` retains the complete
+`local-ai.models/1` record regardless of the text presentation flag. Unreferenced
+files are never described as unused or deleted. `ai gen show` reads notes without
+persisting a hash cache; explicit acquisition and runtime execution stay separate.
 Updates reuse the existing unchanged size/mtime hash record; explicit
 `fetch_models.py --verify-only ...` still forces a full read. No new hash cache
 subsystem is introduced.

@@ -3,6 +3,7 @@
   "name": "krea2",
   "kind": "image",
   "architecture": "krea2",
+  "description": "Krea 2 Turbo: experimental local text-to-image; generation quality acceptance pending",
   "parts": {
     "model": {
       "folder": "diffusion_models",

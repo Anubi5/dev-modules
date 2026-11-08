@@ -44,6 +44,7 @@ def profiles():
     for name, data in packages().items():
         p = deepcopy(data['defaults'])
         p.update(arch=data['architecture'], kind=data['kind'], family=name)
+        p['about'] = data.get('description', name)
         for role, part in data['parts'].items():
             p['file' if role == 'model' else role] = part['file']
         result[name] = p

@@ -706,10 +706,15 @@ def job_view(j):
 
 def jobs_cmd(argv):
     """! @brief ai gen jobs [N] [--json]: the newest jobs with their state now (abandoned = its process is gone). """
-    n = next((int(x) for x in argv if x.isdigit()), 10)
+    parser = argparse.ArgumentParser(prog="ai gen jobs", description="Inspect recent job records without changing them")
+    parser.add_argument("count", nargs="?", type=int, default=10)
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+    if args.count < 1: parser.error("count must be positive")
+    n = args.count
     fs = sorted(glob.glob(os.path.join(JOBS, "*.json")))[-n:]
     out = [job_view(json.load(open(f))) for f in fs]
-    if "--json" in argv:
+    if args.json:
         print(json.dumps(out, indent=1)); return 0
     for j in out:
         print(f"{j['id']}  {j['state']:<13} {(j.get('was') and 'was ' + j['was'] + ' ') or ''}{(j.get('error') or '')[:90]}")
@@ -1341,11 +1346,11 @@ def asset_cmd(argv):
         t, meta, complete = assets.header(f["path"]) if f["name"].endswith(".safetensors") else (None, {}, None)
         out = {"file": f["name"], "folder": f["folder"], "size_gb": round(f["size"] / 1e9, 2), "complete": complete,
                "profile": [n for n, p in PROFILES["models"].items() if p["file"] == f["name"]] or None,
-               "embedded_metadata": assets.summary(meta), "note": assets.note_for(f["path"]) or None}
+               "embedded_metadata": assets.summary(meta), "note": assets.note_for(f["path"], persist=False) or None}
         if f["folder"] == "checkpoints":
             out["sdxl"] = is_sdxl(f["path"])
         if f["folder"] == "loras":
-            out["tested_with"] = sorted(v["model"] for v in assets.tested(f["path"]).values())
+            out["tested_with"] = sorted(v["model"] for v in assets.tested(f["path"], persist=False).values())
         if a.json:
             print(json.dumps(out, indent=1)); return 0
         for k, v in out.items():
@@ -1473,6 +1478,8 @@ def main():
     """!
     @brief Command-line entry point. @return 0 on success, 1 on failure.
     """
+    if sys.argv[2:3] == ["help"]:
+        sys.argv[2] = "--help"
     if sys.argv[1:2] == ["rerun"]:
         return rerun(sys.argv[2:])
     if sys.argv[1:2] == ["jobs"]:
@@ -1483,6 +1490,7 @@ def main():
     if sys.argv[1:2] == ["schema"]:              # ai gen schema: node definitions for the offline workflow check
         return dump_schema(os.path.join(OUTPUT, "schema.json"))
     if sys.argv[1:2] == ["models"]:              # ai gen models: which image models are ready
+        argparse.ArgumentParser(prog="ai gen models").parse_args(sys.argv[2:])
         return models_report()
     if not sys.argv[1:] or sys.argv[1] in ("help", "-h", "--help") or sys.argv[2:3] == ["help"]:   # "image --help": all options
         print(HELP); models_report(); return 0

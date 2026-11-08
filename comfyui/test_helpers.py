@@ -162,6 +162,11 @@ class DownloadTests(unittest.TestCase):
         self.assertEqual(self.run_fetch(['--verify-only']),1)
         self.assertEqual(path.read_bytes(),b'x'*len(self.data))
 
+    def test_update_reuses_the_existing_unchanged_hash_record(self):
+        self.assertEqual(self.run_fetch(['--allow-downloads']),0)
+        with patch.object(self.fetch,'sha256',side_effect=AssertionError('Unchanged model rehashed during update')):
+            self.assertEqual(self.run_fetch(['--allow-downloads']),0)
+
     def test_every_declared_model_has_a_valid_pin(self):
         rows=[line.split() for line in Path(__file__).with_name('models.txt').read_text().splitlines() if line.strip() and not line.startswith('#')]
         self.assertTrue(rows)

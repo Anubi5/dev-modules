@@ -22,9 +22,9 @@ fibo2-edit TextEncodeFibo2
 LIST
 PY=$MOD/app/ComfyUI/.venv/bin/python
 "$PY" -c 'import insightface' 2>/dev/null || echo "  (FaceID unavailable: InsightFace not installed - plain IPAdapter face works)"
-while read -r repo want folder name; do
+while read -r repo want folder name tags; do
   case "$repo" in ''|\#*) continue ;; esac
-  case "${name:-}" in *optional*) continue ;; esac              # optional models: reported by "ai gen models" below
+  case " ${name:-} ${tags:-} " in *' optional '*) continue ;; esac # optional models are reported by ai gen models
   case "${name:-}" in ''|sha256:*) name=$(basename "$want") ;; esac
   [ -e "${MODELS_MOUNT:-/models}/comfy/$folder/$name" ] || [ -e "$MOD/models/$folder/$name" ] || { echo "  missing $folder/$name"; miss=1; }
 done < "$MOD/models.txt"

@@ -192,7 +192,7 @@ def main():
         if have:
             print(f"  {folder}/{name}: present{'' if have[0] == on_d else ' (still inside the distro - run dev mod update comfyui from Windows to move it to D:)'}", flush=True)
             failed += 0 if check_hash(os.path.abspath(have[0]), own, sha, quarantine=False,
-                                      force=verify_only or allow_downloads) else 1
+                                      force=verify_only) else 1
             continue
         if not rw or not allow_downloads or verify_only:
             msg = (f"{folder}/{name} is missing - copy it to D:\\AI\\models\\comfy manually" if verify_only else

@@ -5,5 +5,5 @@ command -v rea >/dev/null || { echo "rea command not linked"; exit 1; }
 command -v ilspy >/dev/null || { echo "ilspy command not linked"; exit 1; }
 if [ -x "$MOD/app/ilspy/ilspycmd" ]; then ilspy --version >/dev/null 2>&1 || { echo "ilspy does not start"; exit 1; }
 else echo "  ILSpy not installed yet (installed on first use)"; fi
-if [ -x "$MOD/app/npm/node_modules/.bin/rea" ]; then rea doctor >/dev/null 2>&1 || { echo "rea doctor fails"; exit 1; }
+if [ -x "$MOD/app/npm/node_modules/.bin/rea" ]; then rea doctor --provider ghidra >/dev/null 2>&1 || { echo "rea Ghidra readiness fails"; exit 1; }
 else echo "  REA not installed yet (installed on first use)"; fi

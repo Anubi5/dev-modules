@@ -38,4 +38,23 @@ import json; S='$L'; json.dump({i:{'repo':'r/'+i,'file':S+'/st/'+i+'/m-Q4_K_M.gg
 python3 "$R/llama-swap/resolve_models.py" --config "$L/cfg.json" --state "$L/st" --ro "$L/ro" > "$L/out" 2>&1; r=$?
 [ -e "$L/st/a/m-Q4_K_M.gguf" ] && grep -q "a FAILED" "$L/out" && [ $r -ne 0 ] && ok "llama-swap: differing copy kept, model fails" || { no "llama conflict"; cat "$L/out"; }
 [ ! -e "$L/st/b/m-Q4_K_M.gguf" ] && grep -q "$L/ro/b" "$L/st/models.json" && ok "llama-swap: identical copy removed, D: path recorded" || no "llama identical"
+# The real ComfyUI quick-test parser must accept saved-as + checksum + optional independently.
+Q=$T/quick; mkdir -p "$Q/root/comfy/checkpoints"
+cat > "$Q/models.txt" <<'LIST'
+r upstream.safetensors checkpoints renamed.safetensors sha256:0000000000000000000000000000000000000000000000000000000000000000
+r plain.safetensors checkpoints sha256:0000000000000000000000000000000000000000000000000000000000000000
+r optional.safetensors checkpoints renamed-optional.safetensors sha256:0000000000000000000000000000000000000000000000000000000000000000 optional
+LIST
+touch "$Q/root/comfy/checkpoints/renamed.safetensors" "$Q/root/comfy/checkpoints/plain.safetensors"
+{
+  echo 'miss=0'
+  sed -n '/^while read -r repo want folder/,/^done < "\$MOD\/models.txt"/p' "$R/comfyui/test.sh"
+  echo 'exit $miss'
+} > "$Q/check.sh"
+MOD="$Q" MODELS_MOUNT="$Q/root" bash "$Q/check.sh" > "$Q/out" 2>&1 \
+  && ok "comfy quick test: saved-as, pin and optional are separate fields" || { no "comfy quick manifest parser"; cat "$Q/out"; }
+rm "$Q/root/comfy/checkpoints/renamed.safetensors"
+if MOD="$Q" MODELS_MOUNT="$Q/root" bash "$Q/check.sh" > "$Q/out" 2>&1; then no "comfy quick test missed absent required file"
+else ok "comfy quick test: missing required renamed file still fails"; fi
+bash "$R/_tests/reverse_test.sh" || no "reverse-tools scoped readiness"
 rm -rf "$T"; exit $fail

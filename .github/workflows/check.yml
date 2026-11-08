@@ -39,6 +39,8 @@ jobs:
         run: bash character/test.sh
       - name: Model files (copies, conflicts, moves)
         run: bash _tests/models_test.sh
+      - name: Model acquisition requires owner consent (offline fixtures)
+        run: python3 -B _tests/download_policy_test.py
       - name: Module contract (real tests, checksums for code-carrying model files)
         run: bash _tests/contract_check.sh
       - name: Rig contract and CLI (offline)

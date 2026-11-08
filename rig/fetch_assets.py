@@ -4,6 +4,30 @@ import json
 import os
 from pathlib import Path
 import shutil
+import re
+import sys
+import tempfile
+
+
+def acquire(repository,revision,row,destination,policy):
+    if os.environ.get('DEV_MODEL_OPERATION')!='prompt' or os.environ.get('DEV_UNATTENDED'):
+        raise SystemExit('Missing pinned asset; run dev mod update rig for confirmed acquisition, or copy manually')
+    if (policy.get('approved') is not True or not policy.get('license') or policy.get('gated')
+            or not re.fullmatch('[a-fA-F0-9]{40}',revision)
+            or not re.fullmatch('[a-fA-F0-9]{64}',row.get('sha256',''))
+            or type(row.get('bytes')) is not int or row['bytes']<=0):
+        raise SystemExit('Missing reviewed size/hash/licence; gated assets require manual owner acquisition')
+    print(f"Missing pinned file: {row['path']}; bytes={row['bytes']}; source={repository}@{revision}; licence={policy['license']}; SHA-256={row['sha256']}",flush=True)
+    if not sys.stdin.isatty() or input('Download this pinned file? Type DOWNLOAD: ').strip()!='DOWNLOAD':
+        raise SystemExit('Download not confirmed')
+    destination=Path(destination)
+    destination.parent.mkdir(parents=True,exist_ok=True)
+    staging=tempfile.mkdtemp(prefix='.model-stage-',dir=destination.parent)
+    from huggingface_hub import hf_hub_download
+    downloaded=Path(hf_hub_download(repo_id=repository,revision=revision,filename=row['path'],token=False,local_dir=staging))
+    if sha256(downloaded)!=row['sha256'] or downloaded.stat().st_size!=row['bytes']:
+        raise SystemExit('Downloaded file differs from declared pins; staging preserved')
+    os.link(downloaded,destination) # preserve any existing destination, including races
 
 
 def sha256(path):
@@ -24,17 +48,12 @@ def main():
     installed = {"source_revision": manifest["source"]["revision"], "models_root": str(root), "checkpoints": []}
     for row in manifest["weights"]["files"]:
         target = root / row["path"]
+        if not target.resolve().is_relative_to(root.resolve()):raise SystemExit('Unsafe model path')
         if not target.is_file():
             if not write_root:
-                raise SystemExit("Missing pinned model: " + str(target) + "; use the Windows module-update command with the writable model mount")
-            from huggingface_hub import hf_hub_download
-            downloaded = Path(hf_hub_download(repo_id=manifest["weights"]["repository"],
-                revision=manifest["weights"]["revision"], filename=row["path"], token=False))
-            if sha256(downloaded) != row["sha256"]:
-                raise SystemExit("Downloaded checkpoint checksum mismatch: " + row["path"])
+                raise SystemExit("Missing pinned model: " + str(target) + "; run dev mod update rig, or copy manually")
             writable = Path(write_root) / row["path"]
-            writable.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(downloaded, writable)
+            acquire(manifest['weights']['repository'],manifest['weights']['revision'],row,writable,manifest['weights'].get('download_policy',{}))
         if not target.is_file() or sha256(target) != row["sha256"]:
             raise SystemExit("Pinned model missing or checksum mismatch: " + row["path"])
         installed["checkpoints"].append({"path": str(target), "sha256": row["sha256"]})
@@ -45,13 +64,12 @@ def main():
         cache = Path(os.environ.get("RIG_ASSET_CACHE", str(Path.home() / ".cache/huggingface/hub")))
         cached = cache / "models--facebook--opt-350m/snapshots" / architecture["revision"] / architecture["path"]
         if not cached.is_file():
-            from huggingface_hub import hf_hub_download
-            cached = Path(hf_hub_download(repo_id=architecture["repository"], revision=architecture["revision"],
-                                         filename=architecture["path"], token=False))
+            acquire(architecture['repository'],architecture['revision'],architecture,destination,architecture.get('download_policy',{}))
+            cached=destination
         if sha256(cached) != architecture["sha256"]:
             raise SystemExit("Architecture configuration checksum mismatch")
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(cached, destination)
+        if cached!=destination:shutil.copyfile(cached, destination)
     installed["architecture"] = {"directory": str(destination.parent), "sha256": architecture["sha256"]}
     (module / "app/installed.json").write_text(json.dumps(installed, indent=2))
 

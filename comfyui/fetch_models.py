@@ -24,19 +24,14 @@ CODE_FORMATS = (".pt", ".pth", ".bin", ".ckpt", ".pkl")   # pickle-based: can ru
 
 
 def confirm_download():
-    """Use the controlling terminal when stdout is a PowerShell pipeline."""
-    prompt='Download this pinned file? Type DOWNLOAD:'
-    try:
-        terminal_out=open('/dev/tty','w',encoding='utf-8')
-        try:terminal_in=open('/dev/tty','r',encoding='utf-8')
-        except BaseException:terminal_out.close();raise
+    """Flush the visible line through the output pipeline; read the controlling terminal."""
+    print('Download this pinned file? Type DOWNLOAD:',flush=True)
+    try:terminal_in=open('/dev/tty','r',encoding='utf-8')
     except OSError:
         if not sys.stdin.isatty():
             print('No interactive terminal; download refused',flush=True);return False
-        print(prompt,flush=True)
         return input().strip()=='DOWNLOAD'
-    with terminal_out,terminal_in:
-        print(prompt,file=terminal_out,flush=True)
+    with terminal_in:
         return terminal_in.readline().strip()=='DOWNLOAD'
 
 

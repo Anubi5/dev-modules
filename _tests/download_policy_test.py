@@ -134,10 +134,15 @@ class DownloadTests(unittest.TestCase):
         class Terminal(io.StringIO):
             def close(self):pass
         for module in (comfy,llama,rig):
-            output=Terminal();answer=Terminal('NO\n')
-            with patch('builtins.open',side_effect=[output,answer]),patch.object(sys.stdin,'isatty',return_value=False):
-                self.assertFalse(module.confirm_download())
-            self.assertTrue(output.getvalue().endswith('Type DOWNLOAD:\n'))
+            answer=Terminal('NO\n')
+            original_read=answer.readline
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                def read():
+                    self.assertTrue(output.getvalue().endswith('Type DOWNLOAD:\n'))
+                    return original_read()
+                with patch('builtins.open',return_value=answer),patch.object(answer,'readline',side_effect=read),patch.object(sys.stdin,'isatty',return_value=False):
+                    self.assertFalse(module.confirm_download())
+            self.assertEqual(answer.tell(),3)
 
 
 if __name__=='__main__':unittest.main()

@@ -68,10 +68,10 @@ def header(path):
     return h, meta, os.path.getsize(path) >= 8 + n + end
 
 
-def sha256(path, fresh=False):
+def sha256(path, fresh=False, persist=True):
     """!
     @brief SHA-256 of a file; cached by path, size and modified time. fresh=True re-reads the file whatever the cache
-           says (strict checks: rerun, verify) and updates the cache.
+           says (strict checks: rerun, verify). persist=False reads without saving cache state.
     """
     st = os.stat(path)
     cache = _load(CACHE)
@@ -83,7 +83,8 @@ def sha256(path, fresh=False):
         for b in iter(lambda: f.read(8 << 20), b""):
             h.update(b)
     cache[path] = [st.st_size, int(st.st_mtime), h.hexdigest()]
-    _save(CACHE, cache)
+    if persist:
+        _save(CACHE, cache)
     return h.hexdigest()
 
 
@@ -183,9 +184,9 @@ def notes():
     return _load(NOTES)
 
 
-def note_for(path):
+def note_for(path, persist=True):
     """! @brief The note for a file (by content) or {}. """
-    return notes().get(sha256(path), {})
+    return notes().get(sha256(path, persist=persist), {})
 
 
 def set_note(path, values):
@@ -203,10 +204,10 @@ def set_note(path, values):
     return n
 
 
-def tested(lora_path=None):
+def tested(lora_path=None, persist=True):
     """! @brief Recorded successful runs {lora sha: {model sha: {"model": file, "lora": file, "date": d}}} (one LoRA's when given). """
     t = _load(TESTED)
-    return t.get(sha256(lora_path), {}) if lora_path else t
+    return t.get(sha256(lora_path, persist=persist), {}) if lora_path else t
 
 
 def record_tested(lora_path, model_path):

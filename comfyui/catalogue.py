@@ -136,15 +136,25 @@ def main(argv=None):
     parser.add_argument('command',choices=['list','show','verify'])
     parser.add_argument('query',nargs='?')
     parser.add_argument('--json',action='store_true')
+    parser.add_argument('--all',action='store_true',help='list component files as well as logical packages')
     parser.add_argument('--root',type=Path,default=Path(os.environ.get('MODELS_MOUNT','/models')))
     args=parser.parse_args(argv)
+    if args.command=='list' and args.query: parser.error('list does not take a model ID; use show ID')
+    if args.all and args.command!='list': parser.error('--all is only supported by list')
     if args.command!='list' and not args.query: parser.error('show/verify require a model or package ID')
     try:
         report=inventory(args.root)
         result=report if args.command=='list' else select(report,args.query) if args.command=='show' else verify(args.root,report,args.query)
         if args.json or args.command!='list': print(json.dumps(result,indent=2))
         else:
-            for row in report['packages']+report['files']: print(f"{row['status']:<16} {row['id']}")
+            for row in report['packages']: print(f"{row['status']:<16} {row['id']}")
+            components={str((args.root/component).resolve()) for package in report['packages'] for component in package['components']}
+            # Unrecognized files and standalone GGUF/LoRA files stay visible. A missing
+            # registry reference is never evidence that a file is unused or disposable.
+            visible=[row for row in report['files'] if args.all or (row['path'] not in components and not row['expected_sha256'])]
+            for row in visible: print(f"{row['status']:<16} {row['id']}")
+            hidden=len(report['files'])-len(visible)
+            if hidden: print(f"{hidden} declared component file(s) hidden; use --all for details")
         return 0
     except (OSError,ValueError,KeyError) as error:
         if args.json: print(json.dumps(dict(status='failed',error=str(error))))

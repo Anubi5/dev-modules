@@ -10,8 +10,17 @@ cat > "$T/bin/curl" <<'SH'
 echo '{"data":[{"id":"legacy-chat"}]}'
 SH
 chmod +x "$T/bin/curl"
+if [ -n "${NATIVE_PYTHON:-}" ]; then
+  printf '#!/usr/bin/env bash\nexec "$NATIVE_PYTHON" "$@"\n' > "$T/bin/python3"
+  chmod +x "$T/bin/python3"
+fi
 export PATH="$T/bin:/usr/bin:/bin"
+# Help and invalid verbs must not query the model server, even without a catalogue.
+for flag in help -h --help; do bash "$R/llama-swap/bin/ai-models" "$flag" | grep -q 'ai models'; done
+if bash "$R/llama-swap/bin/ai-models" typo 2>"$T/error"; then exit 1; fi
+grep -q 'Unknown ai models command' "$T/error"
 result=$(bash "$R/llama-swap/bin/ai-models")
+result=${result%$'\r'} # Native Windows Python uses CRLF; production Linux output is unchanged.
 [ "$result" = '  legacy-chat' ]
 if bash "$R/llama-swap/bin/ai-models" show fixture --json 2>"$T/error"; then
   echo 'FAIL absent catalogue silently accepted'; exit 1

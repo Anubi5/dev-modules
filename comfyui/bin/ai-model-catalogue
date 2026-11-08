@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 # Shared inventory implementation. The existing ai-models command owns dispatch.
-exec python3 ~/.local/share/modules/comfyui/catalogue.py "$@"
+exec python3 -B ~/.local/share/modules/comfyui/catalogue.py "$@"

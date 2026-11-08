@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 ## @brief "ai gen": GPU hand-off image/video generation (see gen.py).
-exec python3 ~/.local/share/modules/comfyui/gen.py "$@"
+exec python3 -B ~/.local/share/modules/comfyui/gen.py "$@"

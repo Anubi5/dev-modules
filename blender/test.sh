@@ -3,7 +3,6 @@
 ##        virtual display: scene read + screenshot). --full: also a GPU render through the blender command.
 set -uo pipefail
 B=$MOD/app/current/blender
-MCP_SRC="git+https://projects.blender.org/lab/blender_mcp.git@2cea8d566dde07fbac28a61d698909d69724e853#subdirectory=mcp"
 "$B" -b --version >/dev/null 2>&1 || { echo "blender does not start"; exit 1; }
 o=$("$B" -b --online-mode --command blender_mcp --help 2>&1 || true); [[ "$o" == *"usage: blender_mcp"* ]] || { echo "MCP add-on missing"; exit 1; }
 echo "  Blender starts, MCP add-on installed"
@@ -15,7 +14,7 @@ if ! port; then                                   # nobody's bridge running: ope
   for _ in $(seq 60); do port && break; sleep 1; done
 fi
 port || { echo "MCP bridge did not open port 9876 (see /tmp/blender-mcp-test.log)"; [ -n "$started" ] && kill $started; exit 1; }
-python3 "$MOD/mcp_smoke.py" "$MCP_SRC"; rc=$?
+python3 "$MOD/mcp_smoke.py" "$MOD/bin/blender-mcp-prepared"; rc=$?
 [ -n "$started" ] && { kill $started 2>/dev/null; wait $started 2>/dev/null; }
 [ $rc = 0 ] || { echo "official MCP path failed (see above)"; exit 1; }
 [ "${1:-}" = --full ] || exit 0

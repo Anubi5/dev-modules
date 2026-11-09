@@ -7,7 +7,9 @@ the same tools work for any MCP-capable agent - instead of through scripts writt
   agent can take screenshots and viewport renders and *see* its scene. Nothing appears on Windows.
 - `blender -b ...` still works for scripted renders (takes the shared GPU lock, like `ai gen`).
 - `test.sh`: Blender starts, the add-on works, and the MCP path works end to end (scene read + screenshot);
-  `--full` also renders on the GPU.
+  `--full` also renders on the GPU. The smoke uses `blender-mcp-prepared`, never
+  `uv tool run`; missing preparation fails rather than resolving dependencies.
+  Server stderr remains visible, and failed initialization stops the protocol.
 - Open results with Windows Blender (`dev files outputs` / `dev share`).
 - Install/update records the pinned MCP executable, Git provenance and installed
   dependency metadata in `app/mcp-runtime.json`, and retains the old plugin MCP

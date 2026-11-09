@@ -1,32 +1,38 @@
 #!/usr/bin/env python3
-"""!
-@file mcp_smoke.py
-@brief End-to-end check of the official Blender MCP path, the way an agent uses it: starts the pinned Blender Lab MCP
-       server (stdio), initializes, lists the tools, reads the scene and takes a window screenshot (needs the GUI
-       Blender on the virtual display). Prints one OK/FAILED line per step; exit 0 only if all passed.
-Usage: mcp_smoke.py <uv tool source>
+"""Check the prepared official Blender MCP path without resolving dependencies.
+
+Usage: mcp_smoke.py <prepared-command>
+
+The caller provides the module-owned prepared executable. The smoke reads the
+scene and takes a screenshot; it requires a separately started Blender bridge.
 """
 import json
 import subprocess
 import sys
 import time
+from typing import Any
 
 
-def main():
-    """! @brief Runs the steps. @return exit code """
-    p = subprocess.Popen(["uv", "tool", "run", "--from", sys.argv[1], "blender-mcp", "--transport", "stdio"],
-                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+def main() -> int:
+    """Return zero only after initialization, scene read and screenshot pass."""
+    p = subprocess.Popen([sys.argv[1], "--transport", "stdio"],
+                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
                          env={**__import__("os").environ, "BLENDER_MCP_HOST": "127.0.0.1", "BLENDER_MCP_PORT": "9876"})
+    assert p.stdin is not None and p.stdout is not None
     n = [0]
 
-    def call(method, params=None, notify=False):
+    def call(method: str, params: dict[str, Any] | None = None, notify: bool = False) -> dict[str, Any]:
+        """Send one protocol request and return an error if the child exits."""
         n[0] += 1
         msg = {"jsonrpc": "2.0", "method": method, **({"params": params} if params is not None else {})}
         if not notify:
             msg["id"] = n[0]
-        p.stdin.write(json.dumps(msg) + "\n"); p.stdin.flush()
+        try:
+            p.stdin.write(json.dumps(msg) + "\n"); p.stdin.flush()
+        except BrokenPipeError:
+            return {"error": "MCP process closed its input; see child stderr"}
         if notify:
-            return None
+            return {}
         end = time.time() + 120
         while time.time() < end:
             line = p.stdout.readline()
@@ -40,8 +46,10 @@ def main():
     ok = True
     try:
         r = call("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "dev-test", "version": "1"}})
-        call("notifications/initialized", notify=True)
         print(f"  MCP initialize: {'OK' if 'result' in r else 'FAILED ' + str(r)[:200]}"); ok &= "result" in r
+        if not ok:
+            return 1
+        call("notifications/initialized", notify=True)
         tools = [t["name"] for t in call("tools/list").get("result", {}).get("tools", [])]
         print(f"  MCP tools: {len(tools)} ({', '.join(t for t in tools if 'summary' in t or 'screenshot' in t)})"); ok &= len(tools) > 10
         r = call("tools/call", {"name": "get_objects_summary", "arguments": {}})
@@ -57,7 +65,12 @@ def main():
             img = any(c.get("type") == "image" for c in res.get("content", [])) and not res.get("isError")
             print(f"  screenshot ({shot}): {'OK' if img else 'FAILED ' + json.dumps(res)[:200]}"); ok &= img
     finally:
-        p.terminate()
+        if p.poll() is None:
+            p.terminate()
+            try:
+                p.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                p.kill(); p.wait()
     return 0 if ok else 1
 
 

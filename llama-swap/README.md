@@ -9,7 +9,7 @@ Provides the core's **model-serving contract**: OpenAI-style API on 127.0.0.1:80
 llama.cpp (CUDA) behind [llama-swap](https://github.com/mostlygeek/llama-swap); each model loads on first use and
 unloads when idle. Chat page: http://127.0.0.1:8080/upstream/qwen3.5-9b/ (`dev chat`).
 
-- Models: `models.json` (repo or search, quantisation, llama-server args). Add a model = add an entry, push, `dev mod update llama-swap`.
+- Models: `models.json` (repo or search, quantisation, llama-server args). New model: push to dev-modules -> `dev mod pin` -> `dev mod update llama-swap`.
 - Model files: `D:\AI\models\llm\<id>\` only (read-only at `/models/llm`); `$MOD/models/models.json` records which files
   each model uses. Downloads need D: writable, so run `dev mod add|update llama-swap` from Windows.
   No model keeps a copy inside the distro (owner decision, 7 Nov 2026: every weight only on D:). `"local_copy": true`
@@ -20,15 +20,16 @@ unloads when idle. Chat page: http://127.0.0.1:8080/upstream/qwen3.5-9b/ (`dev c
 - llama.cpp is built from a pinned release (`LLAMA_CPP_TAG` in install.sh); raising it rebuilds on the next update (15-30 min).
 - `"fit": true` lets llama.cpp split a model between GPU and RAM itself (`--fit on`) - for models not tuned yet.
 
-## Search and candidate models (added 2 Nov 2026)
+## Search models
 | id | What | Notes |
 |---|---|---|
 | `embed-gemma2` | EmbeddingGemma 2 (Q8_0, ~310 MB): text embeddings at `POST /v1/embeddings` for local search | Apache 2.0; bench checks a related sentence ranks above an unrelated one |
-| `lfm2.5-24b` | LFM2.5-24B-A2B (Q4_K_M, 14.5 GB, 2.45B active): strong tool use and instruction following, text only | candidate for Hermes; licence "lfm1.0" (read its LICENSE file before any commercial use) |
-| `nemotron-bolt` | Nemotron 3.5 Bolt 74B-A9B, native 2-bit (22 GB + 1.7 GB vision) | candidate for Hermes with vision; NVIDIA model licence; tight in 24 GB RAM and read from D: (slow first load) |
 
-Candidates appear in the bench report as "(candidate)" and never fail `dev test`; they are compared with the 35B on the
-Hermes evaluation before one replaces it (`AGENT_MODEL` in sandbox.env).
+The owner retired `lfm2.5-24b` and `nemotron-bolt` from the serving declarations
+and default benchmark. Their existing weights stay on D: and are never deleted
+by this change. Old cached file records do not re-enable them in the generated
+server configuration. The general inventory may still report the retained files
+as unconfigured; that does not make them runnable.
 
 ## Checking images: `img-ask` (vision-check model)
 `img-ask <image> "<question>" [--expect WORD]` asks WeVisOne-VL 2B (Tencent, Apache 2.0, ~2.6 GB with its vision part)

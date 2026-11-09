@@ -119,42 +119,6 @@
       "capability_tags": []
     },
     {
-      "id": "lfm2.5-24b",
-      "name": "LFM2.5 24B-A2B (candidate: agent tool use)",
-      "repo": "LiquidAI/LFM2.5-24B-A2B-GGUF",
-      "quant": [
-        "Q4_K_M"
-      ],
-      "mmproj": false,
-      "fit": true,
-      "candidate": true,
-      "args": "-c 65536 -ctk q8_0 -ctv q8_0",
-      "ttl": 300,
-      "long_prompt_test": true,
-      "capability_tags": [
-        "llm"
-      ]
-    },
-    {
-      "id": "nemotron-bolt",
-      "name": "Nemotron 3.5 Bolt 74B-A9B 2-bit (candidate: agent with vision)",
-      "repo": "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-GGUF",
-      "quant": [
-        "24GB"
-      ],
-      "mmproj": true,
-      "vision": true,
-      "fit": true,
-      "candidate": true,
-      "args": "-c 32768 -ctk q8_0 -ctv q8_0",
-      "ttl": 300,
-      "long_prompt_test": true,
-      "capability_tags": [
-        "llm",
-        "vlm"
-      ]
-    },
-    {
       "id": "vision-check",
       "name": "WeVisOne-VL 2B (checks images: what is there, how many, which colour)",
       "repo": "mradermacher/WeVisOne-VL-2B-GGUF",

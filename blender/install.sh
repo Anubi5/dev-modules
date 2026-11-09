@@ -40,9 +40,16 @@ MCP_BIN=$(uv tool run --python "$MCP_PYTHON" --with-requirements "$MOD/mcp-requi
 say "Hermes Blender plugin (official, catalog pin)"
 if command -v hermes >/dev/null; then
   pl=$(hermes plugins list 2>/dev/null || true)          # (no pipe into grep -q: with pipefail that can misfire)
-  [[ "$pl" == *" blender "* ]] || hermes plugins install blender </dev/null || echo "  CHECK hermes plugins install blender failed"
-  hermes plugins enable blender </dev/null >/dev/null 2>&1 || true
-  hermes plugins list 2>/dev/null | grep -w blender | head -1
+  if [[ "$pl" != *" blender "* ]]; then
+    hermes plugins install blender </dev/null || { echo "  CHECK hermes plugins install blender failed - Blender not ready"; exit 1; }
+  fi
+  hermes plugins enable blender </dev/null >/dev/null 2>&1 || { echo "  CHECK hermes plugins enable blender failed - Blender not ready"; exit 1; }
+  pl=$(hermes plugins list 2>/dev/null || true)
+  row=$(printf '%s\n' "$pl" | grep -w blender | head -1 || true)
+  [[ "$row" =~ (^|[^a-z])enabled ]] || { echo "  CHECK the Blender plugin is not listed as enabled in Hermes - Blender not ready"; exit 1; }
+  echo "$row"
+else
+  echo "  Hermes not installed: Blender plugin skipped (dev mod add agent-hermes, then dev mod update blender)"
 fi
 python3 -B "$MOD/mcp_runtime.py" prepare --module "$MOD" --runtime "$MCP_BIN" --source "$MCP_SRC" \
   --plugin "${HERMES_HOME:-$HOME/.hermes}/plugins/blender"

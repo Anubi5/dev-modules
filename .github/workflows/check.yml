@@ -30,7 +30,9 @@ jobs:
       - name: Public model command dispatch
         run: bash _tests/catalogue_dispatch_test.sh
       - name: Daily and agent shared weights/projector (offline)
-        run: python3 -m unittest discover -s llama-swap -p 'test_variants.py'
+        run: |
+          python3 -m unittest discover -s llama-swap -p 'test_variants.py'
+          python3 -m unittest discover -s llama-swap -p 'test_retirement.py'
       - name: Blender MCP prepared launch never installs (offline)
         run: |
           python3 -B blender/test_mcp_runtime.py

@@ -1,5 +1,7 @@
 # comfyui (image and video generation)
 
+Image, video and 3D generation with ComfyUI (Z-Image, FLUX 3, Krea 2, SDXL, Wan, Pixal3D, TRELLIS.2).
+
 `python3 -B fetch_models.py --plan --json` plans from the same models.txt parser
 used by acquisition and catalogue pins, without importing download dependencies.
 Add `bytes:<positive integer>` alongside `sha256:<hex>` for a non-package model;

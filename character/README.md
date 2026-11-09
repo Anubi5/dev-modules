@@ -1,5 +1,7 @@
 # Character
 
+Character pipeline: turns a description into an image, 3D model, rig and Unreal animation, step by step.
+
 The runner requires `--json` from generation and rig producers. It reads one
 `local-ai.producer/1` result, retains stderr as `producer.log` and stdout as
 `producer.json`, and never discovers records by scraping progress text. Producers

@@ -1,0 +1,6 @@
+# Your Hermes data, saved by "dev state save" (paths relative to the home folder).
+# Not saved: the Hermes program (~/.hermes/hermes-agent, reinstalled pinned), caches, logs and .env.
+.hermes/memories
+.hermes/sessions
+.hermes/state.db
+.hermes/SOUL.md

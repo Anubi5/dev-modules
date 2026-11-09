@@ -1,4 +1,7 @@
 # blender (3D)
+
+Blender 3D with the official MCP add-on and Hermes plugin, so agents can build and render scenes.
+
 Blender (pinned version, checked against blender.org's sha256 list) plus the **official Blender Lab MCP add-on and
 server** (pinned v1.0.3) and the **official Hermes Blender plugin**. Agents work in Blender through those MCP tools -
 the same tools work for any MCP-capable agent - instead of through scripts written by us.

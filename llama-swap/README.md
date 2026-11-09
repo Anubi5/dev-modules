@@ -1,5 +1,7 @@
 # llama-swap (model serving)
 
+Local chat and vision models (llama.cpp) behind one OpenAI-style API for Hermes and the chat page.
+
 `qwen3.5-9b-agent` is a separate 65,536-context serving entry for Hermes. It uses
 `weights_from: qwen3.5-9b`, so it resolves to the daily entry's exact D: paths:
 no second GGUF, copy, download or WSL weight cache. The daily entry and its

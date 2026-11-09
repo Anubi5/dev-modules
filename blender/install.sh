@@ -7,6 +7,7 @@ set -euo pipefail
 VER=${BLENDER_VERSION:-5.2.2}                                       # pinned; change on purpose, the old one stays
 ADDON_VER=1.0.3; ADDON_SHA=a7a9da816192502e5a0a202a396444e266b47d8fc4f74ad4698048bd43040707
 MCP_SRC="git+https://projects.blender.org/lab/blender_mcp.git@2cea8d566dde07fbac28a61d698909d69724e853#subdirectory=mcp"
+MCP_PYTHON=3.14.7
 say() { echo "  [$(date +%H:%M:%S)] $*"; }
 R=https://download.blender.org/release/Blender${VER%.*}/; TB=blender-$VER-linux-x64.tar.xz
 mkdir -p "$MOD/app" "$MOD/bin"
@@ -32,7 +33,9 @@ fi
 addon_ok || { echo "  CHECK MCP add-on not working"; exit 1; }
 
 say "MCP server (Blender Lab, pinned commit) - prepared now so it starts offline later"
-uv tool run --from "$MCP_SRC" blender-mcp --help >/dev/null || { echo "  CHECK MCP server could not be prepared"; exit 1; }
+MCP_BIN=$(uv tool run --python "$MCP_PYTHON" --with-requirements "$MOD/mcp-requirements.lock" \
+  --from "$MCP_SRC" python -c 'import shutil; print(shutil.which("blender-mcp") or "")')
+[ -x "$MCP_BIN" ] || { echo "  CHECK MCP server could not be prepared"; exit 1; }
 
 say "Hermes Blender plugin (official, catalog pin)"
 if command -v hermes >/dev/null; then
@@ -41,4 +44,6 @@ if command -v hermes >/dev/null; then
   hermes plugins enable blender </dev/null >/dev/null 2>&1 || true
   hermes plugins list 2>/dev/null | grep -w blender | head -1
 fi
+python3 -B "$MOD/mcp_runtime.py" prepare --module "$MOD" --runtime "$MCP_BIN" --source "$MCP_SRC" \
+  --plugin "${HERMES_HOME:-$HOME/.hermes}/plugins/blender"
 echo "Blender ready"

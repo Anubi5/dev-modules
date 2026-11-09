@@ -9,5 +9,13 @@ the same tools work for any MCP-capable agent - instead of through scripts writt
 - `test.sh`: Blender starts, the add-on works, and the MCP path works end to end (scene read + screenshot);
   `--full` also renders on the GPU.
 - Open results with Windows Blender (`dev files outputs` / `dev share`).
+- Install/update records the pinned MCP executable, Git provenance and installed
+  dependency metadata in `app/mcp-runtime.json`, and retains the old plugin MCP
+  configuration before selecting `blender-mcp-prepared`. Launch executes that
+  prepared binary directly; it never calls uv or another installer. Missing or
+  changed preparation fails with an explicit `dev mod update blender` instruction.
+  Custom owner commands are preserved and require review before replacement.
+  Python 3.14.7 and the 38 exact transitive versions in `mcp-requirements.lock`
+  are selected during installation; the prepared environment must match that lock.
 - Security: the MCP tools run any Python inside Blender, and the bridge (127.0.0.1:9876) has no password. That is fine
   here because the whole sandbox is the boundary (no Windows drives, firewall), but don't expose the port.

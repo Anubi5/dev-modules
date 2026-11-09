@@ -1,5 +1,7 @@
 # Rig
 
+Automatic rigging of 3D characters (UniRig) with an FBX hand-off for Unreal.
+
 `ai rig model.glb --json` exposes a single `local-ai.producer/1` result on stdout;
 progress goes to stderr. Human output remains the default. The character runner
 requires this interface and creates an FBX-only rig hand-off; the producer record

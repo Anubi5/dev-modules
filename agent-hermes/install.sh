@@ -26,5 +26,8 @@ fi
 python3 -B "$SETUP/hermes_runtime.py" install
 python3 -B "$SETUP/hermes_local_setup.py" --apply --reviewed-revision "$PIN" >/dev/null \
   || { echo "  CHECK Hermes profile could not be applied (config.yaml restored from its backup)"; exit 1; }
+soul="${HERMES_HOME:-$HOME/.hermes}/SOUL.md"   # the reviewed local section is appended once; your own text stays
+[ ! -f "$SETUP/hermes-local-SOUL.md" ] || grep -qF "$(sed -n 1p "$SETUP/hermes-local-SOUL.md")" "$soul" 2>/dev/null \
+  || { printf '\n' >> "$soul"; cat "$SETUP/hermes-local-SOUL.md" >> "$soul"; echo "  local profile section added to SOUL.md"; }
 python3 -B "$SETUP/hermes_profile_check.py"
 echo "Hermes ready ($(hermes --version 2>/dev/null | head -1))"

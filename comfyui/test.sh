@@ -25,7 +25,7 @@ PY=$MOD/app/ComfyUI/.venv/bin/python
 while read -r repo want folder name tags; do
   case "$repo" in ''|\#*) continue ;; esac
   case " ${name:-} ${tags:-} " in *' optional '*) continue ;; esac # optional models are reported by ai gen models
-  case "${name:-}" in ''|sha256:*) name=$(basename "$want") ;; esac
+  case "${name:-}" in ''|sha256:*|bytes:*) name=$(basename "$want") ;; esac
   [ -e "${MODELS_MOUNT:-/models}/comfy/$folder/$name" ] || [ -e "$MOD/models/$folder/$name" ] || { echo "  missing $folder/$name"; miss=1; }
 done < "$MOD/models.txt"
 echo "  image models:"; python3 "$MOD/gen.py" models || miss=1     # every model in profiles.json: ready / optional / MISSING

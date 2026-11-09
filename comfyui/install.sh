@@ -59,7 +59,6 @@ say "model files (models.txt) - verifying D: files; fetching only pinned, licenc
 .venv/bin/python "$MOD/fetch_models.py" --allow-downloads "$MOD/models.txt" "${MODELS_MOUNT:-/models}/comfy" "${MODELS_RW:-/models-rw}/comfy" \
   "$MOD/models"
 say "helper models (owner-supplied, hash-pinned, only on D:)"
-# A deliberate module update may retire only byte-identical legacy helper copies,
-# after every declared D: file and every legacy file have verified. No downloads.
-.venv/bin/python "$MOD/helper_models.py" --root "${MODELS_MOUNT:-/models}/comfy" --allow-missing --retire-from "$C"
+# Inspection never retires legacy weights; cleanup is a separate owner operation.
+.venv/bin/python "$MOD/helper_models.py" --root "${MODELS_MOUNT:-/models}/comfy" --allow-missing
 echo "ComfyUI ready"

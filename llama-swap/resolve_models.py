@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """!
 @file resolve_models.py
-@brief Finds or downloads the chat model files listed in models.json - they live on D:, never inside the distro.
+@brief Reuses existing chat weights; new files require reviewed pins and explicit owner confirmation.
 
-Chat model files live in D:\\AI\\models\\llm\\<id>\\ (read-only at /models/llm inside). Downloads and the one-time move
-of older in-distro copies need D: writable at /models-rw, which only Windows turns on ("dev mod add|update").
+Chat model files live in D:\\AI\\models\\llm\\<id>\\ (read-only at /models/llm inside).
+Legacy copies are preserved; no automatic migration, replacement or retirement.
 The record of which files each model uses is <state>/models.json (id -> file paths). Every choice is printed.
 With --media, the ComfyUI files are placed in <out>/<folder>/ instead (older setup path).
 
@@ -20,13 +20,50 @@ import re
 import shutil
 import sys
 import time
+import hashlib
+import tempfile
 
 sys.stdout.reconfigure(line_buffering=True)            # show progress in the live log
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")       # plain HTTPS with resume copes better with flaky links
 os.environ.setdefault("HF_HUB_DOWNLOAD_TIMEOUT", "60")
-from huggingface_hub import HfApi, hf_hub_download as _hf_download  # noqa: E402
+from pathlib import Path
+api = None
 
-api = HfApi()
+
+def _hf_download(*args, **kwargs):
+    from huggingface_hub import hf_hub_download
+    return hf_hub_download(*args, **kwargs)
+
+
+def declarations(path):
+    return json.loads(Path(path).read_text())
+
+
+def download_plan(config=None, root=None):
+    config=Path(config or Path(__file__).with_name('models.json'))
+    root=Path(root or os.environ.get('MODELS_MOUNT','/models'));files=[]
+    for spec in declarations(config)['chat']:
+        for row in spec.get('pinned_files',[]):
+            rel='llm/'+spec['id']+'/'+row['file'];target=root/rel
+            if not target.resolve().is_relative_to(root.resolve()):raise ValueError('Unsafe declared model path')
+            if target.is_file():continue
+            policy=spec.get('download_policy',{});sha=row.get('sha256');size=row.get('bytes')
+            eligible=bool(re.fullmatch('[a-fA-F0-9]{64}',sha or '')) and bool(re.fullmatch('[a-fA-F0-9]{40}',spec.get('revision',''))) and bool(spec.get('repo')) and type(size) is int and size>0 and policy.get('approved') is True and bool(policy.get('license')) and not policy.get('gated')
+            files.append(dict(path=rel,bytes=size,source=spec.get('repo','')+'@'+spec.get('revision','')+'/'+row['file'],licence=policy.get('license'),sha256=sha.lower() if sha else None,eligible=eligible,reason=None if eligible else 'Manual copy: incomplete or restricted declaration'))
+    return dict(schema=1,files=files)
+
+
+def approved_download(sha):
+    """Only argument-derived approvals from the Windows plan may authorize bytes."""
+    if os.environ.get('DEV_MODEL_OPERATION') != 'approved' or os.environ.get('DEV_UNATTENDED'):
+        return False
+    try:
+        approved = json.loads(os.environ.get('DEV_APPROVED_SHA256', '[]'))
+    except (ValueError, TypeError):
+        return False
+    return (isinstance(approved, list)
+            and all(isinstance(value, str) and re.fullmatch('[a-f0-9]{64}', value) for value in approved)
+            and isinstance(sha, str) and sha.lower() in approved)
 
 
 def download(repo, filename, **kw):
@@ -53,6 +90,10 @@ def find_repo(spec):
     @param spec  One entry of models.json "chat".
     @return Repository id, or None if nothing matches.
     """
+    global api
+    if api is None:
+        from huggingface_hub import HfApi
+        api=HfApi()
     if spec.get("repo"):
         try:
             api.model_info(spec["repo"])
@@ -120,61 +161,45 @@ def move_to_d(src, dst, keep=False):
     keep or os.remove(src)
 
 
-def place(rel, ro, rw, legacy, repo=None, local=False):
-    """!
-    @brief Makes one file available on D: and returns the path to load it from.
-           On D: already -> use it (and delete a leftover in-distro copy). Only in the distro -> move it to D: when
-           D: is writable, else keep using it for now. Missing -> download straight to D: (needs D: writable).
-           local=True (models.json "local_copy"): D: keeps the original, and a copy inside the distro is loaded -
-           for a model that reads its file while it runs (MoE experts in RAM), which is much slower from D:.
-           Rule for local copies: D: is the authority - a local copy that differs in size is replaced from D:.
-           Two copies of a NON-local model must be identical (SHA-256); otherwise the model fails (no guessing).
-    @param rel     "<id>/<file in repo>".  @param ro  Read-only D: root (/models/llm).
-    @param rw      Writable D: root (/models-rw/llm) or None.  @param legacy  In-distro root ($MOD/models).
-    @param repo    Repository to download from; None = offline check only.  @param local  Keep a copy in the distro.
-    @return Path to load the file from.
-    """
-    on_d, old = os.path.join(ro, rel), os.path.join(legacy, rel)
-    have_d = os.path.exists(on_d) and os.path.getsize(on_d) > 0
-    have_old = os.path.exists(old) and os.path.getsize(old) > 0
-    if local and have_old and (same_file(old, on_d) or (not have_d and not rw)):
-        return old
+def place(rel, ro, rw, legacy, repo=None, local=False, declaration=None):
+    """Preserve all existing weights. Missing pinned files need individual owner consent."""
+    if os.path.isabs(rel) or '..' in Path(rel).parts or ':' in rel or '\\' in rel:
+        raise RuntimeError('Unsafe model path')
+    on_d,old=os.path.join(ro,rel),os.path.join(legacy,rel)
+    have_d=os.path.isfile(on_d) and os.path.getsize(on_d)>0
+    have_old=os.path.isfile(old) and os.path.getsize(old)>0
     if have_d:
-        if not local and os.path.exists(old):             # two copies: same content (hash) or a conflict
-            if same_content(old, on_d):
-                os.remove(old); print(f"  {os.path.basename(rel)}: removed the duplicate inside the distro (same file on D:)")
-            else:                                         # which one is right is unknown: fail this model, don't guess
-                raise RuntimeError(f"{os.path.basename(rel)}: the copy inside the distro ({old}) differs from the one on D: "
-                                   f"- both kept; delete the wrong one, then run dev mod update llama-swap again")
-        if not local:
-            return on_d
-    elif have_old:
-        if not rw:
-            print(f"  {os.path.basename(rel)}: still inside the distro only - run 'dev mod update llama-swap' from Windows to move it to D:")
-            return old
-        if local:                                        # original to D:, keep the distro copy
-            print(f"  {os.path.basename(rel)}: copying the original to D:")
-            move_to_d(old, os.path.join(rw, rel), keep=True)
-            return old
-        move_to_d(old, os.path.join(rw, rel)); return on_d
-    else:
-        if not repo:
-            raise RuntimeError(f"{rel} is missing")
-        if not rw:
-            raise RuntimeError(f"{rel} is missing - downloads go to D:\\AI\\models, run 'dev mod update llama-swap' from Windows")
-        print(f"  {repo} :: {os.path.basename(rel)} -> D:")
-        model_id, filename = rel.split("/", 1)
-        download(repo, filename, local_dir=os.path.join(rw, model_id))
-        shutil.rmtree(os.path.join(rw, model_id, ".cache"), ignore_errors=True)   # Hugging Face bookkeeping
-        if not local:
-            return on_d
-    print(f"  {os.path.basename(rel)}: copying into the distro (local_copy: loads from the distro's own disk)")
-    os.makedirs(os.path.dirname(old), exist_ok=True)
-    shutil.copyfile(on_d, old + ".part")
-    if os.path.getsize(old + ".part") != os.path.getsize(on_d):
-        os.remove(old + ".part"); raise RuntimeError(f"copy of {os.path.basename(rel)} is incomplete")
-    os.replace(old + ".part", old)
-    return old
+        if have_old and not same_content(old,on_d):raise RuntimeError('Legacy and canonical weights differ; both preserved')
+        return on_d
+    if have_old:
+        print('  Legacy weight preserved; copy manually to D: for '+rel)
+        return old
+    if not repo or not rw or os.environ.get('DEV_MODEL_OPERATION')!='approved' or os.environ.get('DEV_UNATTENDED'):
+        raise RuntimeError(rel+' is missing; run dev mod update llama-swap for confirmed pinned acquisition, or copy manually')
+    if declaration is None:raise RuntimeError('Missing declared pins/licence; copy manually')
+    spec,row=declaration;policy=spec.get('download_policy',{})
+    if (policy.get('approved') is not True or not policy.get('license') or policy.get('gated')
+            or not re.fullmatch('[a-fA-F0-9]{40}',spec.get('revision',''))
+            or not re.fullmatch('[a-fA-F0-9]{64}',row.get('sha256',''))
+            or type(row.get('bytes')) is not int or row['bytes']<=0):
+        raise RuntimeError('Missing reviewed size/hash/licence/revision; gated models stay manual')
+    filename=row['file']
+    print(f"  Missing pinned file: {rel}; bytes={row['bytes']}; source={repo}@{spec['revision']}/{filename}; licence={policy['license']}; SHA-256={row['sha256']}",flush=True)
+    if not approved_download(row['sha256']):
+        raise RuntimeError('SHA-256 not approved; download refused')
+    os.makedirs(rw,exist_ok=True)
+    staging=tempfile.mkdtemp(prefix='.model-stage-',dir=rw)
+    downloaded=download(repo,filename,revision=spec['revision'],local_dir=staging,token=False)
+    digest=hashlib.sha256()
+    with open(downloaded,'rb') as stream:
+        for block in iter(lambda:stream.read(1048576),b''):digest.update(block)
+    if digest.hexdigest().lower()!=row['sha256'].lower() or os.path.getsize(downloaded)!=row['bytes']:
+        raise RuntimeError('Downloaded file differs from declared pins; staging preserved')
+    destination=os.path.join(rw,rel)
+    os.makedirs(os.path.dirname(destination),exist_ok=True)
+    os.link(downloaded,destination) # fails atomically if any destination already exists
+    os.unlink(downloaded) # published link retains the verified weight
+    return on_d
 
 
 def upgrade_record(old, spec):
@@ -224,6 +249,17 @@ def chat_models(specs, state, ro, rw=None):
     for spec in sorted(specs, key=lambda row: bool(row.get('weights_from'))):
         try:
             print(f"\n[{spec['id']}]")
+            # Declared pins are checked even when an older serving record can be reused.
+            for row in spec.get('pinned_files',[]):
+                for root in (ro,state):
+                    path=Path(root)/spec['id']/row['file']
+                    if not path.resolve().is_relative_to(Path(root).resolve()):raise RuntimeError('Unsafe pinned model path')
+                    if path.is_file():
+                        digest=hashlib.sha256()
+                        with path.open('rb') as stream:
+                            for block in iter(lambda:stream.read(1048576),b''):digest.update(block)
+                        if path.stat().st_size!=row['bytes'] or digest.hexdigest().lower()!=row['sha256'].lower():
+                            raise RuntimeError('Declared model pin mismatch; existing file preserved')
             source = spec.get('weights_from')
             if source:
                 if source not in resolved or by_id[source].get('weights_from'):
@@ -265,20 +301,16 @@ def chat_models(specs, state, ro, rw=None):
                     if "is missing" not in str(e):
                         raise                             # e.g. two different copies: report, don't look further
                     # a recorded file is gone: look it up again below
-            repo = find_repo(spec)
-            if not repo:
-                print("  no matching repo found"); failed += 1; continue
-            files = api.list_repo_files(repo)
-            chosen = pick_files(files, spec["quant"])
-            if not chosen:
-                print(f"  {repo}: no file matching {spec['quant']}"); failed += 1; continue
-            paths = [place(f"{spec['id']}/{f}", ro, rw, state, repo, bool(spec.get("local_copy"))) for f in chosen]
-            entry = {"repo": repo, "file": paths[0], "files": paths, "quant": spec["quant"]}   # every part of split files
-            if spec.get("mmproj"):
-                mm = sorted((f for f in files if "mmproj" in f.lower() and f.lower().endswith(".gguf")),
-                            key=lambda f: (0 if re.search("q8", f, re.I) else 1, len(f)))
-                if mm:
-                    entry["mmproj"] = place(f"{spec['id']}/{mm[0]}", ro, rw, state, repo)
+            declared=spec.get('pinned_files',[])
+            if not declared or not spec.get('repo'):
+                raise RuntimeError('Missing local model or declared pinned files; use dev mod update llama-swap after metadata review, or copy manually')
+            repo=spec['repo'];models=[row for row in declared if row.get('role','model')=='model']
+            projectors=[row for row in declared if row.get('role')=='mmproj']
+            if not models or (spec.get('mmproj') and len(projectors)!=1):raise RuntimeError('Incomplete pinned file declaration')
+            paths=[place(spec['id']+'/'+row['file'],ro,rw,state,repo,declaration=(spec,row)) for row in models]
+            entry=dict(repo=repo,file=paths[0],files=paths,quant=spec['quant'])
+            if spec.get('mmproj'):
+                row=projectors[0];entry['mmproj']=place(spec['id']+'/'+row['file'],ro,rw,state,repo,declaration=(spec,row))
             manifest[spec["id"]] = entry
             resolved.add(spec['id'])
             save_manifest(manifest_path, manifest)
@@ -291,29 +323,11 @@ def chat_models(specs, state, ro, rw=None):
 
 
 def media_models(specs, out):
-    """!
-    @brief Places every ComfyUI file in <out>/<folder>/, downloading only what is missing.
-    @param specs  models.json "media" list.
-    @param out    ComfyUI model root (e.g. <ModelsWin>/comfy).
-    @return Number of files that failed.
-    """
-    failed = 0
-    staging = os.path.join(out, "_dl")
+    """Legacy media entry point follows the same no-clobber, confirmed pin policy."""
+    failed=0
     for spec in specs:
-        dest = os.path.join(out, spec["folder"])
-        os.makedirs(dest, exist_ok=True)
-        if os.path.exists(os.path.join(dest, spec["file"])):
-            print(f"  {spec['file']}: already present"); continue
-        try:
-            match = [f for f in api.list_repo_files(spec["repo"]) if f.endswith(spec["file"])]
-            if not match:
-                print(f"  {spec['repo']}: {spec['file']} not found"); failed += 1; continue
-            print(f"  {spec['repo']} :: {match[0]} -> {spec['folder']}")
-            path = download(spec["repo"], match[0], local_dir=staging)
-            os.replace(path, os.path.join(dest, os.path.basename(path)))
-        except Exception as e:
-            print(f"  {spec['repo']}: {e}"); failed += 1
-    shutil.rmtree(staging, ignore_errors=True)
+        try:place(spec['folder']+'/'+spec['file'],out,out,out,spec.get('repo'),declaration=(spec,spec))
+        except Exception as error:print('CHECK '+str(error));failed+=1
     return failed
 
 
@@ -322,14 +336,18 @@ def main():
     @brief Command-line entry point; exit code 0 only if every item is available.
     """
     ap = argparse.ArgumentParser()
-    ap.add_argument("--config", required=True, help="models.json")
+    ap.add_argument("--config", default=str(Path(__file__).with_name('models.json')), help="models.json")
+    ap.add_argument('--plan',action='store_true');ap.add_argument('--json',action='store_true');ap.add_argument('--models-root')
     ap.add_argument("--out", help="--media: ComfyUI model root")
     ap.add_argument("--media", action="store_true", help="ComfyUI files instead of chat models")
     ap.add_argument("--state", help="in-distro folder for the record (models.json)")
     ap.add_argument("--ro", default="/models/llm", help="chat models on D:, read-only")
     ap.add_argument("--rw", help="the same folder writable (only during dev mod add|update from Windows)")
     a = ap.parse_args()
-    cfg = json.load(open(a.config))
+    if a.plan or a.json:
+        if not(a.plan and a.json):ap.error('Use --plan --json together')
+        print(json.dumps(download_plan(a.config,a.models_root)));return
+    cfg = declarations(a.config)
     rw = a.rw if a.rw and os.path.isdir(a.rw) and os.access(a.rw, os.W_OK) else None
     n = media_models(cfg["media"], a.out) if a.media else chat_models(cfg["chat"], a.state, a.ro, rw)
     print(f"\n{n} item(s) failed" if n else "\nall items available")

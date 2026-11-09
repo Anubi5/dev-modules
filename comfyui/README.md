@@ -1,5 +1,13 @@
 # comfyui (image and video generation)
 
+`python3 -B fetch_models.py --plan --json` plans from the same models.txt parser
+used by acquisition and catalogue pins, without importing download dependencies.
+Add `bytes:<positive integer>` alongside `sha256:<hex>` for a non-package model;
+the exact filename/size/hash and reviewed download_licenses.json entry make it
+eligible for Windows approval. Package-part sizes remain a fallback. Unknown
+sizes remain null/manual-only. Plans never query upstream APIs. Existing byte
+declarations were matched to public file metadata by filename and pinned SHA-256.
+
 Independent reviewed image families live in `families/`; see its README for the
 package and trust boundary. `ai models list/show/verify` provides the same
 read-only local inventory to humans and Hermes, including copied, unregistered

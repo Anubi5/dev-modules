@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """!
 @file fetch_models.py
-@brief Makes every file in models.txt available on D: (read-only inside at /models/comfy): present there, moved there
-       from an older in-distro copy, or downloaded there. Writing to D: needs the writable mount (/models-rw), which
+@brief Verifies model files and preserves legacy copies. Confirmed pinned acquisition needs the writable mount (/models-rw), which
        only Windows turns on while it runs "dev mod add|update". Downloads additionally require --allow-downloads,
        a declared hash and a reviewed licence entry. Startup and discovery never invoke the download path.
 Usage: fetch_models.py <models.txt> <read-only root> <writable root or -> <state dir> [<old in-distro root>]
@@ -15,11 +14,67 @@ from pathlib import Path
 import re
 import shutil
 import sys
+import tempfile
+import uuid
 
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")    # the Xet downloader can hang after a file is complete
-from huggingface_hub import HfApi, hf_hub_download
+def HfApi(*args, **kwargs):
+    from huggingface_hub import HfApi as implementation
+    return implementation(*args, **kwargs)
+
+
+def hf_hub_download(*args, **kwargs):
+    from huggingface_hub import hf_hub_download as implementation
+    return implementation(*args, **kwargs)
 
 CODE_FORMATS = (".pt", ".pth", ".bin", ".ckpt", ".pkl")   # pickle-based: can run code when loaded
+
+
+def declarations(listing):
+    """Single models.txt parser for planning, acquisition and catalogue pins."""
+    rows=[]
+    for line in Path(listing).read_text().splitlines():
+        if not line.strip() or line.lstrip().startswith('#'):continue
+        fields=line.split();repo,want,folder=fields[:3];tags=fields[3:]
+        sha=next((x[7:] for x in tags if x.startswith('sha256:')),None)
+        size=next((int(x[6:]) for x in tags if x.startswith('bytes:')),None)
+        name=next((x for x in tags if x!='optional' and not x.startswith(('sha256:','bytes:'))),Path(want).name)
+        if (Path(folder).is_absolute() or '..' in Path(folder).parts or '\\' in folder or ':' in folder
+                or Path(name).name!=name or '\\' in name or ':' in name):raise ValueError('Unsafe declared model path')
+        if size is not None and size<=0:raise ValueError('Declared bytes must be positive')
+        rows.append(dict(repo=repo,want=want,folder=folder,name=name,sha256=sha,bytes=size,optional='optional' in tags))
+    return rows
+
+
+def download_plan(listing=None, root=None):
+    here=Path(__file__).resolve().parent;root=Path(root or os.environ.get('MODELS_MOUNT','/models'))
+    policies=json.loads((here/'download_licenses.json').read_text());sizes={}
+    for package in sorted(here.glob('families/*/package.json')):
+        for part in json.loads(package.read_text())['parts'].values():sizes[(part['folder']+'/'+part['file'],part['sha256'].lower())]=part['bytes']
+    files=[]
+    for row in declarations(listing or here/'models.txt'):
+        rel=row['folder']+'/'+row['name'];target=root/'comfy'/rel
+        if not target.resolve().is_relative_to(root.resolve()):raise ValueError('Unsafe model path')
+        if target.is_file():continue
+        policy=policies.get(row['repo'],{});sha=row['sha256']
+        size=row['bytes'] if row['bytes'] is not None else sizes.get((rel,(sha or '').lower()))
+        eligible=bool(re.fullmatch('[a-fA-F0-9]{64}',sha or '')) and type(size) is int and size>0 and policy.get('approved') is True and bool(policy.get('license')) and not policy.get('gated') and row['want'] not in policy.get('manual_files',[])
+        origin=row['repo'] if row['repo'].startswith('https://') else row['repo']+'/'+row['want']
+        files.append(dict(path='comfy/'+rel,bytes=size,source=origin,licence=policy.get('license'),sha256=sha.lower() if sha else None,eligible=eligible,reason=None if eligible else 'Manual copy: incomplete or restricted declaration'))
+    return dict(schema=1,files=files)
+
+
+def approved_download(sha):
+    """Only argument-derived approvals from the Windows plan may authorize bytes."""
+    if os.environ.get('DEV_MODEL_OPERATION') != 'approved' or os.environ.get('DEV_UNATTENDED'):
+        return False
+    try:
+        approved = json.loads(os.environ.get('DEV_APPROVED_SHA256', '[]'))
+    except (ValueError, TypeError):
+        return False
+    return (isinstance(approved, list)
+            and all(isinstance(value, str) and re.fullmatch('[a-f0-9]{64}', value) for value in approved)
+            and isinstance(sha, str) and sha.lower() in approved)
 
 
 def sha256(path):
@@ -120,34 +175,32 @@ def fetch_url(url, dest, sha):
     """!
     @brief Downloads a file from a direct URL (e.g. CivitAI) to dest, only if its SHA-256 matches the pinned one.
     @param url  Download URL.  @param dest  Final path.  @param sha  Expected SHA-256 (hex).
-    @return None; raises on failure (the partial file is removed).
+    @return None; raises on failure; private staging is retained without replacing any destination.
     """
     import urllib.error
     import urllib.request
-    part = dest + ".part"
+    part = dest + '.' + uuid.uuid4().hex + '.part'
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     req = urllib.request.Request(url, headers={"User-Agent": "dev-modules/1.0"})
     h, done, last = hashlib.sha256(), 0, 0
     try:
-        with urllib.request.urlopen(req, timeout=60) as r, open(part, "wb") as f:
+        with urllib.request.urlopen(req, timeout=60) as r, open(part, "xb") as f:
             total = int(r.headers.get("Content-Length") or 0)
             for block in iter(lambda: r.read(1 << 20), b""):
                 f.write(block); h.update(block); done += len(block)
                 if done - last >= 256 << 20:   # progress every 256 MB
                     last = done; print(f"    {done >> 20} MB{f' of {total >> 20} MB' if total else ''}", flush=True)
     except urllib.error.HTTPError as e:
-        os.path.exists(part) and os.remove(part)
         if e.code in (401, 403):
             raise RuntimeError(f"the site wants a login for this file - download it in your browser and put it in "
                                f"D:\\AI\\models\\comfy\\{os.path.basename(os.path.dirname(dest))}") from None
         raise
     if h.hexdigest().lower() != sha.lower():
-        os.remove(part)
-        raise RuntimeError(f"checksum mismatch (expected {sha[:12]}..., got {h.hexdigest()[:12]}...) - file discarded")
+        raise RuntimeError(f"checksum mismatch (expected {sha[:12]}..., got {h.hexdigest()[:12]}...); private staging retained")
     if os.path.exists(dest):
-        os.remove(part)
         raise RuntimeError('Destination appeared during download; preserved')
-    os.replace(part, dest)
+    os.link(part, dest)
+    os.unlink(part) # remove only the new staging name; the verified published inode stays
 
 
 def main():
@@ -156,32 +209,30 @@ def main():
            "<https URL> <file name> <folder> sha256:<hex>" lines (direct download, checksum required) and
            downloads only what is missing. @return exit code
     """
-    verify_only = '--verify-only' in sys.argv
-    if verify_only: sys.argv.remove('--verify-only')
+    if '--plan' in sys.argv or '--json' in sys.argv:
+        import argparse
+        parser=argparse.ArgumentParser();parser.add_argument('--plan',action='store_true',required=True);parser.add_argument('--json',action='store_true',required=True)
+        parser.add_argument('--models-root');parser.add_argument('--list')
+        args=parser.parse_args();print(json.dumps(download_plan(args.list,args.models_root)));return 0
+    requested_verify = '--verify-only' in sys.argv
+    if requested_verify: sys.argv.remove('--verify-only')
+    verify_only = requested_verify or os.environ.get('DEV_MODEL_OPERATION')!='approved' or bool(os.environ.get('DEV_UNATTENDED'))
     allow_downloads = '--allow-downloads' in sys.argv
     if allow_downloads: sys.argv.remove('--allow-downloads')
     licences = json.loads(Path(__file__).with_name('download_licenses.json').read_text())
     lst, ro, rw, own = sys.argv[1:5]
     old_root = sys.argv[5] if len(sys.argv) > 5 else None
     rw = rw if rw != "-" and os.path.isdir(rw) and os.access(rw, os.W_OK) else None
-    if verify_only: rw, old_root = None, None
+    if verify_only: rw = None
     os.makedirs(own, exist_ok=True)
     failed = 0
-    for line in Path(lst).read_text().splitlines():
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        parts = line.split()
-        repo, want, folder = parts[:3]
-        sha = next((x[7:] for x in parts[3:] if x.startswith("sha256:")), None)
-        optional = "optional" in parts[3:]                # missing = that model is just not available, not an error
-        name = next((x for x in parts[3:] if not x.startswith("sha256:") and x != "optional"), os.path.basename(want))
+    for row in declarations(lst):
+        repo,want,folder,sha,optional,name=(row[key] for key in ('repo','want','folder','sha256','optional','name'))
         on_d = os.path.join(ro, folder, name)
         old = os.path.join(old_root, folder, name) if old_root else None
-        if old and os.path.exists(old) and not os.path.exists(on_d) and rw:
-            move_to_d(old, os.path.join(rw, folder, name), on_d, own, sha)
         if old and os.path.exists(old) and os.path.exists(on_d):   # two copies: same content (hash) or a conflict
             if os.path.getsize(old) == os.path.getsize(on_d) and sha256(old) == sha256(on_d):
-                os.remove(old); print(f"  {folder}/{name}: removed the duplicate inside the distro (same file on D:)")
+                print(f"  {folder}/{name}: identical legacy copy preserved; cleanup is a separate owner operation")
             else:                                             # which one is right is unknown: stop, don't guess
                 print(f"  CHECK {folder}/{name}: the copy inside the distro differs from the one on D: - both kept. "
                       f"Delete the wrong one (D:\\AI\\models\\comfy\\{folder.replace('/', chr(92))}\\{name} or {old}), "
@@ -195,41 +246,45 @@ def main():
                                       force=verify_only) else 1
             continue
         if not rw or not allow_downloads or verify_only:
-            msg = (f"{folder}/{name} is missing - copy it to D:\\AI\\models\\comfy manually" if verify_only else
-                   f"{folder}/{name} is missing - downloads go to D:\\AI\\models, run 'dev mod update comfyui' from Windows")
+            msg = f"{folder}/{name} is missing - run 'dev mod update comfyui' for confirmed pinned acquisition, or copy it manually"
             print(f"  (optional) {msg}" if optional else f"  CHECK {msg}"); failed += 0 if optional else 1
             continue
         policy = licences.get(repo, {})
         if (not sha or not re.fullmatch(r'[0-9a-fA-F]{64}', sha)
-                or not policy.get('approved') or want in policy.get('manual_files', [])):
+                or policy.get('approved') is not True or not policy.get('license') or want in policy.get('manual_files', [])):
             print(f"  {'(optional)' if optional else 'CHECK'} {folder}/{name}: manual copy required; "
                   "downloads require a declared SHA-256 and reviewed licence approval")
             failed += 0 if optional else 1
             continue
         dst = os.path.join(rw, folder, name)
+        if not approved_download(sha):
+            print(f'  CHECK {name}: SHA-256 not approved; file preserved/missing')
+            failed += 0 if optional else 1;continue
         if repo.startswith("https://"):
             try:
                 if not sha:
                     raise RuntimeError("direct downloads need a sha256:<hex> in the list")
                 print(f"  downloading {name} from {repo.split('/')[2]} (checksum pinned)", flush=True)
                 fetch_url(repo, dst, sha)
-                check_hash(dst, own, sha, key=os.path.abspath(on_d))   # record it as checked
+                if not check_hash(dst, own, sha, key=os.path.abspath(on_d),quarantine=False):failed+=1
             except Exception as e:
                 print(f"  CHECK {name}: {e}"); failed += 1
             continue
         try:
-            matches = [f for f in HfApi(token=False).list_repo_files(repo) if f == want or f.endswith("/" + want)]
+            matches = [f for f in HfApi(token=False).list_repo_files(repo) if f == want]
             if len(matches) != 1: raise RuntimeError('Expected exactly one declared upstream file')
             match = matches[0]
             print(f"  downloading {repo} :: {match}", flush=True)
-            path = hf_hub_download(repo, match, local_dir=os.path.join(rw, "_dl"), token=False)
+            staging=tempfile.mkdtemp(prefix='.model-stage-',dir=rw)
+            path = hf_hub_download(repo, match, local_dir=staging, token=False)
             if sha256(path).lower() != sha.lower():
                 raise RuntimeError('Downloaded file does not match its pinned checksum; not published')
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             if os.path.exists(dst): raise RuntimeError('Destination appeared during download; preserved')
-            os.replace(path, dst)
-            if not check_hash(dst, own, sha, key=os.path.abspath(on_d)):
+            os.link(path, dst) # atomic no-clobber publication; retain staging for owner review
+            if not check_hash(dst, own, sha, key=os.path.abspath(on_d),quarantine=False):
                 failed += 1
+            else:os.unlink(path) # the published hard link keeps the verified data
         except Exception as e:
             gated = "gated" in type(e).__name__.lower() or "401" in str(e) or "403" in str(e)
             why = (f"needs a Hugging Face login: accept its licence on huggingface.co/{repo} and put the file into "
@@ -238,12 +293,6 @@ def main():
                 print(f"  (optional) {folder}/{name} not available - {why}")
             else:
                 print(f"  CHECK {repo} {name}: {why}"); failed += 1
-    if rw:
-        shutil.rmtree(os.path.join(rw, "_dl"), ignore_errors=True)   # Hugging Face staging folder
-    if old_root and os.path.isdir(old_root):
-        for d, _, _ in sorted(os.walk(old_root), reverse=True):      # empty folders left after the move
-            if d != old_root and not os.listdir(d):
-                os.rmdir(d)
     return 1 if failed else 0
 
 

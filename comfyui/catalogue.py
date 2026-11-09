@@ -67,11 +67,9 @@ def sha256(path):
 
 def declared_pins():
     pins={}
-    for line in (HERE/'models.txt').read_text().splitlines():
-        if not line.strip() or line.lstrip().startswith('#'): continue
-        fields=line.split(); name=next((x for x in fields[3:] if x!='optional' and not x.startswith('sha256:')),Path(fields[1]).name)
-        pin=next((x[7:].lower() for x in fields[3:] if x.startswith('sha256:')),None)
-        if pin: pins['comfy/'+fields[2]+'/'+name]=pin
+    from fetch_models import declarations
+    for row in declarations(HERE/'models.txt'):
+        if row['sha256']:pins['comfy/'+row['folder']+'/'+row['name']]=row['sha256'].lower()
     for package in registry.packages().values():
         for part in package['parts'].values(): pins['comfy/'+part['folder']+'/'+part['file']]=part['sha256']
     helpers=HERE/'helper_models.json'
@@ -87,8 +85,18 @@ def declared_pins():
 def inventory(root):
     root=Path(root).resolve(); pins=declared_pins(); files=[]
     for path in sorted(root.rglob('*')):
-        if not path.is_file() or path.suffix.lower() not in EXTENSIONS: continue
+        if not path.is_file(): continue
         if not path.resolve().is_relative_to(root): continue
+        staged=(any(part.startswith('.model-stage-') for part in path.relative_to(root).parts)
+                or bool(re.search(r'\.[0-9a-f]{32}\.part$',path.name)))
+        if staged and '.cache' in path.parts and not path.name.endswith('.incomplete'):continue
+        if staged:
+            stat=path.stat()
+            files.append(dict(id=path.relative_to(root).as_posix(),kind='download-staging',path=str(path),
+                bytes=stat.st_size,mtime_ns=stat.st_mtime_ns,status='failed-download',expected_sha256=None,
+                reason='Failed or incomplete download retained for owner review; never executed or automatically deleted'))
+            continue
+        if path.suffix.lower() not in EXTENSIONS: continue
         relative=path.relative_to(root).as_posix(); stat=path.stat()
         kind='lora' if 'loras' in path.parts else 'gguf' if path.suffix.lower()=='.gguf' else 'weights'
         status='untested' if relative in pins or kind in ('lora','gguf') else 'needs-something'
@@ -158,6 +166,10 @@ def inventory(root):
     legacy_metadata=dict(legacy['models'],**legacy.get('video_models',{}),**legacy.get('assets',{}))
     by_path={str(Path(row['path']).resolve()):row for row in files}
     for row in files:
+        if row['kind']=='download-staging':
+            row.update(format=dict(name=Path(row['path']).suffix.lstrip('.'),status='unverified',completeness='failed-download'),
+                capability_tags=[],packages=[],runnable=False,identification='failed-download',compatibility='not runnable; owner cleanup only')
+            continue
         row.update(format=format_info(Path(row['path'])),capability_tags=[],packages=[],runnable=False,
                    identification='declared-pin' if row['expected_sha256'] else 'unknown',
                    compatibility='no reviewed serving package')
@@ -173,6 +185,7 @@ def inventory(root):
         for component in package['components']:
             row=by_path.get(str((root/component).resolve()))
             if not row: continue
+            if row['kind']=='download-staging':invalid.append(row['id']);continue
             row['packages'].append(name)
             row['identification']='declared-package'
             row['capability_tags']=sorted(set(row['capability_tags']+package['capability_tags']))
@@ -236,8 +249,10 @@ def main(argv=None):
             components={str((args.root/component).resolve()) for package in report['packages'] for component in package['components']}
             # Unrecognized files and standalone GGUF/LoRA files stay visible. A missing
             # registry reference is never evidence that a file is unused or disposable.
-            visible=[row for row in report['files'] if args.all or row['path'] not in components]
-            for row in visible: print(f"{row['status']:<16} {row['id']}")
+            visible=[row for row in report['files'] if args.all or row.get('kind')=='download-staging' or row['path'] not in components]
+            for row in visible:
+                if row.get('kind')=='download-staging':print(f"failed download  {row['bytes']} bytes  {row['path']}")
+                else:print(f"{row['status']:<16} {row['id']}")
             hidden=len(report['files'])-len(visible)
             if hidden: print(f"{hidden} declared component file(s) hidden; use --all for details")
         return 0

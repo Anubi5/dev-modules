@@ -2,6 +2,7 @@
 import hashlib
 import importlib.util
 import contextlib
+import json
 import io
 import os
 from pathlib import Path
@@ -111,11 +112,13 @@ class DownloadTests(unittest.TestCase):
         self.root=Path(self.temp.name); self.ro=self.root/'models'; self.ro.mkdir()
         self.state=self.root/'state'; self.listing=self.root/'models.txt'
         self.data=b'pinned model fixture'; self.sha=hashlib.sha256(self.data).hexdigest()
-        stub=SimpleNamespace(HfApi=lambda **kwargs: SimpleNamespace(list_repo_files=lambda repo:['weights.safetensors']),
+        stub=SimpleNamespace(HfApi=lambda **kwargs: SimpleNamespace(list_repo_files=lambda repo:['weights.safetensors'],
+                             model_info=lambda *a,**k:SimpleNamespace(gated=False,siblings=[SimpleNamespace(rfilename='weights.safetensors',size=len(self.data))])),
                              hf_hub_download=self.download)
         spec=importlib.util.spec_from_file_location('fixture_fetch', Path(__file__).with_name('fetch_models.py'))
         with patch.dict(sys.modules, huggingface_hub=stub):
             self.fetch=importlib.util.module_from_spec(spec); spec.loader.exec_module(self.fetch)
+        self.fetch.HfApi=stub.HfApi;self.fetch.hf_hub_download=stub.hf_hub_download
         self.calls=[]
 
     def download(self, repo, filename, **kwargs):
@@ -125,7 +128,9 @@ class DownloadTests(unittest.TestCase):
 
     def run_fetch(self, flags=(), repo='Bingsu/adetailer', pin=True):
         self.listing.write_text(f'{repo} weights.safetensors checkpoints'+(' sha256:'+self.sha if pin else '')+'\n')
-        with patch.object(sys,'argv',['fetch',*flags,str(self.listing),str(self.ro),str(self.ro),str(self.state)]), contextlib.redirect_stdout(io.StringIO()):
+        with patch.object(sys,'argv',['fetch',*flags,str(self.listing),str(self.ro),str(self.ro),str(self.state)]), \
+             patch.dict(os.environ,DEV_MODEL_OPERATION='approved',DEV_UNATTENDED='',DEV_APPROVED_SHA256=json.dumps([self.sha])), \
+             contextlib.redirect_stdout(io.StringIO()):
             return self.fetch.main()
 
     def test_no_implicit_download_even_with_writable_destination(self):

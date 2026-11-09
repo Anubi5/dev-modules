@@ -14,5 +14,7 @@ Needs: internet only during `dev mod add/update agent-hermes`; no GPU of its own
   approved writes, no automatic profile collection) and the profile check.
 - The pinned commit lives in the core's `hermes_runtime.py` (one place); this module pins the matching
   installer hash. Changing one without the other fails the install on purpose.
+- **Your data:** `state.txt` declares what `dev state save` keeps outside the distro (memory, sessions, SOUL);
+  the profile itself is re-applied by this module, so `config.yaml` is not carried over.
 - **Remove:** `dev mod remove agent-hermes` leaves `~/.hermes` (source, memory, sessions) in place.
 - Install `agent-hermes` before `blender`: Blender adds the official Hermes Blender plugin.

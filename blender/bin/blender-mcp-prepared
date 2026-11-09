@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+MOD=$(dirname "$(dirname "$(readlink -f "$0")")")
+exec python3 -B "$MOD/mcp_runtime.py" run --module "$MOD" -- "$@"

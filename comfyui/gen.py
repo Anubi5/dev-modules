@@ -15,7 +15,8 @@ Usage:
   gen.py image "prompt" [--name N] [--negative T] [--seed S] [--steps N] [--size WxH] [--upscale] [--hires]
                [--pose IMG [--pose-strength F]] [--face IMG [--face-weight F]] [--fix-faces] [--fix-hands]
   gen.py video "prompt" [--model M] [--name N] [--negative T] [--seed S] [--steps N] [--frames N]
-Prints the output file paths (one per line, after "OUTPUT"); exit code 0 on success.
+Human output lists produced paths; --json emits one producer result with progress on stderr.
+Exit code 0 on success. Parser-derived help never inspects models or starts services.
 """
 import argparse
 import contextlib
@@ -1050,46 +1051,6 @@ def write_record(files, info, wf=None, status="succeeded", error=None, prefix=No
     return path
 
 
-HELP = """ai gen - images, edits and short videos on the local GPU (one job at a time; the chat model is unloaded meanwhile)
-
-  ai gen image "prompt" [--name N] [--model M] [--size WxH] [--seed S]   make an image (default model: zimage)
-      --style art          artwork/illustration instead of photo defaults      --negative "..."  what to avoid ("" = nothing)
-      --pose IMG           copy a body pose (SDXL models, anima)               --pose-strength 0.3-1.0
-      --face IMG           keep a face (SDXL models)                           --face-weight 0.3-1.2
-      --fix-faces --fix-hands  redraw faces/hands (SDXL)   --hires  detailed 2x copy (SDXL)   --upscale  fast 2x copy
-      --checkpoint NAME    any SDXL file in D:\\AI\\models\\comfy\\checkpoints
-      --cfg 4.5            guidance (default per model)                       --force-lora  run a LoRA that does not fit
-      --lora NAME[:0.8]    a LoRA from D:\\AI\\models\\comfy\\loras (part of its name; strength -2..2, default 1); up to 4
-                           - use LoRAs made for the model (SDXL LoRA with SDXL models, FLUX LoRA with flux3 ...)
-  ai gen edit "what to change" --image IMG [--image REF]   change an image by instruction (FLUX 3; --model fibo2 = Fibo 2.0)
-  ai gen pose "description" | --from PHOTO                 a pose for ControlNet: "<name>" (plain full-body photo,
-                                                           best for --pose) + "<name>_pose" (the skeleton picture)
-      --pose-skeleton      (image) the --pose picture is already a skeleton (files named *_pose_*.png are detected)
-  ai gen video "prompt" [--frames 33]                      Wan 2.2 clip (33 frames ~ 1.4 s, up to 121)  (--model NAME selects a video package)
-  ai gen 3d --image PHOTO [--model pixal3d|trellis2] [--quality normal|high] [--faces N] [--texture 2048]
-  ai gen 3d --model pixal3d-mv --image FRONT [--image LEFT --image BACK --image RIGHT]   3D model from up to 4 views
-                                                           a textured 3D model (GLB) from one picture; Blender renders
-                                                           it from 4 sides when installed
-  ai gen models                                            which image models are ready
-  ai gen list [models|loras|checkpoints] [--json]          what is installed now, with notes and tested pairs
-  ai gen show NAME [--json]                                one file: complete?, embedded metadata, note, tested with
-  ai gen check --model M --lora L [--lora L2]              does a LoRA fit that model (file headers only, no GPU)
-  ai gen note NAME [--trigger T --strength S --cfg C --negative N --base B --about A --source URL]
-                   checkpoint: [--sampler S --scheduler K --steps N --cfg C --negative N]
-                                                           remember what the LoRA's card says (used automatically)
-  ai gen verify                                            re-read files used before: same content?
-  ai gen rerun FILE.workflow.json [--name N]               run a saved workflow again, exactly
-  ai gen jobs [N] [--json]                                 the newest jobs and their state (abandoned = process gone)
-
-  --model takes a profile or any model file: ComfyUI's own detection tells what kind it is (from the file's header)
-  and it starts from that kind's profile; ai gen note FILE [--sampler --steps --cfg ...] adds its card's settings.
-  Every result gets <name>.json (what was asked) and <name>.workflow.json (the exact ComfyUI workflow that ran).
-  ai gen schema                                            save ComfyUI node definitions (for the CI check)
-
-  Reference images must be inside ~/work (e.g. ~/work/inputs). Results: ~/work/outputs/comfy/<date>/ (+ a .json record);
-  from Windows: dev share. All options: ai gen image --help
-
-Models (--model):"""
 
 
 def _one(name, folder=None):
@@ -1474,26 +1435,9 @@ def rerun(argv):
     return 0 if ok else 1
 
 
-def main():
-    """!
-    @brief Command-line entry point. @return 0 on success, 1 on failure.
-    """
-    if sys.argv[2:3] == ["help"]:
-        sys.argv[2] = "--help"
-    if sys.argv[1:2] == ["rerun"]:
-        return rerun(sys.argv[2:])
-    if sys.argv[1:2] == ["jobs"]:
-        return jobs_cmd(sys.argv[2:])
-    if sys.argv[1:2] and sys.argv[1] in ("list", "show", "check", "note", "verify", "names"):
-        return asset_cmd(sys.argv[1:])
-    ap = argparse.ArgumentParser(description="Generate an image or video on the GPU (hands the GPU over from the chat model).")
-    if sys.argv[1:2] == ["schema"]:              # ai gen schema: node definitions for the offline workflow check
-        return dump_schema(os.path.join(OUTPUT, "schema.json"))
-    if sys.argv[1:2] == ["models"]:              # ai gen models: which image models are ready
-        argparse.ArgumentParser(prog="ai gen models").parse_args(sys.argv[2:])
-        return models_report()
-    if not sys.argv[1:] or sys.argv[1] in ("help", "-h", "--help") or sys.argv[2:3] == ["help"]:   # "image --help": all options
-        print(HELP); models_report(); return 0
+def generation_parser():
+    """Build the same parser for execution and side-effect-free help."""
+    ap = argparse.ArgumentParser(prog="ai gen", description="Generate images, video or 3D with existing model files; coordinates the shared GPU.")
     ap.add_argument("kind", choices=["image", "video", "edit", "pose", "3d"],
                     help="edit = change an image by instruction; pose = a ControlNet pose (photo + skeleton)")
     ap.add_argument("--json", action="store_true", help="emit one producer JSON result; progress goes to stderr")
@@ -1529,6 +1473,30 @@ def main():
     ap.add_argument("--faces", type=int, default=None, help="3d: triangles in the final model (default per --quality)")
     ap.add_argument("--texture", type=int, default=None, help="3d: texture size 1024 | 2048 | 4096 (default per --quality)")
     ap.add_argument("--keep-background", action="store_true", help="3d: the picture is already cut out (no background removal)")
+    return ap
+
+
+def main():
+    """!
+    @brief Command-line entry point. @return 0 on success, 1 on failure.
+    """
+    if sys.argv[2:3] == ["help"]:
+        sys.argv[2] = "--help"
+    if sys.argv[1:2] == ["rerun"]:
+        return rerun(sys.argv[2:])
+    if sys.argv[1:2] == ["jobs"]:
+        return jobs_cmd(sys.argv[2:])
+    if sys.argv[1:2] and sys.argv[1] in ("list", "show", "check", "note", "verify", "names"):
+        return asset_cmd(sys.argv[1:])
+    ap = generation_parser()
+    if sys.argv[1:2] == ["schema"]:
+        argparse.ArgumentParser(prog="ai gen schema", description="Query ComfyUI node definitions and write the schema in the output directory.").parse_args(sys.argv[2:])
+        return dump_schema(os.path.join(OUTPUT, "schema.json"))
+    if sys.argv[1:2] == ["models"]:
+        argparse.ArgumentParser(prog="ai gen models", description="Inspect readiness of configured generation profiles; no GPU job.").parse_args(sys.argv[2:])
+        return models_report()
+    if not sys.argv[1:] or sys.argv[1] in ("help", "-h", "--help"):
+        ap.print_help(); return 0
     # Optional positional prompts may follow options and '--', including literal
     # prompts beginning with '-'. Use argparse's supported intermixed parser.
     a = ap.parse_intermixed_args()

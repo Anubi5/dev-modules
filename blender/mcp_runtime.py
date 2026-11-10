@@ -70,11 +70,13 @@ def prepare(module, executable, source, plugin=None):
         data = json.loads(original)
         servers = data.get('mcpServers', data.get('mcp_servers', data))
         server = servers.get('blender')
-        command = str(module / 'bin/blender-mcp-prepared')
+        # Agent Plugins v1 rejects absolute command paths. The module runner
+        # already links this owned wrapper into ~/.local/bin on Hermes's PATH.
+        command = 'blender-mcp-prepared'
         if not isinstance(server, dict):
             raise ValueError('Blender plugin server declaration is missing')
         arguments = server.get('args', [])
-        if server.get('command') != command:
+        if server.get('command') not in (command, str(module / 'bin/blender-mcp-prepared')):
             expected = ['tool', 'run', '--from', source, 'blender-mcp']
             if server.get('command') != 'uv' or arguments[:len(expected)] != expected:
                 raise ValueError('Custom Blender MCP command preserved; review it before integration')

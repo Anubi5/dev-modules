@@ -19,6 +19,9 @@ the same tools work for any MCP-capable agent - instead of through scripts writt
   configuration before selecting `blender-mcp-prepared`. Launch executes that
   prepared binary directly; it never calls uv or another installer. Missing or
   changed preparation fails with an explicit `dev mod update blender` instruction.
+  The portable plugin uses the bare launcher name linked in `~/.local/bin`;
+  Hermes rejects absolute command paths. Earlier owned absolute declarations
+  migrate to this form while their arguments and environment remain unchanged.
   Custom owner commands are preserved and require review before replacement.
   Python 3.14.7 and the 38 exact transitive versions in `mcp-requirements.lock`
   are selected during installation; the prepared environment must match that lock.

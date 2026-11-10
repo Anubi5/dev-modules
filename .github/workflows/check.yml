@@ -21,6 +21,10 @@ jobs:
           ! grep -q "undefined name" pf.txt
       - name: SAM2 custom-node dependency pin (offline)
         run: python3 -B comfyui/test_sam2_pin.py
+      - name: Native help dispatch and checked parser export (offline)
+        run: |
+          python3 -B _tests/command_help_test.py
+          python3 -B _tests/export_help.py --check
       - name: ai gen workflows match the pinned ComfyUI node definitions
         run: python3 comfyui/check_workflows.py
       - name: Generation capability compatibility (offline)

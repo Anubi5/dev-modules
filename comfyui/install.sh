@@ -36,11 +36,19 @@ while read -r r ref _; do
   n=$(basename "$r" .git); keep+=("$n"); say "custom node $n (${ref:0:10})"
   at_commit "$r" "$ref" "custom_nodes/$n" || { echo "  CHECK could not get $n at $ref"; exit 1; }
   req="custom_nodes/$n/requirements.txt"
-  if [ "$n" = ComfyUI-Impact-Pack ] && grep -qxF 'git+https://github.com/facebookresearch/sam2' "$req"; then
-    # Pin the unnamed VCS requirement before uv resolves it; reuse the installed revision.
-    sed -i 's|^git+https://github\.com/facebookresearch/sam2$|git+https://github.com/facebookresearch/sam2@2b90b9f5ceec907a1c18123530e92e794ad901a4|' "$req"
-  fi
-  if [ -f "$req" ]; then uv pip install -q --python .venv "${pin[@]}" -r "$req"; fi
+  if [ "$n" = ComfyUI-Impact-Pack ]; then (
+    expected='git+https://github.com/facebookresearch/sam2'
+    [ -f "$req" ] && [ "$(grep -cxF "$expected" "$req" || true)" = 1 ] \
+      && [ "$(grep -c 'facebookresearch/sam2' "$req" || true)" = 1 ] \
+      || { echo '  CHECK Impact-Pack SAM2 requirement missing or changed; nothing resolved' >&2; exit 1; }
+    # Keep relative requirement paths valid and the pinned upstream file unchanged.
+    tmp_req=$(mktemp "$C/custom_nodes/$n/.eva-requirements.XXXXXXXX")
+    trap 'rm -f -- "$tmp_req"' EXIT
+    trap 'exit 1' HUP INT TERM
+    sed 's|^git+https://github\.com/facebookresearch/sam2$|git+https://github.com/facebookresearch/sam2@2b90b9f5ceec907a1c18123530e92e794ad901a4|' "$req" > "$tmp_req"
+    uv pip install -q --python .venv "${pin[@]}" -r "$tmp_req"
+  )
+  elif [ -f "$req" ]; then uv pip install -q --python .venv "${pin[@]}" -r "$req"; fi
 done < "$MOD/nodes.txt"
 for d in custom_nodes/*/; do n=$(basename "$d"); [ -d "$d/.git" ] || continue
   [[ " ${keep[*]} " == *" $n "* ]] || { mv "$d" "$A/removed-nodes/$n-$(date +%s)"; echo "  node $n no longer listed - moved to app/removed-nodes/"; }; done

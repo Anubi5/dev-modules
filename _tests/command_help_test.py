@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import unittest
 from unittest.mock import patch
+from export_help import dispatch
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'comfyui'))
@@ -15,6 +16,14 @@ spec.loader.exec_module(gen)
 
 
 class HelpTest(unittest.TestCase):
+    def test_character_export_uses_actual_selected_subparser(self):
+        for name,option in [('manifest','--file'),('inspect','manifest'),('plan','pipeline'),('run','--work-dir')]:
+            with self.subTest(command=name):
+                page=dispatch(ROOT/'character/cli.py',[name,'--help'])
+                self.assertIn('ai character '+name,page['usage'])
+                self.assertFalse(page['children'])
+                self.assertTrue(any(option in row['names'] for row in page['arguments']))
+
     def test_documented_generation_example_uses_real_parser(self):
         args=gen.generation_parser().parse_intermixed_args(['image','a blue mug','--model','krea2','--seed','43','--json'])
         self.assertEqual((args.kind,args.model,args.seed,args.json),('image','krea2',43,True))

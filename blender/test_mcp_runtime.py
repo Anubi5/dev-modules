@@ -37,7 +37,7 @@ class PreparedRuntimeTests(unittest.TestCase):
             result = runtime.prepare(module,executable,SOURCE,plugin)
             after = json.loads((plugin / 'mcp.json').read_text())
             self.assertFalse(result['runtime_installs'])
-            self.assertEqual(after['mcpServers']['blender']['command'],str(module / 'bin/blender-mcp-prepared'))
+            self.assertEqual(after['mcpServers']['blender']['command'],'blender-mcp-prepared')
             self.assertEqual(after['mcpServers']['blender']['args'],['--transport','stdio'])
             self.assertEqual(after['mcpServers']['blender']['env'],{'FIXTURE':'preserved'})
             self.assertEqual(after['mcpServers']['other'],data['mcpServers']['other'])
@@ -45,6 +45,20 @@ class PreparedRuntimeTests(unittest.TestCase):
             self.assertEqual(len(backups),1); self.assertEqual(backups[0].read_bytes(),original)
             runtime.prepare(module,executable,SOURCE,plugin)
             self.assertEqual(len(list(plugin.glob('mcp.json.before-prepared-*'))),1)
+
+    def test_legacy_absolute_wrapper_migrates_to_portable_bare_command(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);module,executable,_=self.fixture(root)
+            plugin=root/'plugin';plugin.mkdir()
+            data=dict(mcpServers=dict(blender=dict(type='stdio',command=str(module/'bin/blender-mcp-prepared'),args=['--transport','stdio'],env={'BLENDER_MCP_HOST':'127.0.0.1'})))
+            original=json.dumps(data).encode();(plugin/'mcp.json').write_bytes(original)
+            runtime.prepare(module,executable,SOURCE,plugin)
+            server=json.loads((plugin/'mcp.json').read_text())['mcpServers']['blender']
+            self.assertEqual(server['command'],'blender-mcp-prepared')
+            self.assertFalse(any(character.isspace() or character in '/\\' for character in server['command']))
+            self.assertEqual(server['args'],data['mcpServers']['blender']['args'])
+            self.assertEqual(server['env'],data['mcpServers']['blender']['env'])
+            self.assertEqual(next(plugin.glob('mcp.json.before-prepared-*')).read_bytes(),original)
 
     def test_wrong_pin_or_custom_command_is_preserved_before_effects(self):
         with tempfile.TemporaryDirectory() as directory:

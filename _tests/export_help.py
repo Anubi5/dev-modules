@@ -51,9 +51,7 @@ def dispatch(script, arguments):
     try:
         sys.path.insert(0, str(script.parent))
         sys.argv = [str(script), *arguments]
-        with patch.object(argparse.ArgumentParser, 'parse_args', capture), \
-             patch.object(argparse.ArgumentParser, 'parse_intermixed_args', capture), \
-             patch.object(argparse.ArgumentParser, 'print_help', capture), \
+        with patch.object(argparse.ArgumentParser, 'print_help', capture), \
              patch('subprocess.Popen', side_effect=AssertionError('Help started a process')), \
              patch('socket.socket', side_effect=AssertionError('Help accessed network')), \
              contextlib.redirect_stdout(io.StringIO()):

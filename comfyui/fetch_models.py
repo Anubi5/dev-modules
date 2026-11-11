@@ -224,6 +224,7 @@ def main():
     old_root = sys.argv[5] if len(sys.argv) > 5 else None
     rw = rw if rw != "-" and os.path.isdir(rw) and os.access(rw, os.W_OK) else None
     if verify_only: rw = None
+    # A full re-hash of every file happens only when asked for (--verify-only); updates trust the size+date record.
     os.makedirs(own, exist_ok=True)
     failed = 0
     for row in declarations(lst):
@@ -243,7 +244,7 @@ def main():
         if have:
             print(f"  {folder}/{name}: present{'' if have[0] == on_d else ' (still inside the distro - run dev mod update comfyui from Windows to move it to D:)'}", flush=True)
             failed += 0 if check_hash(os.path.abspath(have[0]), own, sha, quarantine=False,
-                                      force=verify_only) else 1
+                                      force=requested_verify) else 1
             continue
         if not rw or not allow_downloads or verify_only:
             msg = f"{folder}/{name} is missing - run 'dev mod update comfyui' for confirmed pinned acquisition, or copy it manually"

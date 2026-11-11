@@ -33,11 +33,19 @@ fi
 VENV="$MOD/app/venv"
 [ -x "$VENV/bin/python" ] || uv venv -q --python "$PY" "$VENV"
 FLASH='https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.5cxx11abiFALSE-cp311-cp311-linux_x86_64.whl'
-uv pip install --python "$VENV/bin/python" --index-url https://pypi.org/simple \
-  --extra-index-url https://download.pytorch.org/whl/cu121 --index-strategy unsafe-best-match \
-  --find-links https://data.pyg.org/whl/torch-2.5.0+cu121.html \
-  --only-binary torch,torchvision,bpy,spconv-cu121,torch-scatter,torch-cluster,flash-attn \
-  -r "$MOD/requirements.lock" "$FLASH"
+# Unchanged pins are not reinstalled: uv treats the direct-URL wheel as new on every run (its local version tag
+# differs in letter case), which reinstalled flash-attn and bpy on each update.
+STAMP="$VENV/.eva-pins"; WANT=$(cat "$MOD/requirements.lock" | sha256sum | cut -d' ' -f1)-$(printf '%s' "$FLASH" | sha256sum | cut -c1-16)
+if [ "$(cat "$STAMP" 2>/dev/null)" = "$WANT" ] && "$VENV/bin/python" -c 'import torch, bpy, flash_attn' 2>/dev/null; then
+  echo "Rig runtime unchanged (pinned packages already installed)."
+else
+  uv pip install --python "$VENV/bin/python" --index-url https://pypi.org/simple \
+    --extra-index-url https://download.pytorch.org/whl/cu121 --index-strategy unsafe-best-match \
+    --find-links https://data.pyg.org/whl/torch-2.5.0+cu121.html \
+    --only-binary torch,torchvision,bpy,spconv-cu121,torch-scatter,torch-cluster,flash-attn \
+    -r "$MOD/requirements.lock" "$FLASH"
+  printf '%s' "$WANT" > "$STAMP"
+fi
 "$VENV/bin/python" "$MOD/fetch_assets.py"
 printf '%s\n' "$SRC" > "$MOD/app/source-path.txt"
 chmod +x "$MOD/bin/ai-rig" "$MOD/test.sh"

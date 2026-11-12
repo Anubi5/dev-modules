@@ -1622,7 +1622,9 @@ def main(a=None):
                 "options": {k: getattr(a, k) for k in ("upscale", "hires", "fix_faces", "fix_hands")},
                 "pose": a.pose and {"file": a.pose, "strength": pose_strength},
                 "face": a.face and {"file": a.face, "weight": a.face_weight}, "images": a.image or None,
-                "loras": lora_checks or None}
+                "loras": lora_checks or None,
+                "face_refiner": {"model": PROFILES.get("default_sdxl", "realvis"),
+                                 "model_file": wf["44"]["inputs"]["ckpt_name"]} if arch == "zimage" and a.fix_faces else None}
         limit = a.timeout or (1800 if a.hires or a.fix_hands or a.fix_faces or arch in ("flux3", "fibo2", "moss") else 900)
     else:
         frames = max(5, (a.frames - 1) // 4 * 4 + 1)

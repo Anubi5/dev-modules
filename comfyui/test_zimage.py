@@ -13,20 +13,20 @@ from generation import image, models
 
 
 class ZImageTests(unittest.TestCase):
-    def test_native_pose_and_face_repair_keep_correct_architecture_inputs(self):
+    def test_pose_and_face_refiner_keep_separate_architecture_inputs(self):
         p = models.profile("zimage")
         wf = image.zimage("adult portrait", 7, 8, 1024, 1024, "test", p,
                           pose="pose.png", fix_faces=True, hires=True, upscale=True)
         self.assertEqual(wf["33"]["class_type"], "QwenImageDiffsynthControlnet")
         self.assertEqual(wf["8"]["inputs"]["model"], ["33", 0])
-        self.assertEqual(wf["41"]["inputs"]["clip"], ["2", 0])
-        self.assertEqual(wf["41"]["inputs"]["vae"], ["3", 0])
-        self.assertEqual(wf["41"]["inputs"]["model"], ["7", 0])
-        self.assertEqual(wf["41"]["inputs"]["cfg"], 1)
+        self.assertEqual(wf["41"]["inputs"]["clip"], ["44", 1])
+        self.assertEqual(wf["41"]["inputs"]["vae"], ["44", 2])
+        self.assertEqual(wf["41"]["inputs"]["model"], ["44", 0])
+        self.assertEqual(wf["44"]["class_type"], "CheckpointLoaderSimple")
         self.assertEqual(wf["21"]["inputs"]["image"], ["41", 0])
         self.assertEqual(wf["12"]["inputs"]["image"], ["41", 0])
-        self.assertEqual(wf["41"]["inputs"]["guide_size"], 1024)
-        self.assertEqual(wf["41"]["inputs"]["denoise"], 0.15)
+        self.assertEqual(wf["41"]["inputs"]["positive"], ["45", 0])
+        self.assertEqual(wf["41"]["inputs"]["denoise"], 0.2)
         self.assertEqual(wf["36"]["inputs"]["width"], 1024)
         self.assertEqual(wf["36"]["inputs"]["crop"], "disabled")
         gen.use_skeleton(wf)

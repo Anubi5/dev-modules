@@ -1354,6 +1354,48 @@
    "values": null
   }
  },
+ "QwenImageDiffsynthControlnet": {
+  "end_percent": {
+   "part": "optional",
+   "type": "FLOAT",
+   "values": null
+  },
+  "image": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  },
+  "mask": {
+   "part": "optional",
+   "type": "MASK",
+   "values": null
+  },
+  "model": {
+   "part": "required",
+   "type": "MODEL",
+   "values": null
+  },
+  "model_patch": {
+   "part": "required",
+   "type": "MODEL_PATCH",
+   "values": null
+  },
+  "start_percent": {
+   "part": "optional",
+   "type": "FLOAT",
+   "values": null
+  },
+  "strength": {
+   "part": "required",
+   "type": "FLOAT",
+   "values": null
+  },
+  "vae": {
+   "part": "required",
+   "type": "VAE",
+   "values": null
+  }
+ },
  "ReferenceMultiLatent": {
   "images": {
    "part": "optional",

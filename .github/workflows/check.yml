@@ -28,7 +28,9 @@ jobs:
       - name: ai gen workflows match the pinned ComfyUI node definitions
         run: python3 comfyui/check_workflows.py
       - name: Generation capability compatibility (offline)
-        run: python3 -m unittest discover -s comfyui -p 'test_generation.py'
+        run: |
+          python3 -m unittest discover -s comfyui -p 'test_generation.py'
+          python3 -m unittest discover -s comfyui -p 'test_zimage.py'
       - name: Producer JSON and real CLI parsing (offline)
         run: python3 -m unittest discover -s comfyui -p 'test_producer.py'
       - name: Inspection does not persist state

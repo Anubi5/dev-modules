@@ -29,7 +29,7 @@ outputs; progress goes to stderr. Default human output and exit codes are retain
 
 Model weights are data under `D:\AI\models`. User-started `dev mod add/update`
 may fetch missing declarations only with a SHA-256 pin and an approved entry in
-`download_licenses.json`. All 41 declarations are pinned. The reviewed policy
+`download_licenses.json`. All declarations are pinned. The reviewed policy
 covers personal, non-commercial use; upstream restrictions still apply. Unknown
 licences, gated FLUX, research-only FaceID, the DINOv3 encoder and the CivitAI file
 remain manual downloads. No login or licence acceptance is automated.
@@ -261,3 +261,23 @@ Saves `<name>_*.png`, plus `<name>_pose_*.png` (the detected skeleton) and `<nam
 - 12 GB GPU: SDXL + ControlNet + IPAdapter fits at ~1024 px; run FaceDetailer and upscaling as separate queue runs if memory runs out.
 - ComfyUI runs with `--offline`: the page cannot reach the internet and paid cloud ("partner") nodes are off.
 - Use your own or licensed reference images; FaceID is for consistent fictional characters or people who agreed.
+
+## Z-Image controls and sequential batches
+
+`ai gen image "adult portrait in window light" --model zimage --fix-faces --hires`
+saves the original, repaired image and a refined 2x copy. Face repair uses the
+Z-Image model, encoder and VAE; it does not substitute an SDXL model.
+
+`ai gen image "adult standing, full body" --model zimage --pose ~/work/inputs/pose.png`
+uses the native Union ControlNet patch. `--pose-skeleton` skips pose detection
+for an existing skeleton. Strength is 0.3-1.0. The optional Apache-2.0 patch is
+pinned to an immutable official source, size and checksum; acquire it through
+`dev mod update comfyui` with the existing DOWNLOAD approval. Plain images do
+not require the patch, and startup never acquires it.
+
+`ai gen image "adult portrait" --model zimage --count 3 --seed 1701 --name portraits`
+runs three jobs sequentially with seeds 1701, 1702 and 1703 and distinct names.
+Count is limited to 1-8; a failure stops the batch and retains earlier records.
+Without --seed, one random starting seed is chosen. Each image keeps its normal
+record/workflow; --json also returns the records, per-image results, requested
+count and completed count. Existing single-image output is unchanged.

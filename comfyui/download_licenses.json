@@ -87,6 +87,11 @@
     "license": "research-only; manual review required",
     "source": "https://huggingface.co/h94/IP-Adapter-FaceID"
   },
+  "https://huggingface.co/alibaba-pai/Z-Image-Turbo-Fun-Controlnet-Union/resolve/01c794d57ff16844b24d0580471fa9d686e7a465/Z-Image-Turbo-Fun-Controlnet-Union.safetensors": {
+    "approved": true,
+    "license": "apache-2.0",
+    "source": "https://huggingface.co/alibaba-pai/Z-Image-Turbo-Fun-Controlnet-Union"
+  },
   "stabilityai/stable-diffusion-xl-base-1.0": {
     "approved": true,
     "license": "openrail++",

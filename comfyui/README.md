@@ -266,7 +266,9 @@ Saves `<name>_*.png`, plus `<name>_pose_*.png` (the detected skeleton) and `<nam
 
 `ai gen image "adult portrait in window light" --model zimage --fix-faces --hires`
 saves the original, repaired image and a refined 2x copy. Face repair uses the
-Z-Image model, encoder and VAE; it does not substitute an SDXL model.
+existing default SDXL face refiner with its own encoder/conditioning/VAE, after
+Z-Image generates the base. Its checkpoint must already be installed; preflight
+refuses a missing file and never downloads it. The record names the face refiner.
 
 `ai gen image "adult standing, full body" --model zimage --pose ~/work/inputs/pose.png`
 uses the native Union ControlNet patch. `--pose-skeleton` skips pose detection

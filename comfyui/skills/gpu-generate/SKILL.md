@@ -26,7 +26,7 @@ owner action. Use `ai models verify <id>` only when a full content check is need
      - `--face <image>`: keep the face from a picture with ONE clear face. `--face-weight 0.3-1.2` (0.65; above ~0.8 faces get gaunt and distorted).
      - `--fix-faces` / `--fix-hands`: redraw faces / hands in more detail (use for people, especially full-body shots).
      - `--count N --seed S`: 1-8 images run sequentially, with seeds S, S+1, ...; stop on first failure.
-     - Explicit `--model zimage` supports native `--fix-faces`, `--hires`, and `--pose` (requires the separately approved Union patch). `--face` identity and `--fix-hands` remain SDXL tools.
+     - Explicit `--model zimage` supports `--fix-faces` (existing SDXL refiner), `--hires`, and native `--pose` (requires the separately approved Union patch). `--face` identity and `--fix-hands` remain SDXL tools.
      - `--hires`: also save a detailed 2x copy (slow); `--upscale`: a fast 2x copy.
      - Leave `--model` out unless the user requests a model or the shared inventory
        gives a reason to select another. `--model <id>` uses that package's tuned

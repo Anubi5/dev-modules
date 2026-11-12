@@ -113,7 +113,7 @@ def _loaders(prof, clip_type):
             "3": {"class_type": "VAELoader", "inputs": {"vae_name": prof["vae"]}}}
 
 
-def _finish(wf, prof, seed, steps, model, pos, neg, latent, prefix, upscale, hires=False, fix_faces=False, face_model=None):
+def _finish(wf, prof, seed, steps, model, pos, neg, latent, prefix, upscale, hires=False, fix_faces=False):
     """!
     @brief KSampler + decode + save (+ optional fast 2x copy, + optional refined 2x copy) shared by the newer architectures.
     @details hires: the image is enlarged 2x with the upscale model, then redrawn lightly by the same model (few steps,
@@ -129,8 +129,16 @@ def _finish(wf, prof, seed, steps, model, pos, neg, latent, prefix, upscale, hir
     if fix_faces:
         wf["27"] = {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_base", "images": ["9", 0]}}
         wf["40"] = {"class_type": "UltralyticsDetectorProvider", "inputs": {"model_name": FACE_DET}}
-        inputs = detailer(["9", 0], face_model or model, pos, neg, ["40", 0], seed, 0.35, prof)
-        inputs.update(clip=["2", 0], vae=["3", 0], steps=steps)
+        # The installed Z-Image crop sampler overprocesses skin. Reuse the
+        # existing SDXL repair path with its own model, conditioning and VAE.
+        refiner = profile(PROFILES.get("default_sdxl", "realvis"))
+        if refiner["arch"] != "sdxl":
+            raise ValueError("Z-Image face repair needs an SDXL default_sdxl profile")
+        wf["44"] = {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": refiner["file"]}}
+        wf["45"] = {"class_type": "CLIPTextEncode", "inputs": {"clip": ["44", 1], "text": wf["4"]["inputs"]["text"]}}
+        wf["46"] = {"class_type": "CLIPTextEncode", "inputs": {"clip": ["44", 1], "text": refiner["negative"]["photo"]}}
+        inputs = detailer(["9", 0], ["44", 0], ["45", 0], ["46", 0], ["40", 0], seed, 0.2, refiner)
+        inputs.update(clip=["44", 1], vae=["44", 2])
         wf["41"] = {"class_type": "FaceDetailer", "inputs": inputs}
         wf["10"]["inputs"]["images"] = ["41", 0]
     if upscale:
@@ -203,7 +211,7 @@ def anima(prompt, negative, seed, steps, width, height, prefix, prof, pose=None,
     return _finish(wf, prof, seed, steps, model, ["4", 0], ["5", 0], ["6", 0], prefix, upscale)
 
 
-def zimage(prompt, seed, steps, width, height, prefix, prof, upscale=False, hires=False, fix_faces=False, pose=None, pose_strength=0.8):
+def zimage(prompt, seed, steps, width, height, prefix, prof, upscale=False, hires=False, fix_faces=False, pose=None, pose_strength=1.0):
     """!
     @brief Z-Image Turbo text-to-image (8 steps, CFG 1, AuraFlow sampling shift 3 - official template).
     @return Workflow in ComfyUI API format.
@@ -220,12 +228,15 @@ def zimage(prompt, seed, steps, width, height, prefix, prof, upscale=False, hire
             "31": _dwpose(["30", 0]),
             "32": {"class_type": "ModelPatchLoader", "inputs": {"name": prof["pose_patch"]}},
             "33": {"class_type": "QwenImageDiffsynthControlnet", "inputs": {
-                "model": model, "model_patch": ["32", 0], "vae": ["3", 0], "image": ["31", 0], "strength": pose_strength}},
-            "35": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_pose", "images": ["31", 0]}},
+                "model": model, "model_patch": ["32", 0], "vae": ["3", 0], "image": ["36", 0], "strength": pose_strength}},
+            "35": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_pose", "images": ["36", 0]}},
+            # Native control otherwise center-crops a differently shaped guide.
+            "36": {"class_type": "ImageScale", "inputs": {"image": ["31", 0], "upscale_method": "nearest-exact",
+                   "width": width, "height": height, "crop": "disabled"}},
         })
         model = ["33", 0]
     return _finish(wf, prof, seed, steps, model, ["4", 0], ["5", 0], ["6", 0], prefix, upscale, hires,
-                   fix_faces=fix_faces, face_model=["7", 0])
+                   fix_faces=fix_faces)
 
 
 def moss(prompt, negative, seed, steps, width, height, prefix, prof, upscale=False):

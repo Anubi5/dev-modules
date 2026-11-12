@@ -918,6 +918,42 @@
    "values": null
   }
  },
+ "ImageScale": {
+  "crop": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "disabled",
+    "center"
+   ]
+  },
+  "height": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  },
+  "image": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  },
+  "upscale_method": {
+   "part": "required",
+   "type": "COMBO",
+   "values": [
+    "nearest-exact",
+    "bilinear",
+    "area",
+    "bicubic",
+    "lanczos"
+   ]
+  },
+  "width": {
+   "part": "required",
+   "type": "INT",
+   "values": null
+  }
+ },
  "ImageScaleBy": {
   "image": {
    "part": "required",

@@ -25,9 +25,14 @@ class ZImageTests(unittest.TestCase):
         self.assertEqual(wf["41"]["inputs"]["cfg"], 1)
         self.assertEqual(wf["21"]["inputs"]["image"], ["41", 0])
         self.assertEqual(wf["12"]["inputs"]["image"], ["41", 0])
+        self.assertEqual(wf["41"]["inputs"]["guide_size"], 1024)
+        self.assertEqual(wf["41"]["inputs"]["denoise"], 0.15)
+        self.assertEqual(wf["36"]["inputs"]["width"], 1024)
+        self.assertEqual(wf["36"]["inputs"]["crop"], "disabled")
         gen.use_skeleton(wf)
         self.assertNotIn("31", wf)
-        self.assertEqual(wf["33"]["inputs"]["image"], ["30", 0])
+        self.assertEqual(wf["33"]["inputs"]["image"], ["36", 0])
+        self.assertEqual(wf["36"]["inputs"]["image"], ["30", 0])
 
     def batch(self, count, outcomes):
         with tempfile.TemporaryDirectory() as directory:

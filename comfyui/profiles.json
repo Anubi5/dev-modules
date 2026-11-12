@@ -97,7 +97,7 @@
         "image"
       ],
       "pose_patch": "Z-Image-Turbo-Fun-Controlnet-Union.safetensors",
-      "pose_strength": 0.8,
+      "pose_strength": 1.0,
       "pose_patch_optional": true
     },
     "anima": {

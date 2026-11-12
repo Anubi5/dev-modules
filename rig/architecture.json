@@ -3,5 +3,10 @@
   "revision": "08ab08cc4b72ff5593870b5d527cf4230323703c",
   "path": "config.json",
   "sha256": "3ec75df0e166476e342cf95226ba775d8155449a7b1e430728b3ca26b425e4ab",
-  "purpose": "Architecture configuration only; no OPT pretrained weights are loaded"
+  "purpose": "Architecture configuration only; no OPT pretrained weights are loaded",
+  "bytes": 644,
+  "download_policy": {
+    "approved": true,
+    "license": "other (Meta OPT licence, research and non-commercial use); 644-byte configuration file only, no weights"
+  }
 }

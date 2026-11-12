@@ -38,6 +38,7 @@ MCP_BIN=$(uv tool run --python "$MCP_PYTHON" --with-requirements "$MOD/mcp-requi
 [ -x "$MCP_BIN" ] || { echo "  CHECK MCP server could not be prepared"; exit 1; }
 
 say "Hermes Blender plugin (official, catalog pin)"
+export PATH="$MOD/app/current:$PATH"   # the plugin installer looks for Blender on PATH; the command link comes after this script
 if command -v hermes >/dev/null; then
   pl=$(hermes plugins list 2>/dev/null || true)          # (no pipe into grep -q: with pipefail that can misfire)
   if [[ "$pl" != *" blender "* ]]; then

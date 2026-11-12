@@ -202,6 +202,32 @@ def place(rel, ro, rw, legacy, repo=None, local=False, declaration=None):
     return on_d
 
 
+def adopt_local(spec, ro):
+    """!
+    @brief Builds a record from model files that already lie in <ro>/<id>/ (nothing is downloaded, moved or changed).
+    @details Used when the in-distro record is missing, e.g. after the distro was rebuilt. The file choice follows the
+             same quantisation preference as a download; split files must be complete; a model that needs an image
+             part (mmproj) must have exactly one.
+    @param spec  One models.json "chat" entry.  @param ro  Read-only model store (/models/llm).
+    @return Record entry, or None when the files are not there or not unambiguous.
+    """
+    folder = os.path.join(ro, spec["id"])
+    if not os.path.isdir(folder): return None
+    names = sorted(n for n in os.listdir(folder) if os.path.isfile(os.path.join(folder, n)))
+    files = pick_files(names, spec["quant"])
+    if not files: return None
+    total = re.search(r"-\d{5}-of-(\d{5})", files[0])
+    if total and len(files) != int(total.group(1)): return None
+    entry = dict(repo=spec.get("repo") or "model store", quant=spec["quant"],
+                 files=[os.path.join(folder, n) for n in files])
+    entry["file"] = entry["files"][0]
+    if spec.get("mmproj"):
+        projectors = [n for n in names if "mmproj" in n.lower() and n.lower().endswith(".gguf")]
+        if len(projectors) != 1: return None
+        entry["mmproj"] = os.path.join(folder, projectors[0])
+    return entry
+
+
 def upgrade_record(old, spec):
     """!
     @brief Older records only list the first file: add every split part found next to it and the quantisation,
@@ -302,6 +328,14 @@ def chat_models(specs, state, ro, rw=None):
                         raise                             # e.g. two different copies: report, don't look further
                     # a recorded file is gone: look it up again below
             declared=spec.get('pinned_files',[])
+            local_entry = None if declared else adopt_local(spec, ro)
+            if local_entry:
+                # A rebuilt distro has no record yet: the owner's files in the model store are used as they are.
+                manifest[spec["id"]] = local_entry
+                resolved.add(spec['id'])
+                save_manifest(manifest_path, manifest)
+                print(f"  {os.path.basename(local_entry['file'])}: ready (found in the model store, {len(local_entry['files'])} part(s); not hash-pinned)")
+                continue
             if not declared or not spec.get('repo'):
                 raise RuntimeError('Missing local model or declared pinned files; use dev mod update llama-swap after metadata review, or copy manually')
             repo=spec['repo'];models=[row for row in declared if row.get('role','model')=='model']

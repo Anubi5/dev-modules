@@ -1970,6 +1970,18 @@
    "values": null
   }
  },
+ "VAEEncode": {
+  "pixels": {
+   "part": "required",
+   "type": "IMAGE",
+   "values": null
+  },
+  "vae": {
+   "part": "required",
+   "type": "VAE",
+   "values": null
+  }
+ },
  "VAELoader": {
   "vae_name": {
    "part": "required",

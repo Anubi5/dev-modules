@@ -2,21 +2,9 @@
 
 Character pipeline: turns a description into an image, 3D model, rig and Unreal animation, step by step.
 
-The runner requires `--json` from generation and rig producers. It reads one
-`local-ai.producer/1` result, retains stderr as `producer.log` and stdout as
-`producer.json`, and never discovers records by scraping progress text. Producers
-that do not support this protocol fail explicitly. Prompts after options/`--`
-are accepted by the generator's real argparse parser, including literal dashes.
+Experimental human-operated composition of image/video, mesh and rig producers. Standard library only; no new model installer or GPU owner. Producers must support `local-ai.producer/1`; the runner retains stdout as `producer.json` and stderr as `producer.log` rather than scraping text. See the [module contract](../README.md) for installation.
 
-New rig manifests are **FBX-only**, declaring cm/+Z/+X consumption space. GLB and
-Blender outputs remain in the retained producer record; they are not assigned
-the FBX coordinate declaration. Existing manifests remain readable for history.
-
-Experimental, human-operated composition of the existing image/video, mesh and
-rig commands. Python standard library only; no model installation, service,
-framework or GPU ownership is introduced. Install this module through the normal
-module manager when deliberately updating the workstation; repository merges do
-not install it automatically.
+New rig manifests are FBX-only and declare cm/+Z/+X consumption space. Other formats stay in the producer record with their own conventions.
 
 ```bash
 ai character manifest image --file "front=$HOME/work/demo/front.png" --output ~/work/demo/front.asset.json
@@ -79,7 +67,7 @@ skips completed producers. Failed attempts remain retained. Cooperative
 interruption stops the owned child process group and records interruption.
 SIGKILL/host loss may leave a producer running: inspect/recover its process and
 GPU lease manually before changing a retained `running` stage to `interrupted`.
-The runner deliberately refuses automatic replay of such stages.
+The runner deliberately refuses automatic replay of such stages. Input manifest paths are relative to `--work-dir`, must remain inside it, and are not resolved relative to the pipeline file.
 
 The Windows boundary is explicit: an animation stage writes
 `STAGE.unreal-request.json` and returns `awaiting_host`. Run the Windows Unreal

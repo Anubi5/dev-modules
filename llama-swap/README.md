@@ -1,40 +1,15 @@
-# llama-swap (model serving)
+# llama-swap
 
-Local chat and vision models (llama.cpp) behind one OpenAI-style API for Hermes and the chat page.
+Local model serving through llama.cpp and llama-swap. Provides the OpenAI-style API and `POST /api/models/unload` contract used by cooperating modules. Models load on first use and unload when idle; query the running server's `/v1/models` for actual IDs.
 
-`qwen3.5-9b-agent` is a separate 65,536-context serving entry for Hermes. It uses
-`weights_from: qwen3.5-9b`, so it resolves to the daily entry's exact D: paths:
-no second GGUF, copy, download or WSL weight cache. The daily entry and its
-`default` alias retain their 32,768 context. Variants may reference one ordinary
-resolved model; missing references and alias chains fail explicitly.
-Provides the core's **model-serving contract**: OpenAI-style API on 127.0.0.1:8080, `POST /api/models/unload`.
-llama.cpp (CUDA) behind [llama-swap](https://github.com/mostlygeek/llama-swap); each model loads on first use and
-unloads when idle. Chat page: http://127.0.0.1:8080/upstream/qwen3.5-9b/ (`dev chat`).
+Model declarations and server profiles live in `models.json`; `LLAMA_CPP_TAG` in `install.sh` pins the backend build. Use the [module workflow](../README.md) for reviewed updates/acquisition. Weights are stored under `$MODELS_MOUNT/llm/<id>` with file records under `$MOD/models/models.json`. Profile retirement does not delete weights or let stale cached records re-enable a profile.
 
-- Models: `models.json` (repo or search, quantisation, llama-server args). New model: push to dev-modules -> `dev mod pin` -> `dev mod update llama-swap`.
-- Model files: `D:\AI\models\llm\<id>\` only (read-only at `/models/llm`); `$MOD/models/models.json` records which files
-  each model uses. Downloads need D: writable, so run `dev mod add|update llama-swap` from Windows.
-  No model keeps a copy inside the distro (owner decision, 7 Nov 2026: every weight only on D:). `"local_copy": true`
-  would add one for speed - the 35B MoE answers ~2.5x slower from D: - and is deliberately unused. The next update
-  removes an existing copy once its SHA-256 matches the file on D:.
-- MoE offload: `MOE_CPU` from config.ps1, or tune: `cd ~/.local/share/modules/llama-swap && app/venv/bin/python tune_moe.py` (service stopped).
-- `test.sh --full` = answers, speed and vision of every model (report in `$MOD/bench-*.md`).
-- llama.cpp is built from a pinned release (`LLAMA_CPP_TAG` in install.sh); raising it rebuilds on the next update (15-30 min).
-- `"fit": true` lets llama.cpp split a model between GPU and RAM itself (`--fit on`) - for models not tuned yet.
+Daily and agent profiles can share underlying files while retaining separate context/settings. Default declarations avoid local weight copies; do not enable `local_copy` merely to troubleshoot a service. Any verified duplicate cleanup must retain the external original. `MOE_CPU` tunes expert offload; `fit` delegates placement to the backend. Inspect available RAM/VRAM and stop the service before deliberate tuning with `tune_moe.py`.
 
-## Search models
-| id | What | Notes |
-|---|---|---|
-| `embed-gemma2` | EmbeddingGemma 2 (Q8_0, ~310 MB): text embeddings at `POST /v1/embeddings` for local search | Apache 2.0; bench checks a related sentence ranks above an unrelated one |
+`test.sh --full` exercises configured answers, speed and vision and writes a benchmark report. Short warm samples do not establish long-context performance. The embeddings profile, when present, serves `/v1/embeddings`; a chat model is not automatically an embedding model.
 
-The owner retired `lfm2.5-24b` and `nemotron-bolt` from the serving declarations
-and default benchmark. Their existing weights stay on D: and are never deleted
-by this change. Old cached file records do not re-enable them in the generated
-server configuration. The general inventory may still report the retained files
-as unconfigured; that does not make them runnable.
+```bash
+img-ask "$HOME/work/inputs/render.png" 'Is the red teapot visible?' --expect yes
+```
 
-## Checking images: `img-ask` (vision-check model)
-`img-ask <image> "<question>" [--expect WORD]` asks WeVisOne-VL 2B (Tencent, Apache 2.0, ~2.6 GB with its vision part)
-what an image shows: "Is there a red cube?", "How many people?", "Is the text readable?". Agents use it next to
-`img-check` (pixel numbers) to prove a render shows what was asked. `--expect yes` exits 3 when the answer
-does not contain the word. The model loads in seconds and unloads after 2 idle minutes.
+`img-ask` uses the configured local vision model. `--expect` returns 3 if its word check fails; semantic answers remain fallible and do not replace visual inspection. Keep API services local rather than treating a placeholder client API key as authentication.

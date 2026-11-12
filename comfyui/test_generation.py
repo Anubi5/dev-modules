@@ -12,7 +12,7 @@ from generation import image, models
 
 
 class GenerationTests(unittest.TestCase):
-    def test_existing_233_workflow_graphs_are_identical(self):
+    def test_existing_workflow_graphs_are_identical(self):
         baseline = json.loads(Path(__file__).with_name("tests").joinpath("workflow-baseline.json").read_text())
         actual = [hashlib.sha256(json.dumps(workflow, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
                   for workflow in gen.all_workflows(include_packages=False)]

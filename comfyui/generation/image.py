@@ -113,8 +113,13 @@ def _loaders(prof, clip_type):
             "3": {"class_type": "VAELoader", "inputs": {"vae_name": prof["vae"]}}}
 
 
-def _finish(wf, prof, seed, steps, model, pos, neg, latent, prefix, upscale):
-    """! @brief KSampler + decode + save (+ optional fast 2x copy) shared by the newer architectures. """
+def _finish(wf, prof, seed, steps, model, pos, neg, latent, prefix, upscale, hires=False):
+    """!
+    @brief KSampler + decode + save (+ optional fast 2x copy, + optional refined 2x copy) shared by the newer architectures.
+    @details hires: the image is enlarged 2x with the upscale model, then redrawn lightly by the same model (few steps,
+             low denoise: profile keys refine_steps / refine_denoise). That adds real detail (skin, hair, fabric)
+             without changing the face or the pose - a plain upscale only enlarges what is already there.
+    """
     wf.update({
         "8": {"class_type": "KSampler", "inputs": {"seed": seed, "steps": steps, "cfg": prof["cfg"], "sampler_name": prof["sampler"],
               "scheduler": prof["scheduler"], "denoise": 1.0, "model": model, "positive": pos, "negative": neg, "latent_image": latent}},
@@ -127,6 +132,18 @@ def _finish(wf, prof, seed, steps, model, pos, neg, latent, prefix, upscale):
             "12": {"class_type": "ImageUpscaleWithModel", "inputs": {"upscale_model": ["11", 0], "image": ["9", 0]}},
             "13": {"class_type": "ImageScaleBy", "inputs": {"image": ["12", 0], "upscale_method": "lanczos", "scale_by": 0.5}},
             "14": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_upscaled", "images": ["13", 0]}},
+        })
+    if hires:
+        wf.update({
+            "20": {"class_type": "UpscaleModelLoader", "inputs": {"model_name": "4x-UltraSharp.safetensors"}},
+            "21": {"class_type": "ImageUpscaleWithModel", "inputs": {"upscale_model": ["20", 0], "image": ["9", 0]}},
+            "22": {"class_type": "ImageScaleBy", "inputs": {"image": ["21", 0], "upscale_method": "lanczos", "scale_by": 0.5}},
+            "23": {"class_type": "VAEEncode", "inputs": {"pixels": ["22", 0], "vae": ["3", 0]}},
+            "24": {"class_type": "KSampler", "inputs": {"seed": seed, "steps": prof.get("refine_steps", 5), "cfg": prof["cfg"],
+                   "sampler_name": prof["sampler"], "scheduler": prof["scheduler"], "denoise": prof.get("refine_denoise", 0.3),
+                   "model": model, "positive": pos, "negative": neg, "latent_image": ["23", 0]}},
+            "25": {"class_type": "VAEDecode", "inputs": {"samples": ["24", 0], "vae": ["3", 0]}},
+            "26": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_hires", "images": ["25", 0]}},
         })
     return wf
 
@@ -176,7 +193,7 @@ def anima(prompt, negative, seed, steps, width, height, prefix, prof, pose=None,
     return _finish(wf, prof, seed, steps, model, ["4", 0], ["5", 0], ["6", 0], prefix, upscale)
 
 
-def zimage(prompt, seed, steps, width, height, prefix, prof, upscale=False):
+def zimage(prompt, seed, steps, width, height, prefix, prof, upscale=False, hires=False):
     """!
     @brief Z-Image Turbo text-to-image (8 steps, CFG 1, AuraFlow sampling shift 3 - official template).
     @return Workflow in ComfyUI API format.
@@ -186,7 +203,7 @@ def zimage(prompt, seed, steps, width, height, prefix, prof, upscale=False):
                "5": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["4", 0]}},
                "6": {"class_type": "EmptySD3LatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
                "7": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["1", 0], "shift": prof.get("shift", 3.0)}}})
-    return _finish(wf, prof, seed, steps, ["7", 0], ["4", 0], ["5", 0], ["6", 0], prefix, upscale)
+    return _finish(wf, prof, seed, steps, ["7", 0], ["4", 0], ["5", 0], ["6", 0], prefix, upscale, hires)
 
 
 def moss(prompt, negative, seed, steps, width, height, prefix, prof, upscale=False):

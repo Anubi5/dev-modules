@@ -214,16 +214,32 @@ def adopt_local(spec, ro):
     folder = os.path.join(ro, spec["id"])
     if not os.path.isdir(folder): return None
     names = sorted(n for n in os.listdir(folder) if os.path.isfile(os.path.join(folder, n)))
-    files = pick_files(names, spec["quant"])
-    if not files: return None
-    total = re.search(r"-\d{5}-of-(\d{5})", files[0])
-    if total and len(files) != int(total.group(1)): return None
+    files = []
+    for quant in spec["quant"]:
+        matches = [n for n in names if "mmproj" not in n.lower() and
+                   re.search(r"[-_.]" + re.escape(quant) + r"(-\d{5}-of-\d{5})?\.gguf$", n, re.I)]
+        if not matches: continue
+        parts = [re.fullmatch(r"(.+)-(\d{5})-of-(\d{5})\.gguf", n, re.I) for n in matches]
+        if any(parts):
+            # A single family and total, numbered exactly 1..N; no mixtures or aliases.
+            if not all(parts) or len({p.group(1) for p in parts}) != 1 or len({p.group(3) for p in parts}) != 1:
+                return None
+            ordered = sorted(zip(parts, matches), key=lambda item: int(item[0].group(2)))
+            if len(ordered) != int(parts[0].group(3)) or any(int(p.group(2)) != i for i, (p, _) in enumerate(ordered, 1)):
+                return None
+            files = [name for _, name in ordered]
+        elif len(matches) == 1:
+            files = matches
+        else:
+            return None  # More than one equally preferred model is ambiguous.
+        break
+    if not files or any(os.path.getsize(os.path.join(folder, n)) == 0 for n in files): return None
     entry = dict(repo=spec.get("repo") or "model store", quant=spec["quant"],
                  files=[os.path.join(folder, n) for n in files])
     entry["file"] = entry["files"][0]
     if spec.get("mmproj"):
         projectors = [n for n in names if "mmproj" in n.lower() and n.lower().endswith(".gguf")]
-        if len(projectors) != 1: return None
+        if len(projectors) != 1 or os.path.getsize(os.path.join(folder, projectors[0])) == 0: return None
         entry["mmproj"] = os.path.join(folder, projectors[0])
     return entry
 

@@ -38,6 +38,7 @@ jobs:
       - name: Daily and agent shared weights/projector (offline)
         run: |
           python3 -m unittest discover -s llama-swap -p 'test_variants.py'
+          python3 -m unittest discover -s llama-swap -p 'test_local_adoption.py'
           python3 -m unittest discover -s llama-swap -p 'test_retirement.py'
       - name: Blender MCP prepared launch never installs (offline)
         run: |

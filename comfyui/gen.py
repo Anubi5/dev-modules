@@ -930,6 +930,7 @@ def all_workflows(include_packages=True):
         elif p["arch"] == "zimage":
             for up in (False, True):
                 yield zimage("x", 1, p["steps"], 1024, 1024, "t", p, upscale=up)
+                yield zimage("x", 1, p["steps"], 1024, 1024, "t", p, upscale=up, hires=True)
         elif p["arch"] == "flux3":
             for refs, up in itertools.product([(), ("a",), ("a", "b")], [False, True]):
                 yield flux3("x", 1, p["steps"], 1024, 1024, "t", p, refs=refs, upscale=up)
@@ -1547,7 +1548,7 @@ def main():
             if not a.image or len(a.image) > 4:
                 sys.exit("edit needs --image <file> (up to 4 with extra references)")
             a.model = a.model or PROFILES.get("edit_model", "flux3")
-        if not a.model and not a.checkpoint and (a.pose or a.face or a.fix_faces or a.fix_hands or a.hires):
+        if not a.model and not a.checkpoint and (a.pose or a.face or a.fix_faces or a.fix_hands):
             a.model = PROFILES.get("default_sdxl", "realvis")    # those tools are SDXL-only
         log0 = lambda t: print(f"  {t}", flush=True)
         prof = find_checkpoint(a.checkpoint, log0) if a.checkpoint else resolve_model(a.model or PROFILES["default"], log0)

@@ -63,3 +63,6 @@ Comfy-Org/Pixal3D vae/trellis_2_texture_vae_bf16.safetensors vae optional sha256
 Comfy-Org/BiRefNet background_removal/birefnet.safetensors background_removal optional sha256:9ab37426bf4de0567af6b5d21b16151357149139362e6e8992021b8ce356a154 bytes:444473596
 Comfy-Org/MoGe geometry_estimation/moge_2_vitl_normal_fp16.safetensors geometry_estimation optional sha256:cb1a692d03235671e959e81360d7b4d9f44aefadb1f852d6ca6aa17799d5e31f bytes:661859924
 Comfy-Org/TRELLIS.2 diffusion_models/trellis_2_int8_convrot.safetensors diffusion_models optional sha256:d01952ad137213f6a868f86b6b877026276f84af5eec23069217475a0bad3a31 bytes:5253048192
+
+# Optional native Z-Image pose control; official Union patch, immutable source.
+https://huggingface.co/alibaba-pai/Z-Image-Turbo-Fun-Controlnet-Union/resolve/01c794d57ff16844b24d0580471fa9d686e7a465/Z-Image-Turbo-Fun-Controlnet-Union.safetensors Z-Image-Turbo-Fun-Controlnet-Union.safetensors model_patches optional sha256:86c085c0d7853f12ce5183499934b54d08371c60f549c5a6b20615cd23989388 bytes:3101572408

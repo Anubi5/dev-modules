@@ -15,7 +15,8 @@ def _anima(p, v, o):
 
 
 def _zimage(p, v, o):
-    return image.zimage(v['prompt'], v['seed'], v['steps'], v['width'], v['height'], v['prefix'], p, upscale=o.upscale, hires=o.hires)
+    return image.zimage(v['prompt'], v['seed'], v['steps'], v['width'], v['height'], v['prefix'], p, upscale=o.upscale, hires=o.hires,
+        fix_faces=o.fix_faces, pose="pending" if o.pose else None, pose_strength=v["pose_strength"])
 
 
 def _moss(p, v, o):
@@ -36,7 +37,7 @@ def _fibo2(p, v, o):
 BUILTINS = {
     'sdxl': dict(build=_sdxl, features=['pose','face','fix_faces','fix_hands','hires'], uploads={'pose':'30','face':'21'}),
     'anima': dict(build=_anima, features=['pose'], uploads={'pose':'30'}),
-    'zimage': dict(build=_zimage, negative=False, features=['hires']),
+    'zimage': dict(build=_zimage, negative=False, features=['hires','fix_faces','pose'], uploads={'pose':'30'}),
     'moss': dict(build=_moss),
     'flux3': dict(build=_flux3, negative=False, edit=True, expand=True),
     'fibo2': dict(build=_fibo2, negative=False, edit=True),

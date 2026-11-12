@@ -445,7 +445,7 @@ def models_report():
     for name, p in PROFILES["models"].items():
         need = {"sdxl": [("checkpoints", p["file"])]}.get(p["arch"], [("diffusion_models", p["file"]),
                ("text_encoders", p.get("text_encoder")), ("vae", p.get("vae"))]) + \
-            ([("model_patches", p["pose_patch"])] if p.get("pose_patch") else [])
+            ([("model_patches", p["pose_patch"])] if p.get("pose_patch") and not p.get("pose_patch_optional") else [])
         missing = [f"{d}/{f}" for d, f in need if f and not any(os.path.exists(os.path.join(r, d, f)) for r in roots)]
         state = "ready" if not missing else ("not installed (optional)" if p.get("optional") else "MISSING")
         print(f"  {name:12} {p['arch']:6} {state:26} {p.get('about', '')}")
@@ -960,6 +960,10 @@ def all_workflows(include_packages=True):
         else:
             w = fibo2("x", 1, p["steps"], 1024, 1024, "t", p, refs=("a",))
         yield apply_loras(w, [("a.safetensors", 0.8), ("b.safetensors", -0.5)], p["arch"])
+    if include_packages:
+        p = profile("zimage")
+        for pose, face, hires, up in itertools.product([None, "p"], [False, True], [False, True], [False, True]):
+            yield zimage("x", 1, p["steps"], 1024, 1024, "t", p, pose=pose, fix_faces=face, hires=hires, upscale=up)
     yield pose_wf("x", 1, 896, 1152, "t")
     yield pose_wf("", 1, 896, 1152, "t", src="a")
     yield use_skeleton(sdxl("x", "y", 1, 30, 1024, 1024, False, "t", pose="p", prof=profile(PROFILES.get("default_sdxl", "realvis"))))
@@ -1452,6 +1456,7 @@ def generation_parser():
     ap.add_argument("--model", metavar="NAME", help=f"image/3D profile, video package or compatible model file; default {PROFILES['default']}; use ai gen list for current names")
     ap.add_argument("--style", choices=list(PROFILES["styles"]), default=None, help="image: photo or art (default: per model)")
     ap.add_argument("--negative", default=None, help='what to avoid (default: per model and style; "" = nothing)')
+    ap.add_argument("--count", type=int, default=1, help="image: 1-8 sequential images; seeds increment from --seed (or one random starting seed)")
     ap.add_argument("--seed", type=int, default=None, help="integer random seed; omitted: choose a fresh random seed")
     ap.add_argument("--steps", type=int, default=None, help="image/video/edit/pose: sampling steps, 1-60; default per selected model")
     ap.add_argument("--size", default=None, help="image size WxH (multiples of 64; default 1024x1024, pose 896x1152)")
@@ -1477,7 +1482,28 @@ def generation_parser():
     return ap
 
 
-def main():
+def image_batch(args):
+    """Run bounded image jobs sequentially, retaining each seed and stopping on failure."""
+    first = args.seed if args.seed is not None else random.randint(1, 2**31)
+    if not 0 <= first <= 2**64 - args.count:
+        sys.exit("--seed plus --count exceeds the sampler seed range")
+    results = []
+    for index in range(args.count):
+        item = argparse.Namespace(**vars(args))
+        item.count, item.seed = 1, first + index
+        item.name = f"{args.name or ' '.join(args.prompt.split()[:6])}-{index + 1:02d}"
+        JOB.pop("result", None)
+        code = main(item)
+        results.append(dict(JOB.get("result", {}), seed=item.seed))
+        JOB["result"] = dict(status="failed" if code else "succeeded", record=None,
+            outputs=[path for result in results for path in result.get("outputs", [])],
+            records=[result.get("record") for result in results], results=results,
+            error=results[-1].get("error"), requested=args.count, completed=sum(r.get("status") == "succeeded" for r in results))
+        if code: return code
+    return 0
+
+
+def main(a=None):
     """!
     @brief Command-line entry point. @return 0 on success, 1 on failure.
     """
@@ -1500,7 +1526,13 @@ def main():
         ap.print_help(); return 0
     # Optional positional prompts may follow options and '--', including literal
     # prompts beginning with '-'. Use argparse's supported intermixed parser.
-    a = ap.parse_intermixed_args()
+    a = a or ap.parse_intermixed_args()
+    if not 1 <= a.count <= 8: ap.error("--count must be 1-8")
+    if a.count != 1:
+        if a.kind != "image": ap.error("--count is for image generation")
+        return image_batch(a)
+    if a.seed is not None and not 0 <= a.seed < 2**64:
+        ap.error("--seed must be 0-18446744073709551615")
     if a.kind == "3d":
         return gen3d(a)
     # limits for a 12 GB GPU (and against a runaway agent): larger jobs fail or block the GPU for hours

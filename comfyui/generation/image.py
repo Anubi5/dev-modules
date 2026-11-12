@@ -113,7 +113,7 @@ def _loaders(prof, clip_type):
             "3": {"class_type": "VAELoader", "inputs": {"vae_name": prof["vae"]}}}
 
 
-def _finish(wf, prof, seed, steps, model, pos, neg, latent, prefix, upscale, hires=False):
+def _finish(wf, prof, seed, steps, model, pos, neg, latent, prefix, upscale, hires=False, fix_faces=False, face_model=None):
     """!
     @brief KSampler + decode + save (+ optional fast 2x copy, + optional refined 2x copy) shared by the newer architectures.
     @details hires: the image is enlarged 2x with the upscale model, then redrawn lightly by the same model (few steps,
@@ -126,6 +126,13 @@ def _finish(wf, prof, seed, steps, model, pos, neg, latent, prefix, upscale, hir
         "9": {"class_type": "VAEDecode", "inputs": {"samples": ["8", 0], "vae": ["3", 0]}},
         "10": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix, "images": ["9", 0]}},
     })
+    if fix_faces:
+        wf["27"] = {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_base", "images": ["9", 0]}}
+        wf["40"] = {"class_type": "UltralyticsDetectorProvider", "inputs": {"model_name": FACE_DET}}
+        inputs = detailer(["9", 0], face_model or model, pos, neg, ["40", 0], seed, 0.35, prof)
+        inputs.update(clip=["2", 0], vae=["3", 0], steps=steps)
+        wf["41"] = {"class_type": "FaceDetailer", "inputs": inputs}
+        wf["10"]["inputs"]["images"] = ["41", 0]
     if upscale:
         wf.update({
             "11": {"class_type": "UpscaleModelLoader", "inputs": {"model_name": "4x-UltraSharp.safetensors"}},
@@ -145,6 +152,9 @@ def _finish(wf, prof, seed, steps, model, pos, neg, latent, prefix, upscale, hir
             "25": {"class_type": "VAEDecode", "inputs": {"samples": ["24", 0], "vae": ["3", 0]}},
             "26": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_hires", "images": ["25", 0]}},
         })
+    if fix_faces:
+        if upscale: wf["12"]["inputs"]["image"] = ["41", 0]
+        if hires: wf["21"]["inputs"]["image"] = ["41", 0]
     return wf
 
 
@@ -193,7 +203,7 @@ def anima(prompt, negative, seed, steps, width, height, prefix, prof, pose=None,
     return _finish(wf, prof, seed, steps, model, ["4", 0], ["5", 0], ["6", 0], prefix, upscale)
 
 
-def zimage(prompt, seed, steps, width, height, prefix, prof, upscale=False, hires=False):
+def zimage(prompt, seed, steps, width, height, prefix, prof, upscale=False, hires=False, fix_faces=False, pose=None, pose_strength=0.8):
     """!
     @brief Z-Image Turbo text-to-image (8 steps, CFG 1, AuraFlow sampling shift 3 - official template).
     @return Workflow in ComfyUI API format.
@@ -203,7 +213,19 @@ def zimage(prompt, seed, steps, width, height, prefix, prof, upscale=False, hire
                "5": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["4", 0]}},
                "6": {"class_type": "EmptySD3LatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
                "7": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["1", 0], "shift": prof.get("shift", 3.0)}}})
-    return _finish(wf, prof, seed, steps, ["7", 0], ["4", 0], ["5", 0], ["6", 0], prefix, upscale, hires)
+    model = ["7", 0]
+    if pose:
+        wf.update({
+            "30": {"class_type": "LoadImage", "inputs": {"image": pose}},
+            "31": _dwpose(["30", 0]),
+            "32": {"class_type": "ModelPatchLoader", "inputs": {"name": prof["pose_patch"]}},
+            "33": {"class_type": "QwenImageDiffsynthControlnet", "inputs": {
+                "model": model, "model_patch": ["32", 0], "vae": ["3", 0], "image": ["31", 0], "strength": pose_strength}},
+            "35": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_pose", "images": ["31", 0]}},
+        })
+        model = ["33", 0]
+    return _finish(wf, prof, seed, steps, model, ["4", 0], ["5", 0], ["6", 0], prefix, upscale, hires,
+                   fix_faces=fix_faces, face_model=["7", 0])
 
 
 def moss(prompt, negative, seed, steps, width, height, prefix, prof, upscale=False):

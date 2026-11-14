@@ -14,6 +14,7 @@ the published JSON Schema copy here catches structural errors before a release p
 import importlib.util
 import json
 import os
+import site
 from pathlib import Path
 import subprocess
 import sys
@@ -116,7 +117,9 @@ class ManifestContract(unittest.TestCase):
                     before = snapshot(home)
                     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     try:
-                        env = dict(os.environ, HOME=str(home), PATH=f'{fake}:{os.environ["PATH"]}', MOD=str(module), MOD_NAME=module.name)
+                        # The real user's site-packages stay importable although HOME is disposable.
+                        env = dict(os.environ, HOME=str(home), PATH=f'{fake}:{os.environ["PATH"]}', MOD=str(module), MOD_NAME=module.name,
+                                   PYTHONUSERBASE=os.environ.get('PYTHONUSERBASE', site.getuserbase()))
                         env.update(extra)
                         result = subprocess.run(argv, cwd=home, env=env, capture_output=True, text=True, timeout=60)
                     except subprocess.TimeoutExpired:

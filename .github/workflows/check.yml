@@ -44,8 +44,16 @@ jobs:
         run: |
           python3 -B blender/test_mcp_runtime.py
           python3 -B blender/test_mcp_smoke.py
-      - name: agent-hermes install paths (offline)
-        run: bash _tests/agent_hermes_test.sh
+      - name: agent-hermes install, launch, evaluation and profile (offline)
+        run: |
+          bash _tests/agent_hermes_test.sh
+          bash _tests/agent_hermes_launch_test.sh
+          bash _tests/hermes_eval_test.sh
+          python3 agent-hermes/tests/hermes_profile_test.py
+          python3 agent-hermes/tests/hermes_setup_test.py
+          python3 agent-hermes/tests/hermes_runtime_test.py
+          python3 -m unittest discover -s agent-hermes/tests -p 'agent_measurements_test.py'
+          python3 -m unittest discover -s agent-hermes/tests -p 'hermes_acceptance_test.py'
       - name: Model helper placement and data preservation (offline)
         run: python3 -m unittest discover -s comfyui -p 'test_helpers.py'
       - name: Family registry and read-only model catalogue (offline)

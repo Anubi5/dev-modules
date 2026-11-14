@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 ## @brief Installs or adopts the pinned Hermes and applies the reviewed local profile (safe to run again). Runs as dev.
+## @details Everything Hermes-specific lives in this module: the pin (hermes_runtime.py), the profile
+##          (hermes_local_setup.py, hermes_profile_check.py, hermes-local-SOUL.md), launch.sh and the dashboard unit.
 set -euo pipefail
-SETUP=${EVA_SETUP:-/opt/ai/setup}   # override only for tests
+SETUP=${EVA_SETUP:-$(cd "$(dirname "$(readlink -f "$0")")" && pwd)}   # override only for tests
 INSTALLER_SHA256=f4cdb0e20f1aca2c3871a76b962fd4db61510f549cf973759c753ac13349beb5   # scripts/install.sh at the pin
 SRC="${HERMES_HOME:-$HOME/.hermes}/hermes-agent"
 for f in hermes_runtime.py hermes_local_setup.py hermes_profile_check.py; do
-  [ -f "$SETUP/$f" ] || { echo "  CHECK $SETUP/$f missing - update the core first (dev update)"; exit 1; }; done
+  [ -f "$SETUP/$f" ] || { echo "  CHECK $SETUP/$f missing - incomplete module copy"; exit 1; }; done
 PIN=$(python3 -B -c "import sys; sys.path.insert(0, '$SETUP'); import hermes_runtime as r; print(r.PINNED_REVISION)")
 export HERMES_DISABLE_LAZY_INSTALLS=1 PATH="$HOME/.local/bin:$PATH"
 
@@ -26,8 +28,21 @@ fi
 python3 -B "$SETUP/hermes_runtime.py" install
 python3 -B "$SETUP/hermes_local_setup.py" --apply --reviewed-revision "$PIN" >/dev/null \
   || { echo "  CHECK Hermes profile could not be applied (config.yaml restored from its backup)"; exit 1; }
-soul="${HERMES_HOME:-$HOME/.hermes}/SOUL.md"   # the reviewed local section is appended once; your own text stays
-[ ! -f "$SETUP/hermes-local-SOUL.md" ] || grep -qF "$(sed -n 1p "$SETUP/hermes-local-SOUL.md")" "$soul" 2>/dev/null \
-  || { printf '\n' >> "$soul"; cat "$SETUP/hermes-local-SOUL.md" >> "$soul"; echo "  local profile section added to SOUL.md"; }
+# SOUL.md: the reviewed local section (from its header line, as many lines as the template) is added or refreshed;
+# everything else in the file is your own text and stays.
+soul="${HERMES_HOME:-$HOME/.hermes}/SOUL.md"
+[ ! -f "$SETUP/hermes-local-SOUL.md" ] || python3 -B - "$SETUP/hermes-local-SOUL.md" "$soul" <<'PY'
+import sys
+from pathlib import Path
+template, soul = Path(sys.argv[1]).read_text(), Path(sys.argv[2])
+text = soul.read_text() if soul.is_file() else ''
+if template.strip() not in text:
+    lines, header, size = text.splitlines(True), template.splitlines(True)[0], len(template.splitlines())
+    if header in lines:
+        at = lines.index(header); lines[at:at + size] = [template if template.endswith('\n') else template + '\n']
+        soul.write_text(''.join(lines)); print('  local profile section in SOUL.md refreshed')
+    else:
+        soul.write_text(text + ('\n' if text else '') + template); print('  local profile section added to SOUL.md')
+PY
 python3 -B "$SETUP/hermes_profile_check.py"
 echo "Hermes ready ($(hermes --version 2>/dev/null | head -1))"

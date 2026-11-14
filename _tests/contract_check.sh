@@ -15,7 +15,8 @@ if [ -f "$R/comfyui/models.txt" ]; then
     echo "  comfyui/models.txt: no sha256 for a file that can run code when loaded: $line"; bad=1
   done < <(grep -vE '^\s*(#|$)' "$R/comfyui/models.txt" | grep -iE '\.(bin|pt|pth|ckpt|pkl)(\s|$)' | grep -v 'sha256:')
 fi
-# Optional module.json: only title/url/service, strings; url a loopback page; service one of the module's own units.
+# Optional module.json v1: only title/url/service, strings; url a loopback page; service one of the module's own units.
+# v2 ("schema": 2) is checked by _tests/manifest_contract_test.py.
 for m in "$R"/*/module.json; do
   [ -f "$m" ] || continue; n=$(basename "$(dirname "$m")")
   python3 -B - "$m" "$R/$n" <<'PY' || bad=1
@@ -24,6 +25,7 @@ from pathlib import Path
 path, module = sys.argv[1], Path(sys.argv[2])
 try: data = json.loads(Path(path).read_text())
 except ValueError as error: sys.exit(f'  {module.name}/module.json: {error}')
+if isinstance(data, dict) and 'schema' in data: sys.exit(0)
 problems = [f'unknown key {k}' for k in data if k not in ('title', 'url', 'service')]
 problems += [f'{k} is not a string' for k, v in data.items() if not isinstance(v, str)]
 if isinstance(data.get('url'), str) and not re.match(r'^http://127\.0\.0\.1:(\d+|\$\{[A-Z_][A-Z0-9_]*\})/', data['url']): problems.append('url is not a 127.0.0.1 page')

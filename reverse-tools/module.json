@@ -1,0 +1,15 @@
+{
+  "schema": 2,
+  "name": "reverse-tools",
+  "version": "6.8.0-1",
+  "capabilities": [{"id": "reverse.static", "interface": 1}],
+  "requires": [],
+  "optional": [],
+  "mcp": [],
+  "effects": {
+    "ilspy": ["writes:work"],
+    "rea": ["writes:work", "consequential"]
+  },
+  "skills": ["skills/reverse-tools"],
+  "ui": {"title": "Reverse-engineering tools", "url": null, "service": null}
+}

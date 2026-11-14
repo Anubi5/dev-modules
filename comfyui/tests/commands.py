@@ -22,7 +22,7 @@ def help_text(script):
 def subcommands():
     """ai gen: the generation kinds and the "other commands" its help lists; ai-model-catalogue: its command choices."""
     gen = help_text('gen.py')
-    kinds = re.search(r'\{([a-z0-9,]+)\}', gen).group(1).split(',')
+    kinds = re.search(r'^  \{([a-z0-9,]+)\}', gen, re.M).group(1).split(',')    # the positional kind, not an option's choices
     other = re.findall(r'^  ([a-z0-9-]+) ', gen.split('other commands:', 1)[1], re.M)
     catalogue = re.search(r'\{([a-z0-9,]+)\}', help_text('catalogue.py')).group(1).split(',')
     return {'ai-gen': kinds + other, 'ai-model-catalogue': catalogue}

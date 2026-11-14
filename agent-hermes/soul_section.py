@@ -19,11 +19,10 @@ def refresh(template: str, text: str) -> tuple[str, str]:
     if template in text:
         return text, 'unchanged'
     have = text.splitlines(keepends=True)
-    if begin in have:
-        start = have.index(begin)
-        if have.count(begin) != 1 or end not in have[start + 1:]:
+    if begin in have or end in have:   # markers must be unambiguous: exactly one begin, exactly one end after it
+        if have.count(begin) != 1 or have.count(end) != 1 or have.index(end) < have.index(begin):
             return text, 'review'
-        stop = have.index(end, start + 1)
+        start, stop = have.index(begin), have.index(end)
         return ''.join(have[:start] + lines + have[stop + 1:]), 'refreshed'
     if body[0] in have:
         start = have.index(body[0]); old = have[start:start + len(body)]

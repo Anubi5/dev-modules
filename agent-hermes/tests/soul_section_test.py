@@ -41,7 +41,9 @@ class SoulSectionTests(unittest.TestCase):
     def test_more_malformed_markers(self):
         begin, end = LINES[0], LINES[-1]
         cases = {
-            'end marker only': ('Mine.\n' + end + 'Still mine.\n', 'added'),
+            'end marker only': ('Mine.\n' + end + 'Still mine.\n', 'review'),
+            'stray end before a complete section': (end + 'Mine.\n' + begin + 'x\n' + end, 'review'),
+            'two end markers after begin': (begin + 'x\n' + end + 'Mine.\n' + end, 'review'),
             'two differing begin markers': (begin + 'a\n' + end + begin + 'b\n' + end, 'review'),
             'begin without its end, end earlier': (end + 'Mine.\n' + begin + 'Mine too.\n', 'review'),
         }

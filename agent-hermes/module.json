@@ -1,1 +1,12 @@
-{"title": "Hermes dashboard", "url": "http://127.0.0.1:${HERMES_DASH_PORT}/", "service": "hermes-dashboard"}
+{
+  "schema": 2,
+  "name": "agent-hermes",
+  "version": "d923a5e-1",
+  "capabilities": [{"id": "agent.hermes", "interface": 1}],
+  "requires": [],
+  "optional": [],
+  "mcp": [],
+  "effects": {},
+  "skills": [],
+  "ui": {"title": "Hermes dashboard", "url": "http://127.0.0.1:${HERMES_DASH_PORT}/", "service": "hermes-dashboard"}
+}

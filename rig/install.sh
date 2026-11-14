@@ -4,6 +4,8 @@ set -euo pipefail
 command -v uv >/dev/null
 command -v git >/dev/null
 command -v blender >/dev/null || { echo "Install the Blender module first" >&2; exit 1; }
+if [ "${EVA_STUB_HEAVY:-}" = 1 ]; then   # CI only (T1): no GPU, no downloads; never proof that the real install works
+  echo "  STUB: EVA_STUB_HEAVY=1 - UniRig runtime and assets skipped; this result is labelled stub"; exit 0; fi
 mkdir -p "$MOD/app/cache" "$MOD/app/tmp"
 export UV_CACHE_DIR="$MOD/app/cache/uv" TMPDIR="$MOD/app/tmp" XDG_CACHE_HOME="$MOD/app/cache"
 export HF_HOME="$MOD/app/cache/huggingface" HF_HUB_DISABLE_IMPLICIT_TOKEN=1 HF_HUB_DISABLE_XET=1

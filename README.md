@@ -27,7 +27,7 @@ Inside Linux, `ai mod` exposes lifecycle operations; `ai mod add --from <directo
 
 ## Module contract and development
 
-Copy [_template](_template/README.md). Each module supplies `README.md`, `install.sh` and a meaningful `test.sh`; optional `remove.sh`, `check.sh`, `bin/`, `skills/`, `*.service` and `state.txt` extend it. `bin/ai-NAME` becomes `ai NAME`; skill directories are linked to supported agent homes. User services start on demand. `state.txt` declares home-relative private data to preserve, excluding weights, programs and caches.
+Copy [_template](_template/README.md). Each module supplies `README.md`, `install.sh` and a meaningful `test.sh`; optional `remove.sh`, `check.sh`, `bin/`, `skills/`, `*.service` and `state.txt` extend it. `bin/ai-NAME` becomes `ai NAME`; an optional `module.json` (`title`, a `127.0.0.1` `url` that may use platform settings such as `${LLM_PORT}`, and the `service` to start) gives the module a page for `dev open NAME`; skill directories are linked to supported agent homes. User services start on demand. `state.txt` declares home-relative private data to preserve, excluding weights, programs and caches.
 
 Installers run as the working user and should be repeatable. Write application code/environments inside `$MOD`, results under `$WORK_DIR`, and only explicitly declared integration/state paths elsewhere. Do not edit the platform or another module. Shared UID ownership is an engineering convention, not adversarial isolation. Review source and dependencies before installation.
 

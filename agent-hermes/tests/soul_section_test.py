@@ -38,6 +38,19 @@ class SoulSectionTests(unittest.TestCase):
             with self.subTest(original=original[:20]):
                 self.assertEqual(soul.refresh(TEMPLATE, original)[0], original)
 
+    def test_more_malformed_markers(self):
+        begin, end = LINES[0], LINES[-1]
+        cases = {
+            'end marker only': ('Mine.\n' + end + 'Still mine.\n', 'added'),
+            'two differing begin markers': (begin + 'a\n' + end + begin + 'b\n' + end, 'review'),
+            'begin without its end, end earlier': (end + 'Mine.\n' + begin + 'Mine too.\n', 'review'),
+        }
+        for name, (original, action) in cases.items():
+            with self.subTest(name):
+                text, got = soul.refresh(TEMPLATE, original)
+                self.assertEqual(got, action)
+                self.assertTrue(text.startswith(original))   # the owner's text is never removed or reordered
+
     def test_current_section_unchanged(self):
         self.assertEqual(soul.refresh(TEMPLATE, 'x\n' + TEMPLATE), ('x\n' + TEMPLATE, 'unchanged'))
 

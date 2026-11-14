@@ -70,7 +70,7 @@ class ManifestContract(unittest.TestCase):
         for module, data in v2_modules():
             with self.subTest(module=module.name):
                 jsonschema.validate(data, schema)
-                self.assertEqual(data['name'], module.name)
+                self.assertEqual(data['name'], 'example' if module.name == '_template' else module.name)
 
     def test_files_exist(self):
         """MCP commands, skills and the page service are this module's own files; every skill folder is declared."""

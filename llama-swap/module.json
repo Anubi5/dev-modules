@@ -1,1 +1,22 @@
-{"title": "Chat (llama-swap)", "url": "http://127.0.0.1:${LLM_PORT}/upstream/qwen3.5-9b/", "service": "llama-swap"}
+{
+  "schema": 2,
+  "name": "llama-swap",
+  "version": "1",
+  "capabilities": [
+    {"id": "llm.chat", "interface": 1},
+    {"id": "llm.vision", "interface": 1},
+    {"id": "llm.embed", "interface": 1}
+  ],
+  "requires": [],
+  "optional": ["models.catalogue"],
+  "mcp": [],
+  "effects": {
+    "ai-models": ["read_only"],
+    "ai-models list": ["read_only"],
+    "ai-models show": ["read_only"],
+    "ai-models verify": ["read_only"],
+    "img-ask": ["gpu"]
+  },
+  "skills": [],
+  "ui": {"title": "Chat (llama-swap)", "url": "http://127.0.0.1:${LLM_PORT}/upstream/qwen3.5-9b/", "service": "llama-swap"}
+}

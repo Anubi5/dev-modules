@@ -1,0 +1,17 @@
+{
+  "schema": 2,
+  "name": "character",
+  "version": "1",
+  "capabilities": [{"id": "character.pipeline", "interface": 1}],
+  "requires": [],
+  "optional": ["gen.image", "gen.3d", "rig.humanoid"],
+  "mcp": [],
+  "effects": {
+    "ai-character manifest": ["writes:work"],
+    "ai-character inspect": ["read_only"],
+    "ai-character plan": ["read_only"],
+    "ai-character run": ["writes:work", "gpu"]
+  },
+  "skills": [],
+  "ui": {"title": "Character pipeline", "url": null, "service": null}
+}

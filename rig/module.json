@@ -1,0 +1,14 @@
+{
+  "schema": 2,
+  "name": "rig",
+  "version": "1",
+  "capabilities": [{"id": "rig.humanoid", "interface": 1}],
+  "requires": ["blender.scene"],
+  "optional": [],
+  "mcp": [],
+  "effects": {
+    "ai-rig": ["writes:work", "gpu"]
+  },
+  "skills": [],
+  "ui": {"title": "Rig", "url": null, "service": null}
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-## @brief Blender (pinned, checksum-checked) + the official Blender Lab MCP add-on + the official Hermes Blender plugin.
+## @brief Blender (pinned, checksum-checked) + the official Blender Lab MCP add-on and its prepared MCP server.
 ## @details Agents work in Blender through the official MCP server (Blender Lab, pinned commit), not through our own
 ##          scripts. A private virtual display (Xvfb :99, service blender-display) gives Blender a real window inside
 ##          the sandbox, so screenshots and viewport renders work; nothing appears on Windows.
@@ -44,21 +44,6 @@ else
 fi
 [ -x "$MCP_BIN" ] || { echo "  CHECK MCP server could not be prepared"; exit 1; }
 
-say "Hermes Blender plugin (official, catalog pin)"
-export PATH="$MOD/app/current:$PATH"   # the plugin installer looks for Blender on PATH; the command link comes after this script
-if command -v hermes >/dev/null; then
-  pl=$(hermes plugins list 2>/dev/null || true)          # (no pipe into grep -q: with pipefail that can misfire)
-  if [[ "$pl" != *" blender "* ]]; then
-    hermes plugins install blender </dev/null || { echo "  CHECK hermes plugins install blender failed - Blender not ready"; exit 1; }
-  fi
-  hermes plugins enable blender </dev/null >/dev/null 2>&1 || { echo "  CHECK hermes plugins enable blender failed - Blender not ready"; exit 1; }
-  pl=$(hermes plugins list 2>/dev/null || true)
-  row=$(printf '%s\n' "$pl" | grep -w blender | head -1 || true)
-  [[ "$row" =~ (^|[^a-z])enabled ]] || { echo "  CHECK the Blender plugin is not listed as enabled in Hermes - Blender not ready"; exit 1; }
-  echo "$row"
-else
-  echo "  Hermes not installed: Blender plugin skipped (dev mod add agent-hermes, then dev mod update blender)"
-fi
-python3 -B "$MOD/mcp_runtime.py" prepare --module "$MOD" --runtime "$MCP_BIN" --source "$MCP_SRC" \
-  --plugin "${HERMES_HOME:-$HOME/.hermes}/plugins/blender"
+# Agents get the MCP server from module.json ("mcp"); agent-hermes adds it to Hermes after the owner approves it.
+python3 -B "$MOD/mcp_runtime.py" prepare --module "$MOD" --runtime "$MCP_BIN" --source "$MCP_SRC"
 echo "Blender ready"

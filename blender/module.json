@@ -5,7 +5,7 @@
   "capabilities": [{"id": "blender.scene", "interface": 1}],
   "requires": [],
   "optional": [],
-  "mcp": [{"id": "blender", "command": "bin/blender-mcp-prepared", "args": [], "effects": ["writes", "gpu"]}],
+  "mcp": [{"id": "blender", "command": "bin/blender-mcp-prepared", "args": ["--transport", "stdio"], "effects": ["writes", "gpu"]}],
   "effects": {
     "blender": ["writes", "gpu"],
     "blender-mcp-prepared": ["writes", "gpu"]

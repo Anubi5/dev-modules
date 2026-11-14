@@ -53,6 +53,7 @@ jobs:
           python3 agent-hermes/tests/soul_section_test.py
           python3 agent-hermes/tests/hermes_setup_test.py
           python3 agent-hermes/tests/hermes_runtime_test.py
+          python3 agent-hermes/tests/integrations_test.py
           python3 -m unittest discover -s agent-hermes/tests -p 'agent_measurements_test.py'
           python3 -m unittest discover -s agent-hermes/tests -p 'hermes_acceptance_test.py'
       - name: Model helper placement and data preservation (offline)

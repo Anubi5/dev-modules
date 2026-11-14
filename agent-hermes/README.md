@@ -5,6 +5,15 @@ The local Hermes agent: pinned source, its own locked dependencies and the selec
 Use: `dev hermes` (Windows) or `ai hermes` (inside); the Windows entry switches OFF first; Linux entry requires OFF and a passing profile check.
 Needs: internet only during `dev mod add/update agent-hermes`; no GPU of its own (it talks to llama-swap).
 
+- **Module tools:** other modules declare MCP servers and skills in their `module.json`; installing a module does not
+  expose it. At an attended `dev hermes` start, `integrations.py` reads `ai mod capabilities --json` and asks once
+  about every new or changed declaration (its effects are shown), remembers the answer in `~/.hermes/eva-approved.json`
+  (kept by `dev state save`), writes approved MCP servers into Hermes' config and copies approved skills to
+  `~/.hermes/skills/modules`. Removed or changed providers are dropped at the next start; installs and unattended starts
+  never ask and expose nothing new. The profile check refuses any MCP server that is not approved. The file is a
+  remembered decision, not a security boundary: Hermes runs as the same user, behind internet OFF.
+  The first run records what earlier releases enabled (the Blender plugin, linked module skills) as approved and
+  replaces the plugin with Blender's declared MCP server.
 - **Install/update:** if `~/.hermes/hermes-agent` already is the pinned, clean commit, it is adopted as-is
   (memory, sessions and config untouched). Otherwise Hermes' **official installer from that exact commit**
   (SHA-256 checked) installs it with `--commit <pin> --non-interactive --skip-browser --skip-computer-use`.

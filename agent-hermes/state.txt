@@ -4,3 +4,4 @@
 .hermes/sessions
 .hermes/state.db
 .hermes/SOUL.md
+.hermes/eva-approved.json

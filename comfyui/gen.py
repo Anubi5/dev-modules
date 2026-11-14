@@ -1461,9 +1461,7 @@ def generation_parser():
     """Build the same parser for execution and side-effect-free help."""
     ap = argparse.ArgumentParser(prog="ai gen", description="Generate images, video or 3D with existing model files; coordinates the shared GPU.",
                                  formatter_class=argparse.RawDescriptionHelpFormatter,
-                                 epilog="other commands:
-" + "
-".join(f"  {k:<8} {v}" for k, v in OTHER_COMMANDS.items()))
+                                 epilog="other commands:\n" + "\n".join(f"  {k:<8} {v}" for k, v in OTHER_COMMANDS.items()))
     ap.add_argument("kind", choices=list(GENERATION_KINDS),
                     help="edit = change an image by instruction; pose = a ControlNet pose (photo + skeleton)")
     ap.add_argument("--json", action="store_true", help="emit one producer JSON result; progress goes to stderr")

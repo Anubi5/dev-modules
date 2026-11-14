@@ -85,6 +85,15 @@ class PreparedRuntimeTests(unittest.TestCase):
             self.assertEqual(p.returncode,1);self.assertIn('dependency metadata changed',p.stderr)
             self.assertFalse(p.stdout)
 
+    def test_reuse_returns_prepared_runtime_only_when_unchanged(self):
+        with tempfile.TemporaryDirectory() as directory:
+            module,executable,plugin=self.fixture(Path(directory))
+            runtime.prepare(module,executable,SOURCE)
+            self.assertEqual(runtime.verified(module,SOURCE),executable.resolve())
+            with self.assertRaisesRegex(ValueError,'another source pin'):runtime.verified(module,SOURCE.replace(REVISION,'b'*40))
+            (module/'mcp-requirements.lock').write_text((module/'mcp-requirements.lock').read_text()+'\n# changed\n')
+            with self.assertRaisesRegex(ValueError,'dependency declaration changed'):runtime.verified(module,SOURCE)
+
     def test_missing_receipt_fails_without_creating_runtime(self):
         with tempfile.TemporaryDirectory() as directory:
             module=Path(directory)/'module';module.mkdir()

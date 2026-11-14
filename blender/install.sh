@@ -33,8 +33,15 @@ fi
 addon_ok || { echo "  CHECK MCP add-on not working"; exit 1; }
 
 say "MCP server (Blender Lab, pinned commit) - prepared now so it starts offline later"
-MCP_BIN=$(uv tool run --python "$MCP_PYTHON" --with-requirements "$MOD/mcp-requirements.lock" \
-  --from "$MCP_SRC" python -c 'import shutil; print(shutil.which("blender-mcp") or "")')
+# A repeat install (also offline) reuses the prepared runtime when its source pin, lock, launcher, provenance and
+# dependency metadata are unchanged (not a hash of every installed package file); otherwise uv resolves it again.
+# "prepare" below re-validates the same records either way.
+if MCP_BIN=$(python3 -B "$MOD/mcp_runtime.py" reuse --module "$MOD" --source "$MCP_SRC" 2>/dev/null); then
+  echo "  prepared runtime unchanged (same pin and lock): reused"
+else
+  MCP_BIN=$(uv tool run --python "$MCP_PYTHON" --with-requirements "$MOD/mcp-requirements.lock" \
+    --from "$MCP_SRC" python -c 'import shutil; print(shutil.which("blender-mcp") or "")')
+fi
 [ -x "$MCP_BIN" ] || { echo "  CHECK MCP server could not be prepared"; exit 1; }
 
 say "Hermes Blender plugin (official, catalog pin)"

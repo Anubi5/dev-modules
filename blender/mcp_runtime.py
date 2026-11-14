@@ -94,8 +94,11 @@ def prepare(module, executable, source, plugin=None):
     return dict(status='prepared', revision=revision, dependency_records=len(metadata), runtime_installs=False)
 
 
-def run(module, arguments):
+def verified(module, source=None):
+    """Return the prepared executable if the receipt still matches the lock, files and pin (and source, if given)."""
     receipt = json.loads((module / 'app/mcp-runtime.json').read_text())
+    if source is not None and receipt['source'] != source:
+        raise ValueError('Prepared Blender MCP was built from another source pin')
     url, revision = source_pin(receipt['source'])
     if digest(module / 'mcp-requirements.lock') != receipt['requirements_sha256']:
         raise ValueError('Blender MCP dependency declaration changed; prepare it again')
@@ -110,6 +113,11 @@ def run(module, arguments):
         raise ValueError('Prepared Blender MCP pin changed')
     if any(digest(Path(row['path'])) != row['sha256'] for row in receipt['dependencies']):
         raise ValueError('Prepared Blender MCP dependency metadata changed')
+    return executable
+
+
+def run(module, arguments):
+    executable = verified(module)
     os.execv(executable, [str(executable), *arguments])
 
 
@@ -121,6 +129,9 @@ def main():
     install.add_argument('--runtime', type=Path, required=True)
     install.add_argument('--source', required=True)
     install.add_argument('--plugin', type=Path)
+    reuse = commands.add_parser('reuse', help='print the prepared executable if pin, lock and files are unchanged')
+    reuse.add_argument('--module', type=Path, required=True)
+    reuse.add_argument('--source', required=True)
     launch = commands.add_parser('run')
     launch.add_argument('--module', type=Path, required=True)
     launch.add_argument('arguments', nargs=argparse.REMAINDER)
@@ -128,6 +139,8 @@ def main():
     try:
         if args.operation == 'prepare':
             print(json.dumps(prepare(args.module.resolve(), args.runtime, args.source, args.plugin)))
+        elif args.operation == 'reuse':
+            print(verified(args.module, args.source))
         else:
             arguments = args.arguments[1:] if args.arguments[:1] == ['--'] else args.arguments
             run(args.module, arguments)

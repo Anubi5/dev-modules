@@ -1,0 +1,1 @@
+{"title": "Chat (llama-swap)", "url": "http://127.0.0.1:${LLM_PORT}/upstream/qwen3.5-9b/", "service": "llama-swap"}

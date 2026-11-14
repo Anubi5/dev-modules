@@ -27,7 +27,7 @@ Inside Linux, `ai mod` exposes lifecycle operations; `ai mod add --from <directo
 
 ## Module contract and development
 
-Copy [_template](_template/README.md). Each module supplies `README.md`, `install.sh` and a meaningful `test.sh`; optional `remove.sh`, `check.sh`, `bin/`, `skills/`, `*.service` and `state.txt` extend it. `bin/ai-NAME` becomes `ai NAME`; skill directories are linked to supported agent homes. User services start on demand. `state.txt` declares home-relative private data to preserve, excluding weights, programs and caches.
+Copy [_template](_template/README.md). Each module supplies `README.md`, `install.sh` and a meaningful `test.sh`; optional `remove.sh`, `check.sh`, `bin/`, `skills/`, `*.service` and `state.txt` extend it. `bin/ai-NAME` becomes `ai NAME`; an optional `module.json` (`title`, a `127.0.0.1` `url` that may use platform settings such as `${LLM_PORT}`, and the `service` to start) gives the module a page for `dev open NAME`; skill directories are linked to supported agent homes. User services start on demand. `state.txt` declares home-relative private data to preserve, excluding weights, programs and caches.
 
 Installers run as the working user and should be repeatable. Write application code/environments inside `$MOD`, results under `$WORK_DIR`, and only explicitly declared integration/state paths elsewhere. Do not edit the platform or another module. Shared UID ownership is an engineering convention, not adversarial isolation. Review source and dependencies before installation.
 
@@ -35,4 +35,4 @@ The runner supplies `MOD`, `MOD_NAME`, `WORK_DIR`, `MODELS_MOUNT`, `MODELS_RW`, 
 
 Modules managing weights provide `model-plan.sh`, emitting schema-1 JSON `files` with path, bytes, source, licence, sha256, eligible and optional reason. The hook only reads declarations: no network discovery, downloads, installs or state writes. The platform binds approval/execution to the same clean source revision. Restricted licenses and unknown sizes remain manual, never implicitly accepted.
 
-Tests run from this repository root. `bash _tests/contract_check.sh` checks module obligations; `.github/workflows/check.yml` defines focused suites. Parser changes require refreshing/checking `_tests/export_help.py` output; preserve `command-help.json` and `hermes-command-help.json` because the platform consumes them. Real GPU acceptance is separate from offline fixtures. Module READMEs identify additional dependency, contract and recovery requirements.
+Tests run from this repository root. `bash _tests/contract_check.sh` checks module obligations; `.github/workflows/check.yml` defines focused suites. Module commands answer their own `--help`; the platform forwards it and keeps no copy, so parser changes need no export. Real GPU acceptance is separate from offline fixtures. Module READMEs identify additional dependency, contract and recovery requirements.

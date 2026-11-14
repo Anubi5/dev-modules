@@ -10,6 +10,16 @@ from unittest.mock import patch
 import hermes_batch2_pc as acceptance
 
 
+class ServiceStateTests(unittest.TestCase):
+    def test_dashboard_is_inspected_as_the_module_user_service(self):
+        calls=[]
+        def run(command,**kwargs):
+            calls.append(command); return SimpleNamespace(stdout='active'+chr(10))
+        with patch.object(acceptance.subprocess,'run',side_effect=run):acceptance.service_states()
+        self.assertIn(['systemctl','--user','is-active','hermes-dashboard'],calls)
+        self.assertIn(['systemctl','is-active','net-off'],calls)
+
+
 class AcceptanceTests(unittest.TestCase):
     def events(self,tool=True,exit_code=0):
         events=[dict(type='system',subtype='init',model='qwen3.5-9b-agent')]

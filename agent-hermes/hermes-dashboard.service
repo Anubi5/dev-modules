@@ -9,6 +9,7 @@ Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 Environment=HERMES_DISABLE_LAZY_INSTALLS=1 UV_OFFLINE=1 PIP_NO_INDEX=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 # Reuse the platform's network wall; never toggle it or acquire dependencies on launch.
 ExecStartPre=/usr/bin/systemctl is-active -q net-off
+ExecStartPre=/usr/bin/systemctl --no-ask-password start eva-netcheck
 ExecStartPre=/bin/sh -c '! curl -s -m 5 -o /dev/null https://1.1.1.1'
 ExecStartPre=/usr/bin/python3 -B %h/.local/share/modules/agent-hermes/hermes_profile_check.py
 ExecStart=/bin/sh -c 'cd "$HOME/work" && exec hermes dashboard --no-open --host 127.0.0.1 --port "${HERMES_DASH_PORT:-9119}"'

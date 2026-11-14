@@ -52,7 +52,7 @@ def nested_settings():
 def service_states():
     """Inspect only the services affected by this bounded acceptance."""
     result={}
-    for unit,user in [('llama-swap',True),('comfyui',True),('hermes-dashboard',False),('net-off',False)]:
+    for unit,user in [('llama-swap',True),('comfyui',True),('hermes-dashboard',True),('net-off',False)]:
         command=['systemctl']+(['--user'] if user else [])+['is-active',unit]
         p=subprocess.run(command,capture_output=True,text=True,timeout=10)
         result[unit]=p.stdout.strip()

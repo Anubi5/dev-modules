@@ -1,0 +1,1 @@
+{"title": "Hermes dashboard", "url": "http://127.0.0.1:${HERMES_DASH_PORT}/", "service": "hermes-dashboard"}

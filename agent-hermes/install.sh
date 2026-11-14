@@ -28,21 +28,9 @@ fi
 python3 -B "$SETUP/hermes_runtime.py" install
 python3 -B "$SETUP/hermes_local_setup.py" --apply --reviewed-revision "$PIN" >/dev/null \
   || { echo "  CHECK Hermes profile could not be applied (config.yaml restored from its backup)"; exit 1; }
-# SOUL.md: the reviewed local section (from its header line, as many lines as the template) is added or refreshed;
-# everything else in the file is your own text and stays.
+# SOUL.md: the reviewed local section (between its marker lines) is added or refreshed; your own text stays.
+# An older unmarked section is migrated only if it matches exactly; otherwise nothing is changed and you are told.
 soul="${HERMES_HOME:-$HOME/.hermes}/SOUL.md"
-[ ! -f "$SETUP/hermes-local-SOUL.md" ] || python3 -B - "$SETUP/hermes-local-SOUL.md" "$soul" <<'PY'
-import sys
-from pathlib import Path
-template, soul = Path(sys.argv[1]).read_text(), Path(sys.argv[2])
-text = soul.read_text() if soul.is_file() else ''
-if template.strip() not in text:
-    lines, header, size = text.splitlines(True), template.splitlines(True)[0], len(template.splitlines())
-    if header in lines:
-        at = lines.index(header); lines[at:at + size] = [template if template.endswith('\n') else template + '\n']
-        soul.write_text(''.join(lines)); print('  local profile section in SOUL.md refreshed')
-    else:
-        soul.write_text(text + ('\n' if text else '') + template); print('  local profile section added to SOUL.md')
-PY
+[ ! -f "$SETUP/hermes-local-SOUL.md" ] || python3 -B "$SETUP/soul_section.py" "$SETUP/hermes-local-SOUL.md" "$soul"
 python3 -B "$SETUP/hermes_profile_check.py"
 echo "Hermes ready ($(hermes --version 2>/dev/null | head -1))"

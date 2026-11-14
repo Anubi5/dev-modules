@@ -33,8 +33,9 @@ fi
 addon_ok || { echo "  CHECK MCP add-on not working"; exit 1; }
 
 say "MCP server (Blender Lab, pinned commit) - prepared now so it starts offline later"
-# A repeat install (also offline) reuses the prepared runtime when its pin, lock and recorded files are unchanged;
-# otherwise uv resolves it again. "prepare" below re-validates either way.
+# A repeat install (also offline) reuses the prepared runtime when its source pin, lock, launcher, provenance and
+# dependency metadata are unchanged (not a hash of every installed package file); otherwise uv resolves it again.
+# "prepare" below re-validates the same records either way.
 if MCP_BIN=$(python3 -B "$MOD/mcp_runtime.py" reuse --module "$MOD" --source "$MCP_SRC" 2>/dev/null); then
   echo "  prepared runtime unchanged (same pin and lock): reused"
 else

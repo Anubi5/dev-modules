@@ -105,7 +105,7 @@ def inventory(root):
                           reason='No GPU acceptance inferred from file discovery' if status=='untested' else 'No reviewed package or declaration recognizes this file'))
     packages=[]
     for name,p in registry.packages().items():
-        if p.get('builder'):continue        # families with a reviewed builder are listed with the model profiles below
+        if registry.moved(p):continue        # profiles moved into families (3.2) are listed with the model profiles below
         missing=[]
         for role,part in p['parts'].items():
             path=root/'comfy'/part['folder']/part['file']
@@ -168,7 +168,7 @@ def inventory(root):
                                  components=paths,experimental=True,description=effective.get('name',name),
                                  context_tokens=int(context[1]) if context else None,weights_from=spec.get('weights_from')))
     # Enrich the existing view additively; no second inventory or serving registry.
-    family_metadata={n:p for n,p in registry.packages().items() if not p.get('builder')}
+    family_metadata={n:p for n,p in registry.packages().items() if not registry.moved(p)}
     legacy_metadata=dict(legacy['models'],**legacy.get('video_models',{}),**legacy.get('assets',{}))
     by_path={str(Path(row['path']).resolve()):row for row in files}
     for row in files:

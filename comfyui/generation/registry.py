@@ -19,10 +19,19 @@ def packages(root=ROOT):
         if data.get('schema') != 'local-ai.family/1' or not re.fullmatch('[a-z0-9][a-z0-9.-]*', name):
             raise ValueError('Invalid family package: '+str(path))
         if name in result: raise ValueError('Duplicate family package: '+name)
-        if data.get('kind') not in ('image', 'video') or not data.get('architecture') or not data.get('parts'):
+        if data.get('kind') not in ('image', 'video', '3d') or not data.get('architecture') or not data.get('parts'):
             raise ValueError('Incomplete family: '+name)
-        if data['kind'] != 'image' and data.get('builder') is None:
+        if data['kind'] == 'video' and data.get('builder') is None:
             raise ValueError('A video family needs its reviewed builder: '+name)
+        if data['kind'] == '3d':
+            # A 3D family runs a reviewed recipe file shipped with the module (recipes/*.json), named by its profile.
+            workflow = PurePosixPath(str(data.get('defaults', {}).get('workflow', '')))
+            if (workflow.parts[:1] != ('recipes',) or len(workflow.parts) != 2 or workflow.suffix != '.json'
+                    or not (ROOT.parent / workflow).is_file() or 'builder' in data or 'recipe' in data):
+                raise ValueError('A 3D family names one reviewed recipes/*.json file and nothing else: '+name)
+            data['sha256'] = hashlib.sha256(raw).hexdigest()
+            result[name] = data
+            continue
         for part in data['parts'].values():
             relative = PurePosixPath(part['folder'])/part['file']
             if relative.is_absolute() or '..' in relative.parts or '\\' in str(relative) or ':' in str(relative):
@@ -68,9 +77,14 @@ def profiles():
 
 
 def declarative(prof):
-    """A family made only of its package's recipe (no reviewed Python builder)."""
+    """A family made only of its package's recipe (not a moved profile: see moved())."""
     data = family(prof)
-    return bool(data) and not data.get('builder')
+    return bool(data) and not moved(data)
+
+
+def moved(data):
+    """A profile moved into a family package (3.2): it names a reviewed builder, or a reviewed 3D recipe file."""
+    return bool(data.get('builder')) or data.get('kind') == '3d'
 
 
 def family(prof):
@@ -94,7 +108,7 @@ def build(prof, values):
 def check_parts(prof, models_root):
     """Cheap use-time check; full hashes belong to explicit verification."""
     data=family(prof)
-    if data is None or data.get('builder'):return            # builder families: ComfyUI's preflight, as before
+    if data is None or moved(data):return            # moved profiles: ComfyUI's preflight, as before
     root=Path(models_root).resolve()
     for part in data['parts'].values():
         if part.get('optional'):continue                     # used only by an option that checks for it itself

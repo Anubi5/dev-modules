@@ -45,46 +45,13 @@
       "family": "fibo2"
     },
     "pixal3d": {
-      "arch": "pixal3d",
-      "kind": "3d",
-      "file": "pixal3d_int8_convrot.safetensors",
-      "workflow": "recipes/image-to-3d.json",
-      "set": {
-        "trellis2": false
-      },
-      "about": "Pixal3D: one picture to a textured 3D model (GLB, PBR); geometry follows the photo closely",
-      "licence": "MIT (image encoder: Meta DINOv3 licence)",
-      "source": "huggingface.co/Comfy-Org/Pixal3D (ComfyUI template 3d_pixal3d_trellis2_image_to_model)",
-      "capability_tags": [
-        "3d"
-      ]
+      "family": "pixal3d"
     },
     "trellis2": {
-      "arch": "trellis2",
-      "kind": "3d",
-      "file": "trellis_2_int8_convrot.safetensors",
-      "workflow": "recipes/image-to-3d.json",
-      "set": {
-        "trellis2": true
-      },
-      "about": "TRELLIS.2 (Microsoft): one picture to a textured 3D model; fallback to pixal3d",
-      "licence": "MIT (image encoder: Meta DINOv3 licence)",
-      "source": "huggingface.co/Comfy-Org/TRELLIS.2",
-      "capability_tags": [
-        "3d"
-      ]
+      "family": "trellis2"
     },
     "pixal3d-mv": {
-      "arch": "pixal3d",
-      "kind": "3d",
-      "file": "pixal3d_multiview_int8_convrot.safetensors",
-      "workflow": "recipes/multiview-to-3d.json",
-      "about": "Pixal3D multi-view: up to 4 views (front, left, back, right - e.g. a character turnaround) to one textured 3D model",
-      "licence": "MIT (image encoder: Meta DINOv3 licence)",
-      "source": "huggingface.co/Comfy-Org/Pixal3D (ComfyUI template 3d_pixal3d_multi_views)",
-      "capability_tags": [
-        "3d"
-      ]
+      "family": "pixal3d-mv"
     }
   },
   "edit_model": "flux3",

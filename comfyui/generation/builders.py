@@ -46,7 +46,7 @@ BUILTINS = {
 
 def capabilities(prof):
     package = registry.family(prof)
-    if package and not package.get('builder'):
+    if package and not registry.moved(package):
         result = dict(features=[], uploads={}, negative=False, edit=False, expand=False, upscale=False)
         result.update(package.get('capabilities', {}))
         return result

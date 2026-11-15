@@ -1,3 +1,4 @@
 # Owner-reviewed model acceptance; independent of the runner lifecycle records.
 .local/state/eva/model-acceptance
 .local/state/modules/comfyui/accepted.json
+.local/state/eva/model-verification.json

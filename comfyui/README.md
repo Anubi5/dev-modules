@@ -69,3 +69,22 @@ Run module `test.sh --full` only with its real workstation prerequisites. Offlin
 - **3.5:** `ai gen ... --check` validates model, family, features, inputs, files on disk and needed modules, then stops - no GPU lock, no service, no output. The JSON result also reports model, family, features, seed, workflow_sha256 and revision.
 - **3.4:** every model file is declared once in `models.txt`; family packages name files by path. The download plan no longer lists the FLUX 3 text encoder and VAE twice.
 - **3.3:** an option a family does not support is refused with the family, what it supports and the models that support the option.
+
+## Acceptance and repeat installation
+
+`ai models list/show` inspect without changing state. Explicit `ai models verify ID`
+reads full hashes and records size/time-bound integrity evidence for any model provider
+in `~/.local/state/eva/model-verification.json`. Verification establishes declared pins
+where available, never image quality. `ai models accept ID --record FILE --note REVIEW`
+requires a successful run with matching component hashes and current implementation;
+the note is an owner attestation of visual/semantic review, not an automatic quality test.
+Acceptance retains the run recipe and component hashes. Relevant family/shared-feature
+changes invalidate it; unrelated family changes do not. Legacy evidence stays historical
+until a new current run is reviewed. Acceptance survives permitted removal/reinstallation
+and state save/restore outside the runner's lifecycle directory.
+
+An unchanged prepared ComfyUI runtime reuses its Python environment only when declared
+source pins, the saved constraint lock, installed package freeze and required imports
+match. Changed pins or broken imports need normal authorized maintenance. This avoids
+repeat dependency resolution; it does not make a fresh install offline-capable. Both
+installs still verify model declarations and never grant downloads implicitly.

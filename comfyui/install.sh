@@ -26,10 +26,21 @@ cd "$C"
 [ -d .venv ] || uv venv -q --python 3.12 .venv
 LOCK=$A/constraints.txt; [ "${COMFY_UPGRADE:-0}" = 1 ] && rm -f "$LOCK"
 pin=(); [ -f "$LOCK" ] && pin=(--constraint "$LOCK")
+STAMP=$A/runtime-pins
+runtime_pin() { { printf '%s\n' "$COMFY_REF" 'sam2@2b90b9f5ceec907a1c18123530e92e794ad901a4'; cat "$MOD/nodes.txt" "$LOCK"; } | sha256sum | cut -d' ' -f1; }
+reuse=0
+if [ "${COMFY_UPGRADE:-0}" != 1 ] && [ -f "$LOCK" ] && [ -f "$STAMP" ] \
+   && [ "$(cat "$STAMP")" = "$(runtime_pin)" ] \
+   && uv pip freeze --python .venv 2>/dev/null | cmp -s - "$LOCK" \
+   && .venv/bin/python -c 'import torch, torchvision, torchaudio, huggingface_hub' 2>/dev/null; then
+  reuse=1; say "ComfyUI Python runtime unchanged (pins and installed lock match; no dependency resolution)."
+fi
+if [ "$reuse" = 0 ]; then
 say "Python packages: PyTorch (CUDA) - large the first time"
 uv pip install -q --python .venv "${pin[@]}" torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 say "Python packages: ComfyUI requirements"
 uv pip install -q --python .venv "${pin[@]}" -r requirements.txt huggingface_hub
+fi
 
 # custom nodes: "<git url> <commit>" per line; nodes no longer listed are moved to app/removed-nodes/
 mkdir -p custom_nodes "$A/removed-nodes"; keep=()
@@ -38,6 +49,7 @@ while read -r r ref _; do
   [ -n "${ref:-}" ] || { echo "  CHECK $r has no pinned commit in nodes.txt"; exit 1; }
   n=$(basename "$r" .git); keep+=("$n"); say "custom node $n (${ref:0:10})"
   at_commit "$r" "$ref" "custom_nodes/$n" || { echo "  CHECK could not get $n at $ref"; exit 1; }
+  [ "$reuse" = 1 ] && continue
   req="custom_nodes/$n/requirements.txt"
   if [ "$n" = ComfyUI-Impact-Pack ]; then (
     expected='git+https://github.com/facebookresearch/sam2'
@@ -55,11 +67,14 @@ while read -r r ref _; do
 done < "$MOD/nodes.txt"
 for d in custom_nodes/*/; do n=$(basename "$d"); [ -d "$d/.git" ] || continue
   [[ " ${keep[*]} " == *" $n "* ]] || { mv "$d" "$A/removed-nodes/$n-$(date +%s)"; echo "  node $n no longer listed - moved to app/removed-nodes/"; }; done
+if [ "$reuse" = 0 ]; then
 say "InsightFace (for FaceID; built from source the first time, a few minutes)"
 # FaceID needs InsightFace (built here). Optional: everything else works without it.
 .venv/bin/python -c 'import insightface' 2>/dev/null || uv pip install -q --python .venv "${pin[@]}" insightface onnxruntime-gpu \
   || echo "  CHECK InsightFace did not install - IPAdapter FaceID will not work (plain IPAdapter face does)"
 [ -f "$LOCK" ] || { uv pip freeze --python .venv > "$LOCK"; echo "  Python package versions locked in $LOCK"; }
+runtime_pin > "$STAMP"
+fi
 
 roots() {   # model folders, same layout on D: and in the module's own folder (older installs; emptied by the move to D:)
   printf '%s\n' '  checkpoints: checkpoints' '  diffusion_models: diffusion_models' '  unet: diffusion_models' '  vae: vae' \

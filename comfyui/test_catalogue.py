@@ -58,6 +58,9 @@ class CatalogueTests(unittest.TestCase):
         self.root=Path(self.temp.name)/'models';self.root.mkdir()
         self.data=b'fixture model data';self.sha=hashlib.sha256(self.data).hexdigest()
 
+        verification_patch=patch.object(catalogue,'VERIFICATION',Path(self.temp.name)/'verified.json')
+        verification_patch.start();self.addCleanup(verification_patch.stop)
+
     def fixture(self,relative):
         p=self.root/relative;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(self.data);return p
 
@@ -98,7 +101,7 @@ class CatalogueTests(unittest.TestCase):
             run.write_text(json.dumps(dict(status='failed',model='fixture',outputs=[str(output)])))
             with self.assertRaisesRegex(ValueError,'not a succeeded run'):
                 catalogue.accept(catalogue.inventory(self.root),'fixture',run)
-            run.write_text(json.dumps(dict(status='succeeded',model='fixture',outputs=[str(output)],module='repo @ abc',implementation_sha256=catalogue.acceptance_identity(catalogue.select(catalogue.inventory(self.root),'fixture')))))
+            run.write_text(json.dumps(dict(status='succeeded',model='fixture',outputs=[str(output)],module='repo @ abc',inputs_sha256={'fixture.safetensors':self.sha},implementation_sha256=catalogue.acceptance_identity(catalogue.select(catalogue.inventory(self.root),'fixture')))))
             result=catalogue.accept(catalogue.inventory(self.root),'fixture',run,'looked right')
             self.assertEqual((result['status'],result['revision'],result['note']),('accepted','repo @ abc','looked right'))
             self.assertEqual(stage(),'accepted')

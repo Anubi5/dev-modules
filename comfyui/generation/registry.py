@@ -36,6 +36,19 @@ def implementation(name):
     return sys.modules[key]
 
 
+def samples(prof):
+    """Offline examples follow the selected reviewed implementation, never an external path."""
+    import importlib.util
+    owner = implementation((family(prof) or {}).get('builder', prof['arch']))
+    path = Path(owner.__file__).with_name('samples.py')
+    if path.is_symlink() or not path.resolve().is_relative_to(ROOT.resolve()):
+        raise ValueError('Escaped family sample file')
+    spec = importlib.util.spec_from_file_location(owner.__name__ + '_samples', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def assets():
     """Every asset models.txt declares: {(folder, file): (sha256, bytes or None)} - the one declaration per file."""
     import importlib.util
@@ -79,7 +92,7 @@ def packages(root=ROOT):
             # A 3D family runs a reviewed recipe file shipped with the module (recipes/*.json), named by its profile.
             workflow = PurePosixPath(str(data.get('defaults', {}).get('workflow', '')))
             if (workflow.parts[:1] != ('recipes',) or len(workflow.parts) != 2 or workflow.suffix != '.json'
-                    or not (ROOT.parent / workflow).is_file() or 'builder' in data or 'recipe' in data):
+                    or not (ROOT.parent / workflow).is_file() or not (ROOT.parent / workflow).resolve().is_relative_to(ROOT.parent.resolve()) or 'builder' in data or 'recipe' in data):
                 raise ValueError('A 3D family names one reviewed recipes/*.json file and nothing else: '+name)
             data['sha256'] = hashlib.sha256(raw).hexdigest()
             result[name] = data

@@ -238,21 +238,32 @@ def inventory(root):
 HASHES=Path.home()/'.local/share/modules/comfyui/models/.hashes'          # written by install/update verification
 LEGACY_ACCEPTED=Path.home()/'.local/state/modules/comfyui/accepted.json'
 ACCEPTED=Path.home()/'.local/state/eva/model-acceptance/comfyui.json'          # written by "accept" only
+VERIFICATION=Path.home()/'.local/state/eva/model-verification.json'
 STAGES=('declared','installed','verified','accepted')
 
 
 def hash_record():
     """{path: (sha256, size, mtime_ns)} of the files the module's install/update verification hashed (read-only)."""
     from fetch_models import load_record
-    try: return load_record(str(HASHES))
-    except (OSError,ValueError): return {}
+    try: result=load_record(str(HASHES))
+    except (OSError,ValueError): result={}
+    try:
+        data=json.loads(VERIFICATION.read_text())
+        if data.get('schema')=='local-ai.model-verification-cache/1':
+            result.update({k:tuple(v) for k,v in data.get('files',{}).items()})
+    except (OSError,ValueError,AttributeError,TypeError):
+        pass
+    return result
 
 
 def accepted_records():
-    try:
-        data=json.loads((ACCEPTED if ACCEPTED.exists() else LEGACY_ACCEPTED).read_text())
-        return data if isinstance(data,dict) else {}
-    except (OSError,ValueError): return {}
+    path=ACCEPTED if ACCEPTED.exists() else LEGACY_ACCEPTED
+    if not path.exists():
+        return {}
+    data=json.loads(path.read_text())
+    if not isinstance(data,dict):
+        raise ValueError('Invalid acceptance evidence; file preserved for owner review')
+    return data
 
 
 def migrate_acceptance():
@@ -317,7 +328,7 @@ def stage(root,package,by_path,hashes,record):
     current=component_hashes(root,package,by_path,hashes)
     if current is None: return dict(stage='installed',accepted=None)
     identity=acceptance_identity(package)
-    if record and identity and record.get('implementation_sha256')==identity and record.get('components')==current:
+    if record and identity and record.get('implementation_sha256')==identity and all(record.get('components',{}).get(k)==v for k,v in current.items()) and component_hashes(root,dict(components=list(record.get('components',{}))),by_path,hashes)==record.get('components'):
         return dict(stage='accepted',accepted=record)
     return dict(stage='verified',accepted=None)
 
@@ -337,14 +348,28 @@ def accept(report,query,record_path,note=None):
         raise ValueError('Run implementation does not match the current family; run and review it again')
     if not note or not note.strip():
         raise ValueError('Acceptance needs --note describing the owner visual/semantic review')
+    current=component_hashes(Path(report['root']),selected,{str(Path(r['path']).resolve()):r for r in report['files']},hash_record())
+    execution=run.get('inputs_sha256') or {}
+    if not current or any(execution.get(component.removeprefix('comfy/'))!=pin and execution.get(Path(component).name)!=pin for component,pin in current.items()):
+        raise ValueError('Run lacks matching mandatory component hashes; run and review it again')
+    for name,pin in execution.items():
+        if name.startswith('input:'):
+            continue
+        matches=[r for r in report['files'] if r['id']=='comfy/'+name or Path(r['id']).name==name]
+        if len(matches)!=1:
+            raise ValueError('Run component has no unique current asset: '+name)
+        row=matches[0]
+        checked=component_hashes(Path(report['root']),dict(components=[row['id']]),{row['path']:row},hash_record())
+        if not checked or checked[row['id']]!=pin:
+            raise ValueError('Run component is no longer verified: '+name)
+        current.update(checked)
     outputs=[o for o in run.get('outputs',[]) if Path(o).is_file()]
     if not outputs: raise ValueError(f'{record_path}: its outputs are missing')
     from datetime import datetime,timezone
     entry=dict(at=datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),revision=run.get('module'),
                record=str(Path(record_path).resolve()),outputs=outputs,note=note,
                implementation_sha256=identity, workflow_sha256=run.get('workflow_sha256'), review='owner-attested; not automatic quality validation',
-               components=component_hashes(Path(report['root']),selected,
-                                           {str(Path(r['path']).resolve()):r for r in report['files']},hash_record()))
+               components=current,recipe={k:run.get(k) for k in ('kind','options','steps','seed','size','images','loras','recipe','inputs_sha256')})
     data=accepted_records(); data[selected['id']]=entry
     atomic_acceptance(data)
     return dict(schema='local-ai.model-acceptance/1',id=selected['id'],status='accepted',**entry)
@@ -363,12 +388,25 @@ def verify(root, report, query):
     else:
         if selected['missing']: raise ValueError('Package has missing or changed-size components')
         for component in selected['components']: wanted.append(select(report,component))
-    verified=[]
+    verified=[]; cache=hash_record()
     for row in wanted:
-        path=Path(row['path']); actual=sha256(path); expected=row.get('expected_sha256')
+        path=Path(row['path']); before=path.stat(); actual=sha256(path); expected=row.get('expected_sha256')
+        after=path.stat()
+        if (before.st_size,before.st_mtime_ns)!=(after.st_size,after.st_mtime_ns):
+            raise ValueError('Asset changed during verification; retry: '+row['id'])
         if expected and actual!=expected: raise ValueError('SHA-256 mismatch; file preserved: '+row['id'])
+        cache[str(path)]=(actual,after.st_size,after.st_mtime_ns)
         verified.append(dict(id=row['id'],sha256=actual,pinned=bool(expected),bytes=path.stat().st_size))
-    return dict(schema='local-ai.model-verification/1',id=selected['id'],status='verified',files=verified,
+    import tempfile
+    VERIFICATION.parent.mkdir(parents=True,exist_ok=True)
+    fd,name=tempfile.mkstemp(prefix=VERIFICATION.name+'.',dir=VERIFICATION.parent)
+    try:
+        with os.fdopen(fd,'w') as stream:
+            json.dump(dict(schema='local-ai.model-verification-cache/1',files=cache),stream)
+        os.replace(name,VERIFICATION)
+    finally:
+        Path(name).unlink(missing_ok=True)
+    return dict(schema='local-ai.model-verification/1' ,id=selected['id'],status='verified',files=verified,
                 meaning='Content matches declared pins where available; this is not GPU or quality acceptance')
 
 

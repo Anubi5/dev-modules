@@ -840,8 +840,10 @@ def _run(wf, timeout, wait, log, uploads, finish):
         job_state("unknown", prompt_id=JOB.get("pid"), error=f"{type(e).__name__}: {e}")
         return False, [], f"lost contact with ComfyUI ({e}) - the job may still finish there (prompt {JOB.get('pid')})"
     finally:
-        release(log, JOB.pop("pid", None))
-        chat_resume(paused, log)
+        try:
+            release(log, JOB.pop("pid", None))
+        finally:
+            chat_resume(paused, log)
 
 
 def all_workflows(include_packages=True):
@@ -854,26 +856,8 @@ def all_workflows(include_packages=True):
                 yield builders.registry.build(p,dict(prompt='x',negative='y',seed=1,steps=p['steps'],
                     width=1024,height=1024,prefix='t'))
             continue
-        if p["arch"] == "sdxl":
-            for pose, face, ff, fh, hires, up in itertools.product([None, "p"], [None, "f"], *[[False, True]] * 4):
-                yield sdxl("x", "y", 1, p["steps"], 1024, 1024, up, "t", pose=pose, face=face, fix_faces=ff,
-                           fix_hands=fh, hires=hires, prof=p)
-        elif p["arch"] == "anima":
-            for pose, up in itertools.product([None, "p"], [False, True]):
-                yield anima("x", "y", 1, p["steps"], 1024, 1024, "t", p, pose=pose, upscale=up)
-        elif p["arch"] == "zimage":
-            for up in (False, True):
-                yield zimage("x", 1, p["steps"], 1024, 1024, "t", p, upscale=up)
-                yield zimage("x", 1, p["steps"], 1024, 1024, "t", p, upscale=up, hires=True)
-        elif p["arch"] == "flux3":
-            for refs, up in itertools.product([(), ("a",), ("a", "b")], [False, True]):
-                yield flux3("x", 1, p["steps"], 1024, 1024, "t", p, refs=refs, upscale=up)
-        elif p["arch"] == "moss":
-            for up in (False, True):
-                yield moss("x", "y", 1, p["steps"], 1024, 1024, "t", p, upscale=up)
-        elif p["arch"] == "fibo2":
-            for refs, up in itertools.product([(), ("a",), ("a", "b")], [False, True]):
-                yield fibo2("x", 1, p["steps"], 1024, 1024, "t", p, refs=refs, upscale=up)
+        if p.get("kind", "image") == "image":
+            yield from builders.registry.samples(p).samples(p)
     for name in PROFILES["models"]:                    # every architecture with two LoRAs chained
         p = profile(name)
         if builders.registry.declarative(p): continue
@@ -881,18 +865,7 @@ def all_workflows(include_packages=True):
             r = load_recipe(p["workflow"])                 # every picture input given (all views of a multi-view model)
             yield apply_recipe(r, dict(p.get("set", {}), prefix="t", **{k: "x.png" for k, sp in r["inputs"].items() if sp.get("upload")}))
             continue
-        if p["arch"] == "sdxl":
-            w = sdxl("x", "y", 1, p["steps"], 1024, 1024, True, "t", pose="p", face="f", fix_faces=True, hires=True, prof=p)
-        elif p["arch"] == "anima":
-            w = anima("x", "y", 1, p["steps"], 1024, 1024, "t", p, pose="p")
-        elif p["arch"] == "zimage":
-            w = zimage("x", 1, p["steps"], 1024, 1024, "t", p)
-        elif p["arch"] == "flux3":
-            w = flux3("x", 1, p["steps"], 1024, 1024, "t", p, refs=("a",))
-        elif p["arch"] == "moss":
-            w = moss("x", "y", 1, p["steps"], 1024, 1024, "t", p)
-        else:
-            w = fibo2("x", 1, p["steps"], 1024, 1024, "t", p, refs=("a",))
+        w = builders.registry.samples(p).lora_sample(p)
         yield apply_loras(w, [("a.safetensors", 0.8), ("b.safetensors", -0.5)], p["arch"])
     if include_packages:
         p = profile("zimage")

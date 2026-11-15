@@ -80,10 +80,13 @@ class CheckTests(unittest.TestCase):
 
     def test_needed_chat_model_is_reported_not_started(self):
         with tempfile.TemporaryDirectory() as directory:
-            code, result, _ = self.check(["image", "a sign", "--model", "flux3"], Path(directory) / "models", directory)
+            code, result, _ = self.check(["image", "a sign", "--model", "flux3", "--improve-prompt"], Path(directory) / "models", directory)
+            plain, quiet, _ = self.check(["image", "a sign", "--model", "flux3"], Path(directory) / "models", directory)
         self.assertEqual(code, 1)
         self.assertIn("llm.chat (module llama-swap)", result["error"])
-        self.assertIn("--no-expand", result["error"])
+        self.assertIn("leave out --improve-prompt", result["error"])
+        self.assertIn("improve_prompt", result["features"])
+        self.assertNotIn("llm.chat", quiet["error"])            # 3.6: no expansion unless asked for
 
 
 if __name__ == "__main__": unittest.main()

@@ -23,12 +23,13 @@ def size(a, example):
     return w, h
 
 
-FEATURES = ("pose", "face", "fix_faces", "fix_hands", "hires", "upscale")
+FEATURES = ("pose", "face", "fix_faces", "fix_hands", "hires", "upscale", "improve_prompt")
 
 
 def supported(capability):
     """! @brief The options a family declares it supports, as typed on the command line. """
-    return [f for f in FEATURES if f in capability["features"] or (f == "upscale" and capability["upscale"])]
+    return [f for f in FEATURES if f in capability["features"] or (f == "upscale" and capability["upscale"])
+            or (f == "improve_prompt" and capability["expand"])]
 
 
 def unsupported(prof, capability, missing):
@@ -88,7 +89,9 @@ def prepare(a, seed, prefix, edit=None):
                if getattr(a, option)]
     refs = [rt.check_input(f) for f in a.image]
     uploads += [(f"2{i}0", f) for i, f in enumerate(refs)]
-    if capability['expand'] and not a.no_expand:
+    if a.improve_prompt and not capability['expand']:
+        sys.exit(unsupported(prof, capability, ["improve_prompt"]))
+    if a.improve_prompt:
         if getattr(a, "check", False):           # --check starts no service: only say what the run will need
             a.needs = dict(getattr(a, "needs", {}), **{"llm.chat": "llama-swap"})
         else:

@@ -73,6 +73,10 @@ class RegistryTests(unittest.TestCase):
             with patch.object(registry,'family',return_value=data),self.assertRaisesRegex(ValueError,'declared size'):
                 registry.check_parts(self.prof,root)
 
+    # Deliberate profile changes after the move, each in its own behaviour-change PR.
+    CHANGED_SINCE = {"flux3": {"about": "FLUX 3 Image Klein: prompt-faithful, text in images, edits (ai gen edit); "
+                                        "--improve-prompt expands the caption with the local chat model"}}   # 3.6
+
     def test_migrated_families_keep_their_profile_place_and_capabilities(self):
         """Profiles moved from profiles.json to families/<name> (Phase 3.2) are exactly what they were there
         (tests/profiles-before-3.2.json), in the same catalogue place (= baseline order), with the same builder."""
@@ -84,7 +88,7 @@ class RegistryTests(unittest.TestCase):
             with self.subTest(family=name):
                 prof = dict(models.PROFILES[section][name])
                 self.assertEqual({k: v for k, v in prof.items() if k not in ('family', 'kind')},
-                                 {k: v for k, v in before_all[name].items() if k != 'kind'})
+                                 dict({k: v for k, v in before_all[name].items() if k != 'kind'}, **self.CHANGED_SINCE.get(name, {})))
                 self.assertEqual((prof['family'], prof['kind']), (name, before_all[name].get('kind', 'image')))
                 self.assertEqual(list(models.PROFILES[section]).index(name), list(shipped[section]).index(name))
                 self.assertFalse(registry.declarative(prof))

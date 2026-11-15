@@ -64,7 +64,9 @@ def generation_parser():
     ap.add_argument("--pose-skeleton", action="store_true", help="image: the --pose picture is already a skeleton")
     ap.add_argument("--image", metavar="IMAGE", action="append", default=[],
                     help="edit: the image to change (in ~/work); repeat for extra references (up to 4)")
-    ap.add_argument("--no-expand", action="store_true", help="FLUX 3: use the prompt as typed (no caption expansion)")
+    ap.add_argument("--improve-prompt", action="store_true",
+                    help="FLUX 3: first expand the request into a full caption with the local chat model (needs llama-swap)")
+    ap.add_argument("--no-expand", action="store_true", help=argparse.SUPPRESS)   # the default since 3.6; older commands keep working
     ap.add_argument("--name", default="", help="short name for the output files (default: from the prompt)")
     ap.add_argument("--model", metavar="NAME", help=f"image/3D profile, video package or compatible model file; default {PROFILES['default']}; use ai gen list for current names")
     ap.add_argument("--style", choices=list(PROFILES["styles"]), default=None, help="image: photo or art (default: per model)")

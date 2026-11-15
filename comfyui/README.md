@@ -62,3 +62,10 @@ python3 -B -m unittest discover -s comfyui -p 'test_zimage.py'
 ```
 
 Run module `test.sh --full` only with its real workstation prerequisites. Offline graph/contract checks do not replace GPU/visual acceptance. See [root guidance](../README.md) for parser-export and model-plan checks.
+
+## Behaviour changes
+
+- **3.6:** FLUX 3 no longer rewrites the prompt by default. `--improve-prompt` expands the request into a full caption with the local chat model (needs llama-swap); `--no-expand` is still accepted and is now the default.
+- **3.5:** `ai gen ... --check` validates model, family, features, inputs, files on disk and needed modules, then stops - no GPU lock, no service, no output. The JSON result also reports model, family, features, seed, workflow_sha256 and revision.
+- **3.4:** every model file is declared once in `models.txt`; family packages name files by path. The download plan no longer lists the FLUX 3 text encoder and VAE twice.
+- **3.3:** an option a family does not support is refused with the family, what it supports and the models that support the option.

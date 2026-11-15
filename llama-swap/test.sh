@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 ## @brief Contract check: models listed, one real answer, unload empties /running; --full = bench of every model.
 set -uo pipefail
+if [ "${EVA_STUB_HEAVY:-}" = 1 ]; then   # CI only (T1): no GPU, no downloads; never proof that the real install works
+  echo "  STUB: EVA_STUB_HEAVY=1 - chat server test skipped; this result is labelled stub"; exit 0; fi
 API=http://127.0.0.1:${LLM_PORT:-8080}
 systemctl --user start llama-swap
 for _ in $(seq 60); do curl -sf -m 3 "$API/v1/models" >/dev/null && break; sleep 2; done

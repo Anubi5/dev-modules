@@ -4,6 +4,8 @@
 ## @details Python packages: after the first install their exact versions are kept in app/constraints.txt and every
 ##          later install sticks to them (a hijacked new release cannot slip in). To upgrade on purpose:
 ##          COMFY_UPGRADE=1 dev mod update comfyui   (installs current versions and writes a fresh lock).
+if [ "${EVA_STUB_HEAVY:-}" = 1 ]; then   # CI only (T1): no GPU, no downloads; never proof that the real install works
+  echo "  STUB: EVA_STUB_HEAVY=1 - ComfyUI install (app, nodes, venv, models) skipped; this result is labelled stub"; exit 0; fi
 set -euo pipefail
 COMFY_REPO=https://github.com/comfyanonymous/ComfyUI
 COMFY_REF=6d352802d8f8b9133f664a1757d6c6d26390c335        # pinned ComfyUI commit (raise it deliberately)

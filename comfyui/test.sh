@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 ## @brief Quick: ComfyUI answers, the custom nodes loaded and the model files exist; --full: SDXL + upscale, a Wan video, and pose + face + repair + tiled upscale through ai gen.
 set -uo pipefail
+if [ "${EVA_STUB_HEAVY:-}" = 1 ]; then   # CI only (T1): no GPU, no downloads; never proof that the real install works
+  echo "  STUB: EVA_STUB_HEAVY=1 - ComfyUI service and GPU test skipped; this result is labelled stub"; exit 0; fi
 systemctl --user start comfyui
 for _ in $(seq 90); do curl -sf -m 3 http://127.0.0.1:8188/system_stats >/dev/null && break; sleep 2; done
 curl -sf -m 3 http://127.0.0.1:8188/system_stats >/dev/null || { echo "ComfyUI not answering (ai logs comfyui)"; exit 1; }

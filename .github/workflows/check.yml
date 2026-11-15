@@ -75,7 +75,7 @@ jobs:
         run: python3 -B -m unittest discover -s _tests -p 'publication_fixture_test.py'
       - name: Module contract (real tests, checksums for code-carrying model files)
         run: bash _tests/contract_check.sh
-      - name: Module manifest v2, declared effects and skill format (offline)
+      - name: Module manifest v2, declared effects, skill format and architecture (offline)
         run: |
           pip install -q jsonschema pillow numpy
           # Failure output also becomes a public annotation (job logs need a login).
@@ -83,5 +83,6 @@ jobs:
                   echo "::error title=$2::$(tail -60 out.txt | sed -e 's/%/%25/g' | sed -e ':a;N;$!ba;s/\n/%0A/g')"; return 1; }
           run env REQUIRE_JSONSCHEMA=1 python3 -B _tests/manifest_contract_test.py
           run python3 -B _tests/skills_check.py
+          run python3 -B _tests/architecture_check.py
       - name: Rig contract and CLI (offline)
         run: bash rig/test.sh

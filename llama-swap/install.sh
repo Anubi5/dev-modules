@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 ## @brief Builds llama.cpp (CUDA) and fetches llama-swap into $MOD/app, gets the models in models.json (on D:), writes llama-swap.yaml.
 set -euo pipefail
+if [ "${EVA_STUB_HEAVY:-}" = 1 ]; then   # CI only (T1): no GPU, no downloads; never proof that the real install works
+  echo "  STUB: EVA_STUB_HEAVY=1 - llama.cpp CUDA build and model setup skipped; this result is labelled stub"; exit 0; fi
 cd "$MOD"; A=$MOD/app; mkdir -p "$A/bin" "$MOD/models"
 export PATH=/usr/local/cuda/bin:$PATH
 LLAMA_CPP_TAG=b12040        # pinned llama.cpp release (2 Nov 2026: EmbeddingGemma 2, LFM2.5, Nemotron 3.5 Bolt + vision); raise deliberately

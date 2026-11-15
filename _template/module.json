@@ -1,0 +1,15 @@
+{
+  "schema": 2,
+  "name": "example",
+  "version": "1",
+  "capabilities": [{"id": "example.hello", "interface": 1}],
+  "requires": [],
+  "optional": [],
+  "mcp": [],
+  "effects": {
+    "ai-example hello": ["read_only"],
+    "ai-example save": ["writes:work"]
+  },
+  "skills": ["skills/example"],
+  "ui": {"title": "Example", "url": null, "service": null}
+}

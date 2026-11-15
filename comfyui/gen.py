@@ -724,7 +724,7 @@ def jobs_cmd(argv):
 
 def entry(fn=None):
     """Keep human output by default; producers expose one JSON result on stdout."""
-    structured = sys.argv[1:2] and sys.argv[1] in ("image", "video", "edit", "pose", "3d", "rerun") and "--json" in sys.argv[2:]
+    structured = sys.argv[1:2] and sys.argv[1] in (*GENERATION_KINDS, "rerun") and "--json" in sys.argv[2:]
     if not structured:
         return _entry(fn)
     arguments = sys.argv[:]
@@ -1440,10 +1440,29 @@ def rerun(argv):
     return 0 if ok else 1
 
 
+GENERATION_KINDS = ("image", "video", "edit", "pose", "3d")
+ASSET_COMMANDS = ("list", "show", "check", "note", "verify", "names")
+# The other "ai gen" commands, dispatched in main() and listed in help (their own --help has the details).
+OTHER_COMMANDS = {
+    "rerun": "run a saved workflow again, exactly",
+    "jobs": "recent job records (read-only)",
+    "list": "installed model files and LoRAs",
+    "show": "what is known about one model file",
+    "check": "check a model/checkpoint/LoRA combination before a job",
+    "note": "record notes about a model file",
+    "verify": "check model files against their declared hashes",
+    "names": "plain names for completion",
+    "schema": "save the pinned ComfyUI node definitions (starts ComfyUI)",
+    "models": "readiness of every configured profile; no GPU job",
+}
+
+
 def generation_parser():
     """Build the same parser for execution and side-effect-free help."""
-    ap = argparse.ArgumentParser(prog="ai gen", description="Generate images, video or 3D with existing model files; coordinates the shared GPU.")
-    ap.add_argument("kind", choices=["image", "video", "edit", "pose", "3d"],
+    ap = argparse.ArgumentParser(prog="ai gen", description="Generate images, video or 3D with existing model files; coordinates the shared GPU.",
+                                 formatter_class=argparse.RawDescriptionHelpFormatter,
+                                 epilog="other commands:\n" + "\n".join(f"  {k:<8} {v}" for k, v in OTHER_COMMANDS.items()))
+    ap.add_argument("kind", choices=list(GENERATION_KINDS),
                     help="edit = change an image by instruction; pose = a ControlNet pose (photo + skeleton)")
     ap.add_argument("--json", action="store_true", help="emit one producer JSON result; progress goes to stderr")
     ap.add_argument("prompt", nargs="?", default="", help="what to make; for edit: what to change; for pose: the pose")
@@ -1513,7 +1532,7 @@ def main(a=None):
         return rerun(sys.argv[2:])
     if sys.argv[1:2] == ["jobs"]:
         return jobs_cmd(sys.argv[2:])
-    if sys.argv[1:2] and sys.argv[1] in ("list", "show", "check", "note", "verify", "names"):
+    if sys.argv[1:2] and sys.argv[1] in ASSET_COMMANDS:
         return asset_cmd(sys.argv[1:])
     ap = generation_parser()
     if sys.argv[1:2] == ["schema"]:

@@ -1,1 +1,39 @@
-{"title": "ComfyUI", "url": "http://127.0.0.1:8188/", "service": "comfyui"}
+{
+  "schema": 2,
+  "name": "comfyui",
+  "version": "1",
+  "capabilities": [
+    {"id": "gen.image", "interface": 1},
+    {"id": "gen.edit", "interface": 1},
+    {"id": "gen.video", "interface": 1},
+    {"id": "gen.3d", "interface": 1},
+    {"id": "models.catalogue", "interface": 1}
+  ],
+  "requires": [],
+  "optional": [],
+  "mcp": [],
+  "effects": {
+    "ai-gen image": ["writes:work", "gpu"],
+    "ai-gen video": ["writes:work", "gpu"],
+    "ai-gen edit": ["writes:work", "gpu"],
+    "ai-gen pose": ["writes:work", "gpu"],
+    "ai-gen 3d": ["writes:work", "gpu"],
+    "ai-gen rerun": ["writes:work", "gpu"],
+    "ai-gen jobs": ["read_only"],
+    "ai-gen list": ["read_only"],
+    "ai-gen show": ["read_only"],
+    "ai-gen check": ["writes:cache"],
+    "ai-gen note": ["writes:work"],
+    "ai-gen verify": ["writes:cache"],
+    "ai-gen names": ["read_only"],
+    "ai-gen schema": ["writes:work", "gpu"],
+    "ai-gen models": ["read_only"],
+    "ai-free-comfyui": ["gpu"],
+    "ai-model-catalogue list": ["read_only"],
+    "ai-model-catalogue show": ["read_only"],
+    "ai-model-catalogue verify": ["read_only"],
+    "img-check": ["read_only"]
+  },
+  "skills": ["skills/gpu-generate"],
+  "ui": {"title": "ComfyUI", "url": "http://127.0.0.1:8188/", "service": "comfyui"}
+}

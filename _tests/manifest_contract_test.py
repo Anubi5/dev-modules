@@ -4,8 +4,8 @@ A module opts in with "schema": 2 in module.json. Its effects must name exactly 
 command with subcommands, "<command> <subcommand>" for each one its own help lists); a missing entry means the
 command is not authorised. Subcommand names come from the module's optional tests/commands.py:
 
-    def subcommands() -> dict[str, list[str]]                 # command -> subcommands read from its real parser/help
-    def read_only_fixture(key: str, home: Path) -> list[str]  # argv proving a read_only entry in a disposable HOME
+    def subcommands() -> dict[str, list[str]]     # command -> subcommands read from its real help ('' = bare command)
+    def read_only_fixture(key: str, home: Path)  # argv, or (argv, extra environment), proving a read_only entry
 
 Every read_only entry runs once in a disposable HOME with the GPU lock held and systemctl recorded: it must not
 write into HOME, start a service or wait for the GPU lock. The platform's Pydantic model (Scripts) is authoritative;
@@ -14,6 +14,7 @@ the published JSON Schema copy here catches structural errors before a release p
 import importlib.util
 import json
 import os
+import site
 from pathlib import Path
 import subprocess
 import sys
@@ -50,7 +51,7 @@ def expected_keys(module):
     keys = set()
     for command in sorted(p.name for p in (module / 'bin').glob('*') if p.is_file()) if (module / 'bin').is_dir() else []:
         subs = listed.get(command)
-        keys |= {f'{command} {s}' for s in subs} if subs else {command}
+        keys |= {f'{command} {s}'.strip() for s in subs} if subs else {command}
     return keys
 
 
@@ -112,20 +113,30 @@ class ManifestContract(unittest.TestCase):
                     calls = temp / 'calls'
                     (fake / 'systemctl').write_text(f'#!/bin/sh\necho "systemctl $*" >> {calls}\n')
                     (fake / 'systemctl').chmod(0o755)
-                    argv = found.read_only_fixture(key, home)
+                    argv, extra = fixture(found.read_only_fixture(key, home))
                     before = snapshot(home)
                     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     try:
-                        env = dict(os.environ, HOME=str(home), PATH=f'{fake}:{os.environ["PATH"]}', MOD=str(module), MOD_NAME=module.name)
+                        # The real user's site-packages stay importable although HOME is disposable.
+                        env = dict(os.environ, HOME=str(home), PATH=f'{fake}:{os.environ["PATH"]}', MOD=str(module), MOD_NAME=module.name,
+                                   PYTHONUSERBASE=os.environ.get('PYTHONUSERBASE', site.getuserbase()))
+                        env.update(extra)
                         result = subprocess.run(argv, cwd=home, env=env, capture_output=True, text=True, timeout=60)
                     except subprocess.TimeoutExpired:
                         self.fail(f'{key} waited (GPU lock or service)')
                     finally:
                         fcntl.flock(lock, fcntl.LOCK_UN)
-                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    # The run must reach the command's own code (0 = done, 1 = reported refusal); 2 = usage error in the fixture.
+                    self.assertIn(result.returncode, (0, 1), result.stdout + result.stderr)
+                    self.assertNotIn('Traceback', result.stderr)
                     self.assertEqual(snapshot(home), before, f'{key} wrote into HOME')
                     starts = [c for c in (calls.read_text().splitlines() if calls.exists() else []) if ' start ' in f'{c} ' or ' restart ' in f'{c} ']
                     self.assertEqual(starts, [], f'{key} started a service')
+
+
+def fixture(value):
+    """A fixture is argv or (argv, extra environment)."""
+    return (value[0], dict(value[1])) if isinstance(value, tuple) else (value, {})
 
 
 def snapshot(home):

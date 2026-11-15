@@ -85,6 +85,13 @@ class CheckTests(unittest.TestCase):
             self.assertEqual((code,result['status']),(1,'check_failed'))
             self.assertIn('declared size',result['error'])
 
+    def test_runtime_capability_consumption_rejects_ambiguity_and_wrong_interface(self):
+        from types import SimpleNamespace
+        for declarations,missing in [([('one',1)],False),([('one',2)],True),([('one',1),('two',1)],True),([],True)]:
+            report={'schema':1,'modules':[dict(name=n,manifest=2,capabilities=[dict(id='llm.chat',interface=v)]) for n,v in declarations]}
+            with patch.object(runtime.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout=json.dumps(report))):
+                self.assertEqual(bool(runtime.missing_capabilities({'llm.chat':'llama-swap'})),missing)
+
     def test_batch_preflight_does_not_claim_generated_outputs(self):
         import argparse
         args=argparse.Namespace(seed=7,count=2,name='fixture',prompt='test',check=True)

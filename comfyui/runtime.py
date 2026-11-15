@@ -1181,17 +1181,26 @@ def missing_assets(prof, wf):
 
 
 def missing_capabilities(needs):
-    """! @brief Capabilities the job needs that no installed module provides, e.g. {"llm.chat": "llama-swap"}. """
-    installed = os.path.expanduser("~/.local/share/modules")
-    out = []
-    for capability, module in needs.items():
-        try:
-            manifest = json.load(open(os.path.join(installed, module, "module.json")))
-            provided = {c["id"] if isinstance(c, dict) else c for c in manifest.get("capabilities", [])}
-        except (OSError, ValueError):
-            provided = set()
-        if capability not in provided:
-            out.append(f"{capability} (module {module})")
+    """Required optional-job providers through public, validated read-only discovery; never install them."""
+    if not needs:
+        return []
+    providers = {}
+    try:
+        result=subprocess.run(['ai','mod','capabilities','--json'],capture_output=True,text=True,timeout=30)
+        if result.returncode:
+            raise ValueError('Capability discovery failed')
+        report=json.loads(result.stdout)
+        for module in report.get('modules',[]):
+            if module.get('manifest')!=2:continue
+            for capability in module.get('capabilities',[]):
+                providers.setdefault(capability['id'],[]).append((module['name'],capability['interface']))
+    except (OSError,ValueError,KeyError,TypeError,subprocess.TimeoutExpired):
+        providers={}
+    out=[]
+    for capability,module in needs.items():
+        choices=providers.get(capability,[])
+        if len(choices)!=1 or type(choices[0][1]) is not int or choices[0][1]!=1:
+            out.append(f"{capability} (module {module})" + (' - ambiguous or incompatible interface; requires one interface-1 provider' if choices else ''))
     return out
 
 

@@ -97,6 +97,8 @@ def prepare(a, seed, prefix, edit=None):
         if getattr(a, "check", False):           # --check starts no service: only say what the run will need
             a.needs = dict(getattr(a, "needs", {}), **{"llm.chat": "llama-swap"})
         else:
+            lacking=rt.missing_capabilities({'llm.chat':'llama-swap'})
+            if lacking:sys.exit('Prompt improvement needs '+', '.join(lacking))
             prompt = rt.expand_prompt(a.prompt, "edit" if refs else "t2i", w, h, refs, log=log0, templates=capability.get('prompt_templates'))
     if not capability['negative']: neg = ""
     if a.upscale and not capability['upscale']:

@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 
 import gen
+import runtime
 
 
 class ProducerTests(unittest.TestCase):
@@ -16,8 +17,8 @@ class ProducerTests(unittest.TestCase):
         for kind in ("image", "video"):
             with self.subTest(kind=kind), tempfile.TemporaryDirectory() as directory, \
                  patch.object(sys, "argv", ["gen.py", kind, "--json", "--name=test", "--seed=7", "--", "--literal scene"]), \
-                 patch.dict(gen.JOB, {}, clear=True), patch.object(gen, "OUTPUT", directory), \
-                 patch.object(gen, "generate", return_value=(True, [str(Path(directory)/"output.webp")], None)), \
+                 patch.dict(gen.JOB, {}, clear=True), patch.object(runtime, "OUTPUT", directory), \
+                 patch.object(runtime, "generate", return_value=(True, [str(Path(directory)/"output.webp")], None)), \
                  contextlib.redirect_stdout(io.StringIO()) as output, contextlib.redirect_stderr(io.StringIO()) as progress:
                 self.assertEqual(gen.entry(), 0)
                 result = json.loads(output.getvalue())

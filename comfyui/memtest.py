@@ -13,7 +13,7 @@ import subprocess
 import sys
 import time
 
-import gen
+import runtime
 
 OVR = os.path.expanduser("~/.config/comfyui/override.env")
 
@@ -28,7 +28,7 @@ def restart(mem):
         open(OVR, "w").write(f"COMFY_MEM={mem}\n")
     subprocess.run(["systemctl", "--user", "restart", "comfyui"], check=False)
     for _ in range(90):
-        if gen.comfy_up():
+        if runtime.comfy_up():
             return True
         time.sleep(2)
     return False
@@ -45,18 +45,18 @@ def main():
             print(f"== {label}", flush=True)
             if not restart(mem):
                 print("  ComfyUI did not start"); results[label] = (n, n, []); continue
-            ok, files, err = gen.generate(gen.sdxl("RAW photo, portrait of a woman standing, front view, face clearly visible, arms relaxed, soft window light, 85mm",
-                                                   gen.NEGATIVE, 11, 30, 896, 1152, False, f"{day}/memtest-ref"), 900, log=log)
+            ok, files, err = runtime.generate(runtime.sdxl("RAW photo, portrait of a woman standing, front view, face clearly visible, arms relaxed, soft window light, 85mm",
+                                                   runtime.NEGATIVE, 11, 30, 896, 1152, False, f"{day}/memtest-ref"), 900, log=log)
             portrait = files[0] if ok and files else None
             if not portrait:
                 print(f"  reference portrait failed: {err}"); results[label] = (n, n, []); continue
             fails, times = 0, []
             for i in range(n):
-                wf = gen.sdxl("RAW photo of a woman in a dark red wool coat in a park, overcast autumn day, 50mm", gen.NEGATIVE, 12 + i,
+                wf = runtime.sdxl("RAW photo of a woman in a dark red wool coat in a park, overcast autumn day, 50mm", runtime.NEGATIVE, 12 + i,
                               30, 896, 1152, False, f"{day}/memtest-control", pose="pending", face="pending",
                               fix_faces=True, fix_hands=True, hires=True)
                 t0 = time.time()
-                ok, files, err = gen.generate(wf, 1800, log=log, uploads=[("30", portrait), ("21", portrait)])
+                ok, files, err = runtime.generate(wf, 1800, log=log, uploads=[("30", portrait), ("21", portrait)])
                 dt = time.time() - t0
                 ok = ok and len(files) == 4
                 fails += 0 if ok else 1

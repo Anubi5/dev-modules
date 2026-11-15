@@ -1,0 +1,82 @@
+"""!
+@file image.py
+@brief ai gen image (and the shared part of ai gen edit): one picture from a model profile or file, with its options,
+       LoRAs and reference images checked before the GPU is touched. @return of prepare: the job for the router.
+"""
+import re
+import sys
+
+import runtime as rt
+from generation import builders
+from generation.graph import apply_loras, use_skeleton
+from generation.models import PROFILES, negative_for
+
+
+def size(a, example):
+    """! @brief --size WxH rounded down to multiples of 64 and within the per-job limits. @return (width, height) """
+    m = re.fullmatch(r"(\d{3,4})x(\d{3,4})", a.size)
+    if not m:
+        sys.exit(f"--size must look like {example}")
+    w, h = (int(v) // 64 * 64 for v in m.groups())
+    if not (512 <= w <= rt.MAX_SIDE and 512 <= h <= rt.MAX_SIDE):
+        sys.exit(f"--size: each side must be 512-{rt.MAX_SIDE}")
+    return w, h
+
+
+def prepare(a, seed, prefix, edit=None):
+    """!
+    @brief The workflow and record details of one image job. @param edit  the edit operation (its own checks), or None
+    @return (workflow, uploads, info, time limit, profile)
+    """
+    w, h = size(a, "1024x1024")
+    if a.model and a.checkpoint:
+        sys.exit("use --model or --checkpoint, not both")
+    if edit:
+        edit.before(a)
+    if not a.model and not a.checkpoint and (a.pose or a.face or a.fix_faces or a.fix_hands):
+        a.model = PROFILES.get("default_sdxl", "realvis")    # those tools are SDXL-only
+    log0 = lambda t: print(f"  {t}", flush=True)
+    prof = rt.find_checkpoint(a.checkpoint, log0) if a.checkpoint else rt.resolve_model(a.model or PROFILES["default"], log0)
+    builders.registry.check_parts(prof, rt.MODELS)
+    arch, style = prof["arch"], a.style or prof.get("style", "photo")
+    capability = builders.capabilities(prof)
+    allowed = capability["features"]
+    used = [o for o in ("pose", "face", "fix_faces", "fix_hands", "hires") if getattr(a, o)]
+    if [o for o in used if o not in allowed]:
+        sys.exit(f"--model {prof['name']} ({arch}) does not support --{', --'.join(o.replace('_', '-') for o in used if o not in allowed)}"
+                 " - those work with the SDXL models (realvis, juggernaut, sdxl-base)" + (" and --pose with anima" if arch != "anima" else ""))
+    if edit:
+        edit.check(capability)
+    if a.image and not edit:
+        sys.exit("--image is for edit")
+    pose_strength = a.pose_strength if a.pose_strength is not None else prof.get("pose_strength", 0.65)
+    if not (0.3 <= pose_strength <= 1.0 and 0.3 <= a.face_weight <= 1.2):
+        sys.exit("--pose-strength must be 0.3-1.0 and --face-weight 0.3-1.2")
+    neg = a.negative if a.negative is not None else negative_for(prof, style)
+    steps = a.steps or prof["steps"]
+    loras, prompt, neg, prof, lora_checks = rt.resolve_loras(a, prof, neg, log0)
+    uploads = [(node, rt.check_input(getattr(a, option))) for option, node in capability['uploads'].items()
+               if getattr(a, option)]
+    refs = [rt.check_input(f) for f in a.image]
+    uploads += [(f"2{i}0", f) for i, f in enumerate(refs)]
+    if capability['expand'] and not a.no_expand:
+        prompt = rt.expand_prompt(a.prompt, "edit" if refs else "t2i", w, h, refs, log=log0)
+    if not capability['negative']: neg = ""
+    if a.upscale and not capability['upscale']:
+        sys.exit(f"--model {prof['name']} does not support --upscale")
+    wf = builders.build(prof, dict(prompt=prompt, negative=neg, seed=seed, steps=steps,
+        width=w, height=h, prefix=prefix, pose_strength=pose_strength), a)
+    if a.pose and rt.is_skeleton(a.pose, a.pose_skeleton): use_skeleton(wf)
+    apply_loras(wf, loras, arch)
+    info = {"kind": a.kind, "prompt": a.prompt, "expanded_prompt": prompt if prompt != a.prompt else None,
+            "negative": neg, "seed": seed, "model": prof["name"], "arch": arch,
+            "model_file": prof["file"], "sampler": prof["sampler"], "scheduler": prof["scheduler"], "cfg": prof["cfg"],
+            "steps": steps, "size": f"{w}x{h}", "style": style,
+            "options": {k: getattr(a, k) for k in ("upscale", "hires", "fix_faces", "fix_hands")},
+            "pose": a.pose and {"file": a.pose, "strength": pose_strength},
+            "face": a.face and {"file": a.face, "weight": a.face_weight}, "images": a.image or None,
+            "loras": lora_checks or None,
+            "face_refiner": {"model": PROFILES.get("default_sdxl", "realvis"),
+                             "model_file": wf["44"]["inputs"]["ckpt_name"]} if arch == "zimage" and a.fix_faces else None}
+    limit = a.timeout or (1800 if a.hires or a.fix_hands or a.fix_faces or arch in ("flux3", "fibo2", "moss") else 900)
+    return wf, uploads, info, limit, prof

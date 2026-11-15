@@ -8,6 +8,7 @@ import sys
 import unittest
 
 import gen
+import runtime
 from generation import image, models
 
 
@@ -15,7 +16,7 @@ class GenerationTests(unittest.TestCase):
     def test_existing_workflow_graphs_are_identical(self):
         baseline = json.loads(Path(__file__).with_name("tests").joinpath("workflow-baseline.json").read_text())
         actual = [hashlib.sha256(json.dumps(workflow, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-                  for workflow in gen.all_workflows(include_packages=False)]
+                  for workflow in runtime.all_workflows(include_packages=False)]
         self.assertEqual(actual, baseline["workflows"])
 
     def test_capabilities_import_without_cli_gpu_or_service_runtime(self):
@@ -40,7 +41,7 @@ class GenerationTests(unittest.TestCase):
     def test_recipe_rejects_an_unsupported_choice(self):
         recipe = {"workflow": {}, "inputs": {"texture": {"choices": [1024, 2048], "set": []}}}
         with self.assertRaisesRegex(SystemExit, "choose one of"):
-            gen.apply_recipe(recipe, {"texture": 3000})
+            runtime.apply_recipe(recipe, {"texture": 3000})
 
     def test_packages_separate_capabilities_and_copy_nested_settings(self):
         self.assertEqual(models.package(kind="video").architecture, "wan22")
@@ -78,9 +79,9 @@ class GenerationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, \
              patch.dict(models.PROFILES["video_models"], {"fixture": selected}), \
              patch.object(sys, "argv", ["gen.py", "video", "a scene", "--model", "fixture", "--seed", "7"]), \
-             patch.object(gen, "OUTPUT", directory), patch.dict(gen.JOB, {}, clear=True), \
-             patch.object(gen, "generate", return_value=(True, ["clip.webp"], None)) as execute, \
-             patch.object(gen, "write_record", return_value=None) as record, \
+             patch.object(runtime, "OUTPUT", directory), patch.dict(gen.JOB, {}, clear=True), \
+             patch.object(runtime, "generate", return_value=(True, ["clip.webp"], None)) as execute, \
+             patch.object(runtime, "write_record", return_value=None) as record, \
              contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(gen.main(), 0)
             self.assertEqual(execute.call_args.args[0]["1"]["inputs"]["unet_name"], selected["file"])

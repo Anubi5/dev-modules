@@ -3,7 +3,7 @@
   "name": "agent-hermes",
   "version": "d923a5e-1",
   "capabilities": [{"id": "agent.hermes", "interface": 1}],
-  "requires": [],
+  "requires": ["llm.chat"],
   "optional": [],
   "mcp": [],
   "effects": {},

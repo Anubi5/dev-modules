@@ -1,0 +1,46 @@
+{
+  "schema": "local-ai.family/1",
+  "name": "fibo2",
+  "kind": "image",
+  "architecture": "fibo2",
+  "builder": "fibo2",
+  "description": "Fibo 2.0 Edit Turbo: edits with up to 4 references (ai gen edit --model fibo2), also text-to-image; about 1 MP",
+  "experimental": false,
+  "parts": {
+    "model": {
+      "folder": "diffusion_models",
+      "file": "fibo2_edit_turbo_int8_convrot.safetensors",
+      "bytes": 8408562474,
+      "sha256": "1f6fa7c499191f405467123f655f11762661eaa5bd479d1da8f161398ef72c3b"
+    },
+    "text_encoder": {
+      "folder": "text_encoders",
+      "file": "qwen3vl_4b_int8_convrot.safetensors",
+      "bytes": 4858559240,
+      "sha256": "32de113cbf8282b02cbff0794b637b9d6676da09314a1db5a30bcea9bf4ee01c"
+    },
+    "vae": {
+      "folder": "vae",
+      "file": "flux2-vae.safetensors",
+      "bytes": 336211292,
+      "sha256": "868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3"
+    }
+  },
+  "defaults": {
+    "sampler": "euler",
+    "scheduler": "simple",
+    "cfg": 1.0,
+    "steps": 4
+  },
+  "catalogue": {
+    "licence": "CC BY-NC 4.0 (non-commercial unless you have a Bria agreement)",
+    "source": "huggingface.co/Comfy-Org/Fibo-2.0 + Comfy template image_fibo2_edit_turbo_pe (4 steps, CFG 1, euler, simple, empty negative)",
+    "capability_tags": [
+      "image"
+    ]
+  },
+  "capabilities": {
+    "negative": false,
+    "edit": true
+  }
+}

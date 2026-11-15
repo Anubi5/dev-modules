@@ -27,22 +27,7 @@
       "family": "sdxl-base"
     },
     "flux3": {
-      "arch": "flux3",
-      "file": "flux3-image-klein-int8-convrot.safetensors",
-      "text_encoder": "qwen3vl_4b_int8_convrot.safetensors",
-      "vae": "flux2-vae.safetensors",
-      "sampler": "er_sde",
-      "edit_sampler": "euler",
-      "scheduler": "simple",
-      "cfg": 1.0,
-      "steps": 16,
-      "optional": true,
-      "about": "FLUX 3 Image Klein: prompt-faithful, text in images, edits (ai gen edit); caption expanded by the local model",
-      "licence": "FLUX Kommunity License (non-commercial; commercial-output exception for qualifying users)",
-      "source": "huggingface.co/black-forest-labs/flux-3-image-klein-comfy + Comfy template image_flux3_klein_distilled_* (16 steps, CFG 1)",
-      "capability_tags": [
-        "image"
-      ]
+      "family": "flux3"
     },
     "zimage": {
       "family": "zimage"

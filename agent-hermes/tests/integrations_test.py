@@ -100,6 +100,31 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(stored['decisions']['mcp:blender/blender']['how'], 'migration: Hermes plugin was enabled')
         self.assertEqual(oct((self.home / policy.APPROVALS).stat().st_mode & 0o777)[-3:], '600') if os.name == 'posix' else None
 
+    def test_migration_waits_for_a_module_still_on_the_old_release(self):
+        # dev update updates agent-hermes first: Blender is still the release with the Hermes plugin, no declaration
+        self.fake.config['plugins']['enabled'] = ['blender']
+        old = self.home / 'skills/modules/blender-sandbox'
+        old.mkdir(parents=True); (old / '.module').write_text('blender\n'); (old / 'SKILL.md').write_text('old')
+        first = self.reconcile()
+        self.assertEqual(first['exposed'], [])
+        self.assertEqual(self.fake.config['plugins']['enabled'], [])
+        self.fake.module('blender', mcp=[('blender', ['writes', 'gpu'])], skills=['blender-sandbox'])   # Blender updated
+        result = self.reconcile()                                  # unattended: nobody is asked, the old state returns
+        self.assertEqual((result['exposed'], result['asked']), (['mcp:blender/blender', 'skill:blender/blender-sandbox'], 0))
+        self.assertEqual(self.servers()['blender']['args'], ['--transport', 'stdio'])
+        self.assertIn('name: blender-sandbox', (old / 'SKILL.md').read_text())
+
+    def test_owner_decision_wins_over_the_old_release(self):
+        self.fake.config['plugins']['enabled'] = ['blender']
+        self.reconcile()
+        self.fake.module('blender', mcp=[('blender', ['writes', 'gpu'])])
+        stored = json.loads((self.home / policy.APPROVALS).read_text())
+        stored['decisions']['mcp:blender/blender'] = dict(approved=False, offer=integrations.discover()['mcp:blender/blender'],
+                                                          decided='2026-11-15T00:00:00Z', how='owner')
+        (self.home / policy.APPROVALS).write_text(json.dumps(stored))
+        self.assertEqual(self.reconcile()['exposed'], [])
+        self.assertNotIn('blender', self.servers())
+
     def test_undecided_is_not_exposed_without_an_attended_start(self):
         self.fake.module('blender', mcp=[('blender', ['writes', 'gpu'])], skills=['blender-sandbox'])
         result = self.reconcile()

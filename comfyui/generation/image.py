@@ -1,22 +1,17 @@
 """Image and editing architecture adapters; no execution or GPU ownership."""
 from .models import PROFILES, profile
 
-FACE_DET, HAND_DET = "bbox/face_yolov8m.pt", "bbox/hand_yolov8s.pt"
+from features import references, refine
+from features import upscale as upscaler
+from features.face import sdxl as face_keep
+from features.face_fix import sdxl as face_fix
+from features.face_fix.sdxl import detailer  # noqa: F401  (kept importable)
+from features.hand_fix import sdxl as hand_fix
+from features.pose import anima as anima_pose, sdxl as sdxl_pose, zimage as zimage_pose
+from features.pose.dwpose import skeleton as _dwpose  # noqa: F401  (kept importable)
 
-
-POSE_CN = "controlnet-union-sdxl-promax.safetensors"
-
-
-def detailer(image, model, pos, neg, detector, seed, denoise, prof):
-    """! @brief FaceDetailer inputs (Impact Pack) that redraw what the detector finds. @return inputs dict """
-    return {"image": image, "model": model, "clip": ["4", 1], "vae": ["4", 2], "guide_size": 512, "guide_size_for": True,
-            "max_size": 1024, "seed": seed, "steps": 20, "cfg": prof["cfg"], "sampler_name": prof["sampler"],
-            "scheduler": prof["scheduler"],
-            "positive": pos, "negative": neg, "denoise": denoise, "feather": 5, "noise_mask": True, "force_inpaint": True,
-            "bbox_threshold": 0.5, "bbox_dilation": 10, "bbox_crop_factor": 3.0, "sam_detection_hint": "center-1",
-            "sam_dilation": 0, "sam_threshold": 0.93, "sam_bbox_expansion": 0, "sam_mask_hint_threshold": 0.7,
-            "sam_mask_hint_use_negative": "False", "drop_size": 10, "bbox_detector": detector, "wildcard": "", "cycle": 1,
-            "inpaint_model": False, "noise_mask_feather": 20, "tiled_encode": False, "tiled_decode": False}
+FACE_DET, HAND_DET = face_fix.DETECTOR, hand_fix.DETECTOR
+POSE_CN = sdxl_pose.CONTROLNET
 
 
 def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix, pose=None, face=None, fix_faces=False,
@@ -47,27 +42,10 @@ def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix, pose=Non
     }
     model, pos, neg = ["4", 0], ["6", 0], ["7", 0]
     if face:
-        wf.update({
-            "20": {"class_type": "IPAdapterUnifiedLoaderFaceID", "inputs": {"model": model, "preset": "FACEID PLUS V2",
-                   "lora_strength": 0.6, "provider": "CUDA"}},
-            "21": {"class_type": "LoadImage", "inputs": {"image": face}},
-            "22": {"class_type": "IPAdapterFaceID", "inputs": {"model": ["20", 0], "ipadapter": ["20", 1], "image": ["21", 0],
-                   "weight": face_weight, "weight_faceidv2": 1.0, "weight_type": "linear", "combine_embeds": "concat",
-                   "start_at": 0.0, "end_at": 1.0, "embeds_scaling": "V only"}},
-        })
-        model = ["22", 0]
+        model = face_keep.keep(wf, model, face, face_weight)
     cpos, cneg = pos, neg
     if pose:
-        wf.update({
-            "30": {"class_type": "LoadImage", "inputs": {"image": pose}},
-            "31": _dwpose(["30", 0], "enable"),
-            "32": {"class_type": "ControlNetLoader", "inputs": {"control_net_name": POSE_CN}},
-            "33": {"class_type": "SetUnionControlNetType", "inputs": {"control_net": ["32", 0], "type": "openpose"}},
-            "34": {"class_type": "ControlNetApplyAdvanced", "inputs": {"positive": pos, "negative": neg, "control_net": ["33", 0],
-                   "image": ["31", 0], "strength": pose_strength, "start_percent": 0.0, "end_percent": 0.75, "vae": ["4", 2]}},
-            "35": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_pose", "images": ["31", 0]}},
-        })
-        cpos, cneg = ["34", 0], ["34", 1]
+        cpos, cneg = sdxl_pose.control(wf, pos, neg, pose, pose_strength, prefix, ["4", 2])
     wf.update({
         "3": {"class_type": "KSampler", "inputs": {"seed": seed, "steps": steps, "cfg": C, "sampler_name": S,
               "scheduler": K, "denoise": 1.0, "model": model, "positive": cpos, "negative": cneg, "latent_image": ["5", 0]}},
@@ -77,32 +55,16 @@ def sdxl(prompt, negative, seed, steps, width, height, upscale, prefix, pose=Non
     if save_base if save_base is not None else (fix_faces or fix_hands or hires):   # keep the original next to the repaired one
         wf["14"] = {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_base", "images": image}}
     if fix_faces:   # repairs use the plain prompts (no pose steering on the crops) and the face-keeping model
-        wf["40"] = {"class_type": "UltralyticsDetectorProvider", "inputs": {"model_name": FACE_DET}}
-        wf["41"] = {"class_type": "FaceDetailer", "inputs": detailer(image, model, pos, neg, ["40", 0], seed, 0.35, prof)}
-        image = ["41", 0]
+        image = face_fix.on_sdxl(wf, image, model, pos, neg, seed, prof)
     if fix_hands:
-        wf["42"] = {"class_type": "UltralyticsDetectorProvider", "inputs": {"model_name": HAND_DET}}
-        wf["43"] = {"class_type": "FaceDetailer", "inputs": detailer(image, model, pos, neg, ["42", 0], seed, 0.45, prof)}
-        image = ["43", 0]
+        image = hand_fix.on_sdxl(wf, image, model, pos, neg, seed, prof)
     wf["9"] = {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix, "images": image}}
     if upscale or hires:
-        wf["10"] = {"class_type": "UpscaleModelLoader", "inputs": {"model_name": "4x-UltraSharp.safetensors"}}
+        wf["10"] = upscaler.loader()
     if upscale:
-        wf.update({
-            "11": {"class_type": "ImageUpscaleWithModel", "inputs": {"upscale_model": ["10", 0], "image": image}},
-            "12": {"class_type": "ImageScaleBy", "inputs": {"image": ["11", 0], "upscale_method": "lanczos", "scale_by": 0.5}},
-            "13": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_upscaled", "images": ["12", 0]}},
-        })
+        upscaler.fast_2x(wf, "10", image, prefix, "11", "12", "13")
     if hires:
-        wf.update({
-            "50": {"class_type": "UltimateSDUpscale", "inputs": {"image": image, "model": model, "positive": pos, "negative": neg,
-                   "vae": ["4", 2], "upscale_by": 2.0, "seed": seed, "steps": 20, "cfg": C, "sampler_name": S,
-                   "scheduler": K, "denoise": 0.2, "upscale_model": ["10", 0], "mode_type": "Linear", "tile_width": 1024,
-                   "tile_height": 1024, "mask_blur": 12, "tile_padding": 48, "seam_fix_mode": "None", "seam_fix_denoise": 1.0,
-                   "seam_fix_width": 64, "seam_fix_mask_blur": 8, "seam_fix_padding": 16, "force_uniform_tiles": True,
-                   "tiled_decode": False, "batch_size": 1}},
-            "51": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_hires", "images": ["50", 0]}},
-        })
+        refine.tiled_sdxl(wf, image, model, pos, neg, ["4", 2], "10", seed, prof, prefix)
     return wf
 
 
@@ -128,38 +90,15 @@ def _finish(wf, prof, seed, steps, model, pos, neg, latent, prefix, upscale, hir
     })
     if fix_faces:
         wf["27"] = {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_base", "images": ["9", 0]}}
-        wf["40"] = {"class_type": "UltralyticsDetectorProvider", "inputs": {"model_name": FACE_DET}}
         # The installed Z-Image crop sampler overprocesses skin. Reuse the
         # existing SDXL repair path with its own model, conditioning and VAE.
-        refiner = profile(PROFILES.get("default_sdxl", "realvis"))
-        if refiner["arch"] != "sdxl":
-            raise ValueError("Z-Image face repair needs an SDXL default_sdxl profile")
-        wf["44"] = {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": refiner["file"]}}
-        wf["45"] = {"class_type": "CLIPTextEncode", "inputs": {"clip": ["44", 1], "text": wf["4"]["inputs"]["text"]}}
-        wf["46"] = {"class_type": "CLIPTextEncode", "inputs": {"clip": ["44", 1], "text": refiner["negative"]["photo"]}}
-        inputs = detailer(["9", 0], ["44", 0], ["45", 0], ["46", 0], ["40", 0], seed, 0.2, refiner)
-        inputs.update(clip=["44", 1], vae=["44", 2])
-        wf["41"] = {"class_type": "FaceDetailer", "inputs": inputs}
-        wf["10"]["inputs"]["images"] = ["41", 0]
+        wf["10"]["inputs"]["images"] = face_fix.with_sdxl_refiner(wf, ["9", 0], wf["4"]["inputs"]["text"], seed,
+                                                                  profile(PROFILES.get("default_sdxl", "realvis")))
     if upscale:
-        wf.update({
-            "11": {"class_type": "UpscaleModelLoader", "inputs": {"model_name": "4x-UltraSharp.safetensors"}},
-            "12": {"class_type": "ImageUpscaleWithModel", "inputs": {"upscale_model": ["11", 0], "image": ["9", 0]}},
-            "13": {"class_type": "ImageScaleBy", "inputs": {"image": ["12", 0], "upscale_method": "lanczos", "scale_by": 0.5}},
-            "14": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_upscaled", "images": ["13", 0]}},
-        })
+        wf["11"] = upscaler.loader()
+        upscaler.fast_2x(wf, "11", ["9", 0], prefix, "12", "13", "14")
     if hires:
-        wf.update({
-            "20": {"class_type": "UpscaleModelLoader", "inputs": {"model_name": "4x-UltraSharp.safetensors"}},
-            "21": {"class_type": "ImageUpscaleWithModel", "inputs": {"upscale_model": ["20", 0], "image": ["9", 0]}},
-            "22": {"class_type": "ImageScaleBy", "inputs": {"image": ["21", 0], "upscale_method": "lanczos", "scale_by": 0.5}},
-            "23": {"class_type": "VAEEncode", "inputs": {"pixels": ["22", 0], "vae": ["3", 0]}},
-            "24": {"class_type": "KSampler", "inputs": {"seed": seed, "steps": prof.get("refine_steps", 5), "cfg": prof["cfg"],
-                   "sampler_name": prof["sampler"], "scheduler": prof["scheduler"], "denoise": prof.get("refine_denoise", 0.3),
-                   "model": model, "positive": pos, "negative": neg, "latent_image": ["23", 0]}},
-            "25": {"class_type": "VAEDecode", "inputs": {"samples": ["24", 0], "vae": ["3", 0]}},
-            "26": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_hires", "images": ["25", 0]}},
-        })
+        refine.latent_2x(wf, ["9", 0], model, pos, neg, ["3", 0], seed, prof, prefix)
     if fix_faces:
         if upscale: wf["12"]["inputs"]["image"] = ["41", 0]
         if hires: wf["21"]["inputs"]["image"] = ["41", 0]
@@ -180,9 +119,8 @@ def flux3(prompt, seed, steps, width, height, prefix, prof, refs=(), upscale=Fal
         wf["6"] = {"class_type": "EmptyFlux2LatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}}
         return _finish(wf, prof, seed, steps, ["1", 0], ["4", 0], ["5", 0], ["6", 0], prefix, upscale)
     rml = {"positive": ["4", 0], "negative": ["5", 0], "vae": ["3", 0], "resolution": "resize", "resolution.megapixels": megapixels}
-    for i, name in enumerate(refs):
-        wf[f"2{i}0"] = {"class_type": "LoadImage", "inputs": {"image": name}}
-        rml[f"images.image{i}"] = [f"2{i}0", 0]
+    for i, link in enumerate(references.load(wf, refs)):
+        rml[f"images.image{i}"] = link
     wf["7"] = {"class_type": "ReferenceMultiLatent", "inputs": rml}
     edit = dict(prof, sampler=prof.get("edit_sampler", prof["sampler"]))
     return _finish(wf, edit, seed, steps, ["1", 0], ["7", 0], ["7", 1], ["7", 2], prefix, upscale)
@@ -199,15 +137,7 @@ def anima(prompt, negative, seed, steps, width, height, prefix, prof, pose=None,
                "6": {"class_type": "EmptyLatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}}})
     model = ["1", 0]
     if pose:
-        wf.update({
-            "30": {"class_type": "LoadImage", "inputs": {"image": pose}},
-            "31": _dwpose(["30", 0]),
-            "32": {"class_type": "ModelPatchLoader", "inputs": {"name": prof["pose_patch"]}},
-            "33": {"class_type": "AnimaLLLiteApply", "inputs": {"model": model, "model_patch": ["32", 0], "image": ["31", 0],
-                   "strength": pose_strength, "start_percent": 0.0, "end_percent": 1.0}},
-            "35": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_pose", "images": ["31", 0]}},
-        })
-        model = ["33", 0]
+        model = anima_pose.control(wf, model, pose, prof["pose_patch"], pose_strength, prefix)
     return _finish(wf, prof, seed, steps, model, ["4", 0], ["5", 0], ["6", 0], prefix, upscale)
 
 
@@ -223,18 +153,7 @@ def zimage(prompt, seed, steps, width, height, prefix, prof, upscale=False, hire
                "7": {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["1", 0], "shift": prof.get("shift", 3.0)}}})
     model = ["7", 0]
     if pose:
-        wf.update({
-            "30": {"class_type": "LoadImage", "inputs": {"image": pose}},
-            "31": _dwpose(["30", 0]),
-            "32": {"class_type": "ModelPatchLoader", "inputs": {"name": prof["pose_patch"]}},
-            "33": {"class_type": "QwenImageDiffsynthControlnet", "inputs": {
-                "model": model, "model_patch": ["32", 0], "vae": ["3", 0], "image": ["36", 0], "strength": pose_strength}},
-            "35": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_pose", "images": ["36", 0]}},
-            # Native control otherwise center-crops a differently shaped guide.
-            "36": {"class_type": "ImageScale", "inputs": {"image": ["31", 0], "upscale_method": "nearest-exact",
-                   "width": width, "height": height, "crop": "disabled"}},
-        })
-        model = ["33", 0]
+        model = zimage_pose.control(wf, model, pose, prof["pose_patch"], pose_strength, prefix, ["3", 0], width, height)
     return _finish(wf, prof, seed, steps, model, ["4", 0], ["5", 0], ["6", 0], prefix, upscale, hires,
                    fix_faces=fix_faces)
 
@@ -264,22 +183,14 @@ def fibo2(prompt, seed, steps, width, height, prefix, prof, refs=(), upscale=Fal
     wf = _loaders(prof, "fibo2")
     enc = {"clip": ["2", 0], "prompt": prompt, "negative_prompt": "", "vae": ["3", 0],
            "width": 0 if refs else width, "height": 0 if refs else height, "batch_size": 1}
-    for i, name in enumerate(refs):
-        wf[f"2{i}0"] = {"class_type": "LoadImage", "inputs": {"image": name}}
-        enc[f"images.image_{i + 1}"] = [f"2{i}0", 0]
+    for i, link in enumerate(references.load(wf, refs)):
+        enc[f"images.image_{i + 1}"] = link
     wf["4"] = {"class_type": "TextEncodeFibo2", "inputs": enc}
     return _finish(wf, prof, seed, steps, ["1", 0], ["4", 0], ["4", 1], ["4", 2], prefix, upscale)
 
 
 POSE_PROMPT = ("wide full body photo of a person {d}, entire body from head to feet in frame, space around the figure, "
                "plain light grey studio background, even soft light")
-
-
-def _dwpose(image, scale_stick="disable"):
-    """! @brief DWPose skeleton node (body, hands, face) for an image link. """
-    return {"class_type": "DWPreprocessor", "inputs": {"image": image, "detect_hand": "enable", "detect_body": "enable",
-            "detect_face": "enable", "resolution": 1024, "bbox_detector": "yolox_l.onnx",
-            "pose_estimator": "dw-ll_ucoco_384.onnx", "scale_stick_for_xinsr_cn": scale_stick}}
 
 
 def pose_wf(description, seed, width, height, prefix, src=None):

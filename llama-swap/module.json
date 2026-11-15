@@ -3,9 +3,9 @@
   "name": "llama-swap",
   "version": "1",
   "capabilities": [
-    {"id": "llm.chat", "interface": 1},
-    {"id": "llm.vision", "interface": 1},
-    {"id": "llm.embed", "interface": 1}
+    {"id": "llm.chat", "interface": 1, "endpoint": "http://127.0.0.1:${LLM_PORT}/v1/"},
+    {"id": "llm.vision", "interface": 1, "endpoint": "http://127.0.0.1:${LLM_PORT}/v1/"},
+    {"id": "llm.embed", "interface": 1, "endpoint": "http://127.0.0.1:${LLM_PORT}/v1/"}
   ],
   "requires": [],
   "optional": ["models.catalogue"],

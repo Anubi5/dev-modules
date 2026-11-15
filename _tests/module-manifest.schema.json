@@ -4,6 +4,19 @@
       "additionalProperties": false,
       "description": "Something a module provides to others, with the interface version consumers rely on.",
       "properties": {
+        "endpoint": {
+          "anyOf": [
+            {
+              "pattern": "^http://127\\.0\\.0\\.1:(\\d+|\\$\\{[A-Z_][A-Z0-9_]*\\})/",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Endpoint"
+        },
         "id": {
           "pattern": "^[a-z0-9][a-z0-9-]*(\\.[a-z0-9][a-z0-9-]*)*$",
           "title": "Id",

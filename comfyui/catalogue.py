@@ -105,6 +105,7 @@ def inventory(root):
                           reason='No GPU acceptance inferred from file discovery' if status=='untested' else 'No reviewed package or declaration recognizes this file'))
     packages=[]
     for name,p in registry.packages().items():
+        if p.get('builder'):continue        # families with a reviewed builder are listed with the model profiles below
         missing=[]
         for role,part in p['parts'].items():
             path=root/'comfy'/part['folder']/part['file']
@@ -116,6 +117,9 @@ def inventory(root):
                              components=['comfy/'+part['folder']+'/'+part['file'] for part in p['parts'].values()],
                              description=p.get('description',name),defaults=p.get('defaults',{}),capabilities=p.get('capabilities',{})))
     legacy=json.loads((HERE/'profiles.json').read_text())
+    if any(e=={'family':n} for n,e in legacy['models'].items()):   # {"family": NAME}: that family's profile, in place
+        from generation.models import PROFILES
+        legacy['models']={n:(PROFILES['models'][n] if e=={'family':n} else e) for n,e in legacy['models'].items()}
     for name,p in dict(legacy['models'],**legacy.get('video_models',{}),**legacy.get('assets',{})).items():
         references={p[key] for key in ['file','text_encoder','vae'] if isinstance(p.get(key),str)}
         if p.get('kind')=='3d':
@@ -162,7 +166,7 @@ def inventory(root):
                                  components=paths,experimental=True,description=effective.get('name',name),
                                  context_tokens=int(context[1]) if context else None,weights_from=spec.get('weights_from')))
     # Enrich the existing view additively; no second inventory or serving registry.
-    family_metadata=registry.packages()
+    family_metadata={n:p for n,p in registry.packages().items() if not p.get('builder')}
     legacy_metadata=dict(legacy['models'],**legacy.get('video_models',{}),**legacy.get('assets',{}))
     by_path={str(Path(row['path']).resolve()):row for row in files}
     for row in files:

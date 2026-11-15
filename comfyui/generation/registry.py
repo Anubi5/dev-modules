@@ -27,6 +27,16 @@ def packages(root=ROOT):
                 raise ValueError('Unsafe family model path: '+name)
             if not re.fullmatch('[a-f0-9]{64}', part['sha256']) or part['bytes'] <= 0:
                 raise ValueError('Family parts require a size and SHA-256: '+name)
+            if not isinstance(part.get('optional', False), bool):
+                raise ValueError('Family part "optional" must be true or false: '+name)
+        builder = data.get('builder')
+        if builder is not None:
+            # A reviewed graph builder shipped with the module (generation/builders.BUILTINS), named, never a path.
+            if not isinstance(builder, str) or not re.fullmatch('[a-z0-9][a-z0-9-]*', builder) or 'recipe' in data:
+                raise ValueError('Family builder must be a reviewed builder name (and no recipe): '+name)
+            data['sha256'] = hashlib.sha256(raw).hexdigest()
+            result[name] = data
+            continue
         recipe = data.get('recipe', {})
         workflow = recipe.get('workflow', {})
         if not workflow or not recipe.get('inputs'): raise ValueError('Family needs a workflow recipe: '+name)
@@ -44,11 +54,20 @@ def profiles():
     for name, data in packages().items():
         p = deepcopy(data['defaults'])
         p.update(arch=data['architecture'], kind=data['kind'], family=name)
+        p.update(deepcopy(data.get('catalogue', {})))
         p['about'] = data.get('description', name)
         for role, part in data['parts'].items():
             p['file' if role == 'model' else role] = part['file']
+            if part.get('optional'):
+                p[role + '_optional'] = True
         result[name] = p
     return result
+
+
+def declarative(prof):
+    """A family made only of its package's recipe (no reviewed Python builder)."""
+    data = family(prof)
+    return bool(data) and not data.get('builder')
 
 
 def family(prof):
@@ -72,9 +91,10 @@ def build(prof, values):
 def check_parts(prof, models_root):
     """Cheap use-time check; full hashes belong to explicit verification."""
     data=family(prof)
-    if data is None:return
+    if data is None or data.get('builder'):return            # builder families: ComfyUI's preflight, as before
     root=Path(models_root).resolve()
     for part in data['parts'].values():
+        if part.get('optional'):continue                     # used only by an option that checks for it itself
         path=root/'comfy'/part['folder']/part['file']
         if not path.resolve().is_relative_to(root) or not path.is_file() or path.stat().st_size!=part['bytes']:
             raise ValueError(data['name']+' needs '+str(path)+' with its declared size; copy the pinned component and run ai models verify '+data['name'])

@@ -46,16 +46,18 @@ BUILTINS = {
 
 def capabilities(prof):
     package = registry.family(prof)
-    if package:
+    if package and not package.get('builder'):
         result = dict(features=[], uploads={}, negative=False, edit=False, expand=False, upscale=False)
         result.update(package.get('capabilities', {}))
         return result
-    if prof['arch'] not in BUILTINS: raise ValueError('No reviewed builder for architecture '+prof['arch'])
+    builder = package['builder'] if package else prof['arch']      # a family package names its reviewed builder
+    if builder not in BUILTINS: raise ValueError('No reviewed builder for architecture '+builder)
     result = dict(features=[], uploads={}, negative=True, edit=False, expand=False, upscale=True)
-    result.update(BUILTINS[prof['arch']])
+    result.update(BUILTINS[builder])
+    if package: result.update(package.get('capabilities', {}))   # what the family declares it supports
     return result
 
 
 def build(prof, values, options):
-    if registry.family(prof): return registry.build(prof, values)
+    if registry.declarative(prof): return registry.build(prof, values)
     return capabilities(prof)['build'](prof, values, options)

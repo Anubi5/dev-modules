@@ -75,5 +75,10 @@ jobs:
         run: python3 -B -m unittest discover -s _tests -p 'publication_fixture_test.py'
       - name: Module contract (real tests, checksums for code-carrying model files)
         run: bash _tests/contract_check.sh
+      - name: Module manifest v2, declared effects and skill format (offline)
+        run: |
+          pip install -q jsonschema
+          REQUIRE_JSONSCHEMA=1 python3 -B _tests/manifest_contract_test.py
+          python3 -B _tests/skills_check.py
       - name: Rig contract and CLI (offline)
         run: bash rig/test.sh

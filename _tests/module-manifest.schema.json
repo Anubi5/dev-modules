@@ -1,0 +1,203 @@
+{
+  "$defs": {
+    "Capability": {
+      "additionalProperties": false,
+      "description": "Something a module provides to others, with the interface version consumers rely on.",
+      "properties": {
+        "id": {
+          "pattern": "^[a-z0-9][a-z0-9-]*(\\.[a-z0-9][a-z0-9-]*)*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "interface": {
+          "minimum": 1,
+          "title": "Interface",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "interface"
+      ],
+      "title": "Capability",
+      "type": "object"
+    },
+    "Mcp": {
+      "additionalProperties": false,
+      "description": "A stdio MCP server the module provides; command is a file inside the module.",
+      "properties": {
+        "args": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Args",
+          "type": "array"
+        },
+        "command": {
+          "title": "Command",
+          "type": "string"
+        },
+        "effects": {
+          "items": {
+            "pattern": "^(read_only|writes(:[A-Za-z0-9_.~/-]+)?|gpu|network|consequential)$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Effects",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^[a-z0-9][a-z0-9-]{0,40}$",
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "command",
+        "effects"
+      ],
+      "title": "Mcp",
+      "type": "object"
+    },
+    "Ui": {
+      "additionalProperties": false,
+      "description": "A module's local page for ai open / dev open (the v1 fields).",
+      "properties": {
+        "service": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_.@-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Service"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "pattern": "^http://127\\.0\\.0\\.1:(\\d+|\\$\\{[A-Z_][A-Z0-9_]*\\})/",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        }
+      },
+      "title": "Ui",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Module contract: identity, what it provides and needs, declared effects, skills and page.",
+  "properties": {
+    "capabilities": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Capability"
+      },
+      "title": "Capabilities",
+      "type": "array"
+    },
+    "effects": {
+      "default": {},
+      "patternProperties": {
+        "^[a-z0-9][a-z0-9_-]*( [a-z0-9][a-z0-9_-]*)?$": {
+          "items": {
+            "pattern": "^(read_only|writes(:[A-Za-z0-9_.~/-]+)?|gpu|network|consequential)$",
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "title": "Effects",
+      "type": "object"
+    },
+    "mcp": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Mcp"
+      },
+      "title": "Mcp",
+      "type": "array"
+    },
+    "name": {
+      "pattern": "^[a-z0-9][a-z0-9-]{0,40}$",
+      "title": "Name",
+      "type": "string"
+    },
+    "optional": {
+      "default": [],
+      "items": {
+        "pattern": "^[a-z0-9][a-z0-9-]*(\\.[a-z0-9][a-z0-9-]*)*$",
+        "type": "string"
+      },
+      "title": "Optional",
+      "type": "array"
+    },
+    "requires": {
+      "default": [],
+      "items": {
+        "pattern": "^[a-z0-9][a-z0-9-]*(\\.[a-z0-9][a-z0-9-]*)*$",
+        "type": "string"
+      },
+      "title": "Requires",
+      "type": "array"
+    },
+    "schema": {
+      "const": 2,
+      "title": "Schema",
+      "type": "integer"
+    },
+    "skills": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Skills",
+      "type": "array"
+    },
+    "ui": {
+      "$ref": "#/$defs/Ui",
+      "default": {
+        "service": null,
+        "title": null,
+        "url": null
+      }
+    },
+    "version": {
+      "maxLength": 80,
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "name",
+    "version"
+  ],
+  "title": "ManifestV2",
+  "type": "object"
+}

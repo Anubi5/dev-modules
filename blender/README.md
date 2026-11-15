@@ -16,3 +16,5 @@ Repeat installation currently invokes uv dependency resolution and can need netw
 `test.sh` checks Blender startup, add-on and prepared MCP scene/screenshot calls; `--full` also renders on the GPU. MCP initialization failures stop the smoke test, with stderr retained. See [module development](../README.md) for offline regression checks.
 
 The loopback MCP bridge can execute arbitrary Python and has no application login. Do not expose it; other local processes can reach it. Shared-user execution is not adversarial isolation.
+
+`AI_BLENDER_CPU_ONLY=1 blender -b ...` runs a background script that renders nothing (mesh preparation, import/export) without the GPU lock and without unloading the chat model; other modules use this instead of Blender's own executable.

@@ -210,11 +210,13 @@ def execute(args):
         blender = shutil.which("blender")
         if not blender: raise RuntimeError("Blender module is not available")
         prepared = temporary/"prepared.glb"
-        # CPU-only preprocessing uses the installed executable rather than unloading chat.
-        real_blender = Path.home()/".local/share/modules/blender/app/current/blender"
-        if not real_blender.is_file(): raise RuntimeError("Installed Blender executable missing")
-        common = [real_blender, "-b", "--factory-startup", "--disable-autoexec", "--python-exit-code", "1"]
-        step("prepare", common+["--python", MOD/"prepare_mesh.py", "--", input_path, prepared, str(triangles)], prepared)
+        # CPU-only preprocessing: the blender command's CPU-only mode (no GPU lock, the chat model stays loaded).
+        common = [blender, "-b", "--factory-startup", "--disable-autoexec", "--python-exit-code", "1"]
+        env["AI_BLENDER_CPU_ONLY"] = "1"
+        try:
+            step("prepare", common+["--python", MOD/"prepare_mesh.py", "--", input_path, prepared, str(triangles)], prepared)
+        finally:
+            env.pop("AI_BLENDER_CPU_ONLY", None)
         record["prepared_mesh_sha256"] = sha256(prepared)
         record["preparation"] = json.loads(Path(str(prepared)+".json").read_text())
         with gpu_lease(restore_chat) as lease_fd:

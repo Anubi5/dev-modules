@@ -75,14 +75,13 @@ def discover() -> dict[str, dict[str, Any]]:
 
 
 def load(path: Path) -> dict[str, Any]:
-    """Remembered decisions; an unreadable file decides nothing."""
-    try:
-        data = json.loads(path.read_text())
-        if data.get('schema') == 1 and isinstance(data.get('decisions'), dict):
-            return data
-    except (OSError, ValueError, AttributeError):
-        pass
-    return dict(schema=1, decisions={})
+    """Unreadable existing owner decisions are preserved and block reconciliation."""
+    if not path.exists():
+        return dict(schema=1, decisions={})
+    data = json.loads(path.read_text())
+    if not isinstance(data, dict) or data.get('schema') != 1 or not isinstance(data.get('decisions'), dict):
+        raise ValueError('Invalid Hermes approval record; preserved for owner review')
+    return data
 
 
 def save(path: Path, data: dict[str, Any]) -> None:

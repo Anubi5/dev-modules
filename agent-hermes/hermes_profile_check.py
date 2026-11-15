@@ -13,14 +13,18 @@ from typing import Any
 from urllib.parse import urlsplit
 import hermes_runtime as runtime
 
+# Built-in toolsets; an approved MCP server adds its id (Hermes aliases toolset mcp-<id> to <id>).
+BASE_TOOLSETS=['terminal','file','skills','todo','clarify','memory','vision']
+APPROVALS='eva-approved.json'   # in HERMES_HOME; written by integrations.py from the owner's decisions
+
 EXPECTED={
     'security.allow_lazy_installs':False,
     'model.provider':'custom',
     'model.base_url':'http://127.0.0.1:8080/v1',
     'model.default':'qwen3.5-9b-agent',
     'model.context_length':65536,
-    'platform_toolsets.cli':['terminal','file','skills','todo','clarify','blender','memory','vision'],
-    'plugins.enabled':['blender'],
+    'platform_toolsets.cli':BASE_TOOLSETS,
+    'plugins.enabled':[],
     'memory.provider':'none',
     'memory.memory_enabled':True,
     'memory.user_profile_enabled':False,
@@ -42,15 +46,30 @@ EXPECTED={
     'auxiliary.title_generation.model_upgrade_enabled':False,
 }
 DISABLED_SKILLS={'telegram','telegram-notify','telegram-client','hermes-telegram-business','send-message','browser-use','computer-use'}
-ALLOWED_TOOLSETS=set(EXPECTED['platform_toolsets.cli'])
-ALLOWED_PLUGINS={'blender'}
+ALLOWED_PLUGINS=set()   # module integrations arrive as declared MCP servers, never as Hermes plugins
 PREFERENCES={'model.default','model.context_length','memory.memory_enabled',
              'model.supports_vision','agent.image_input_mode',
              'auxiliary.vision.model','auxiliary.compression.model','auxiliary.approval.model'}
 # Never query entire fallback/provider objects: they can contain authentication.
 FALLBACK_KEYS=tuple(prefix+'.'+leaf for prefix in ('fallback_model','fallback_providers.0')
                     for leaf in ('provider','base_url','model'))
-READ_KEYS=tuple(EXPECTED)+('skills.disabled',)+FALLBACK_KEYS
+READ_KEYS=tuple(EXPECTED)+('skills.disabled','mcp_servers')+FALLBACK_KEYS
+UNSET_ALLOWED=FALLBACK_KEYS+('mcp_servers',)
+
+
+def approved_servers(home: Path) -> dict[str,dict[str,Any]]:
+    """MCP servers the owner approved: id -> {command, args}. A missing or unreadable file approves nothing."""
+    try:
+        data=json.loads((Path(home)/APPROVALS).read_text())
+        decisions=data['decisions'] if data.get('schema')==1 else {}
+    except (OSError,ValueError,KeyError,AttributeError):
+        return {}
+    servers={}
+    for key,record in decisions.items():
+        offer=record.get('offer') if isinstance(record,dict) else None
+        if record.get('approved') is True and isinstance(offer,dict) and offer.get('kind')=='mcp' and key.startswith('mcp:'):
+            servers[offer['id']]=dict(command=offer['command'],args=list(offer.get('args') or []))
+    return servers
 
 
 def local_endpoint(value: Any) -> bool:
@@ -73,9 +92,13 @@ def parse(text):
     return text
 
 
-def evaluate(values: dict[str,Any],unreadable: tuple[str,...] | list[str]=()) -> dict[str,Any]:
-    """Validate projected fields without returning config values or invoking tools."""
-    errors=[]; warnings=[]
+def evaluate(values: dict[str,Any],unreadable: tuple[str,...] | list[str]=(),approved: dict[str,dict[str,Any]] | None=None) -> dict[str,Any]:
+    """Validate projected fields without returning config values or invoking tools.
+
+    approved: MCP servers the owner approved (approved_servers); every configured server must match one exactly.
+    """
+    errors=[]; warnings=[]; approved=approved or {}
+    toolsets=set(BASE_TOOLSETS)|set(approved)
     if values.get('security.allow_lazy_installs') is not False:
         errors.append('Runtime dependency installation is not approved')
     for key in unreadable:
@@ -84,11 +107,20 @@ def evaluate(values: dict[str,Any],unreadable: tuple[str,...] | list[str]=()) ->
         if values.get(key)!='custom':errors.append('Unapproved inference provider: '+key)
     for key in ('model.base_url','auxiliary.vision.base_url','auxiliary.compression.base_url','auxiliary.approval.base_url'):
         if not local_endpoint(values.get(key)):errors.append('Non-local or unapproved endpoint: '+key)
-    for key,allowed in [('platform_toolsets.cli',ALLOWED_TOOLSETS),('plugins.enabled',ALLOWED_PLUGINS)]:
+    for key,allowed,expected in [('platform_toolsets.cli',toolsets,toolsets),('plugins.enabled',ALLOWED_PLUGINS,set())]:
         value=values.get(key)
         if not isinstance(value,list) or not all(isinstance(x,str) for x in value) or not set(value).issubset(allowed):
             errors.append('Unapproved executable capabilities: '+key)
-        elif set(value)!=set(EXPECTED[key]):warnings.append('Expected capabilities missing: '+key)
+        elif set(value)!=expected:warnings.append('Expected capabilities missing: '+key)
+    servers=values.get('mcp_servers')
+    if servers not in (None,{}):
+        if not isinstance(servers,dict):errors.append('Unapproved MCP servers: mcp_servers')
+        else:
+            for name,server in servers.items():
+                want=approved.get(name)
+                got=dict(command=server.get('command'),args=list(server.get('args') or [])) if isinstance(server,dict) else None
+                if want is None or got!=want or set(server)-{'command','args','env','timeout','connect_timeout'}:
+                    errors.append('Unapproved MCP server: '+str(name))
     if values.get('memory.provider') not in (None,'','none','builtin','built-in','default'):
         errors.append('External memory provider configured')
     if values.get('memory.user_profile_enabled') is not False:
@@ -128,12 +160,12 @@ def inspect(executable: str,soul: Path,env: dict[str,str] | None=None) -> dict[s
         try:
             result=subprocess.run([executable,'config','get','--json',key],capture_output=True,text=True,timeout=min(20,remaining),env=env)
             missing='Config key not set: '+key
-            if result.returncode and key in FALLBACK_KEYS and missing in (result.stdout+result.stderr):
+            if result.returncode and key in UNSET_ALLOWED and missing in (result.stdout+result.stderr):
                 values[key]=None # Official CLI explicitly reports an unset leaf, not a transport failure.
             elif result.returncode or len(result.stdout)>65536:unreadable.append(key)
             else:values[key]=json.loads(result.stdout)
         except (OSError,ValueError,subprocess.TimeoutExpired):unreadable.append(key)
-    report=evaluate(values,unreadable)
+    report=evaluate(values,unreadable,approved_servers(soul.parent))
     template=Path(__file__).with_name('hermes-local-SOUL.md').read_text()
     text=soul.read_text() if soul.is_file() else ''
     if template.strip() not in text:report['warnings'].append('Owned SOUL profile section changed or missing')

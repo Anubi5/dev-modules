@@ -13,6 +13,7 @@ echo "$*" >> "$CALLS"
 SH
 cat > "$T/bin/python3" <<'SH'
 #!/usr/bin/env bash
+echo "python $(basename "$2") $3" >> "$CALLS"; [ "$(basename "$2")" = integrations.py ] && exit 0
 echo 'profile checked' >> "$CALLS"; echo 'PROFILE_DIAGNOSTIC'; exit "${PROFILE_RESULT:-1}"
 SH
 cat > "$T/bin/hermes" <<'SH'
@@ -26,12 +27,13 @@ SH
 chmod +x "$T/bin/"*
 if bash "$R/launch.sh" >/dev/null 2>&1; then exit 1; fi
 grep -q 'profile checked' "$CALLS"; ! grep -q 'agent launched' "$CALLS"
+[ "$(grep -n 'python' "$CALLS" | head -1)" = '1:python integrations.py reconcile' ]   # module integrations before the profile check
 set +e; PROFILE_RESULT=0 bash "$R/launch.sh" chat -Q >"$T/out" 2>"$T/err"; code=$?; set -e
 [ "$code" = 7 ]; ! grep -q 'start llama-swap' "$CALLS"; grep -q 'chat -Q' "$CALLS"
 grep -q PROFILE_DIAGNOSTIC "$T/err"; [ "$(cat "$T/out")" = '{"type":"result"}' ]
 : > "$CALLS"; set +e; LLAMA_RESULT=3 PROFILE_RESULT=0 bash "$R/launch.sh" >/dev/null 2>&1; set -e
 grep -q -- '--user start llama-swap' "$CALLS"
-echo 'PASS launch: profile before launch; running chat kept, stopped chat started; offline env; args and exit 7 preserved'
+echo 'PASS launch: integrations, then profile, before launch; running chat kept, stopped chat started; offline env; args and exit 7 preserved'
 cat > "$T/bin/ai" <<'SH'
 #!/usr/bin/env bash
 [ "$1" = hermes ] && [ "$2" = chat ] && [ "$3" = -Q ] && [ "$4" = -q ] || exit 98

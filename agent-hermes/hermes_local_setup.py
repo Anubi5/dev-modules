@@ -17,9 +17,10 @@ import hermes_profile_check as policy
 import hermes_runtime as runtime
 
 
-def settings() -> dict[str,Any]:
-    """Return the reviewed non-secret settings, including curated memory only."""
-    return dict(policy.EXPECTED,**{'skills.disabled':sorted(policy.DISABLED_SKILLS)})
+def settings(home: Path | None=None) -> dict[str,Any]:
+    """Return the reviewed non-secret settings, including curated memory only; toolsets include approved MCP servers."""
+    approved=sorted(policy.approved_servers(Path(home) if home else Path(os.environ.get('HERMES_HOME',Path.home()/'.hermes'))))
+    return dict(policy.EXPECTED,**{'skills.disabled':sorted(policy.DISABLED_SKILLS),'platform_toolsets.cli':policy.BASE_TOOLSETS+approved})
 
 
 def private_memory(home: Path) -> Path:
@@ -78,7 +79,7 @@ def apply(executable: str,home: Path,source: Path|None=None,revision: str|None=N
     backup.chmod(0o600)
     try:
         private_memory(home)
-        for key,value in settings().items():
+        for key,value in settings(home).items():
             # Hermes preserves string-typed CLI arguments verbatim; JSON quotes
             # would become part of the stored provider, model or endpoint.
             argument=value if isinstance(value,str) else json.dumps(value)

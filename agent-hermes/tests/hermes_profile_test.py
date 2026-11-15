@@ -21,6 +21,7 @@ class ProfileTests(unittest.TestCase):
         self.soul.write_text('Existing user personality\n'+SOURCE.with_name('hermes-local-SOUL.md').read_text())
         self.values=dict(checker.EXPECTED,**{'skills.disabled':sorted(checker.DISABLED_SKILLS)})
         self.values.update({key:None for key in checker.FALLBACK_KEYS})
+        self.values['mcp_servers']=None
 
     def inspect(self,failed_key=None):
         def query(command,**kwargs):
@@ -61,8 +62,15 @@ class ProfileTests(unittest.TestCase):
                 self.assertTrue(checker.evaluate(values)['errors'])
 
     def test_approved_attended_tools_are_not_rejected(self):
-        self.values['platform_toolsets.cli']=['terminal','file','blender']
+        self.values['platform_toolsets.cli']=['terminal','file']
         result=self.inspect();self.assertFalse(result['errors']);self.assertTrue(result['warnings'])
+
+    def test_module_toolset_needs_an_approved_mcp_server(self):
+        self.values['platform_toolsets.cli']=checker.BASE_TOOLSETS+['blender']
+        self.assertTrue(self.inspect()['errors'])
+        (self.soul.parent/checker.APPROVALS).write_text(json.dumps(dict(schema=1,decisions={'mcp:blender/blender':dict(
+            approved=True,offer=dict(kind='mcp',id='blender',command='/m/blender/bin/b',args=[]))})))
+        self.assertEqual(self.inspect()['errors'],[])
 
     def test_unknown_security_field_fails_closed(self):
         self.assertTrue(self.inspect('memory.provider')['errors'])

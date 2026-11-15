@@ -10,7 +10,7 @@ from generation import builders
 from operations import image
 
 
-OPTIONS = {'model', 'image', 'steps', 'cfg', 'size', 'upscale', 'negative', 'no_expand', 'force_lora', 'lora', 'improve_prompt'}
+OPTIONS = {'model', 'image', 'steps', 'cfg', 'upscale', 'negative', 'no_expand', 'force_lora', 'lora', 'improve_prompt'}
 
 
 def before(a):

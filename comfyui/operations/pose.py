@@ -14,6 +14,12 @@ from operations import image
 OPTIONS = {'size', 'src'}
 
 
+def validate(a):
+    """Reference extraction is deterministic and keeps the reference's dimensions."""
+    if a.src and (a.prompt.strip() or {'size', 'seed'} & a._provided_options):
+        sys.exit("--from pose extraction does not support a prompt, --size or --seed")
+
+
 def prepare(a, seed, prefix):
     """! @return (workflow, uploads, info, time limit, None) """
     w, h = image.size(a, "896x1152")

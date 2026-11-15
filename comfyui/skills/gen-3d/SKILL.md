@@ -26,3 +26,5 @@ The user wants a 3D model (GLB) of one object or character, from a picture or a 
 ## Rules
 - One `ai gen` at a time; never call the ComfyUI API directly. `GPU busy`: wait, retry once. `FAILED`: report it.
 - The 3D job holds the GPU through the Blender check; do not start Blender yourself meanwhile.
+
+Timeout overrides use `--timeout N`, with N from 60 to 7200 seconds. Options belonging to another operation are rejected before execution.

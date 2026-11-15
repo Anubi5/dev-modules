@@ -1,4 +1,4 @@
-"""rig commands for the manifest effects contract (_tests/manifest_contract_test.py); its commands have no subcommands."""
+"""rig commands for the manifest effects contract (tests/contract/manifest_contract_test.py); its commands have no subcommands."""
 from pathlib import Path
 
 MODULE = Path(__file__).resolve().parents[1]

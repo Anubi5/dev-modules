@@ -31,3 +31,8 @@ FBX import compatibility must be tested in the consumer; an FBX header alone is 
 The lease stops/verifies chat before inference and restores it only if previously active; stop/restart failures are errors. This coordinates cooperating clients, not arbitrary Windows/browser GPU work. Normal cancellation terminates the owned inference group and releases its lease.
 
 SIGKILL or host loss can leave children holding the lease and stale state. Inspect retained records and current process identities, establish that owned GPU work has ended, then restore chat only when the initial state requires it. Do not delete lock files, signal historical PIDs blindly or claim automatic stale-job/native crash recovery. Use the platform's attended Unreal handoff for native animation work.
+
+
+## Local regression tests
+
+Use `python3 -B tests/run.py --module rig --suite fast` from the repository root; use `--suite integration` explicitly for disposable multi-component fixtures. See the [shared test policy](../tests/README.md) for categories, prerequisites and skips. The module-root `test.sh` remains an explicit installer health check, outside the default runner.

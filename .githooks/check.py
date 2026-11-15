@@ -107,7 +107,7 @@ def main():
                     checks.append('ManifestContract.test_schema')
                 # Reuse only these two small existing metadata checks (seven manifests),
                 # never their command execution/read-only integration tests.
-                run([sys.executable, '-B', str(root / '_tests/manifest_contract_test.py'), *checks], cwd=root)
+                run([sys.executable, '-B', str(root / 'tests/contract/manifest_contract_test.py'), *checks], cwd=root)
         if 'ai-sandbox/config/release.json' in changed:
             try:
                 import pydantic  # noqa: F401
@@ -119,8 +119,6 @@ def main():
         selected = []
         if any(p in changed for p in ('tools/module_manifest.py', 'tools/module-manifest.schema.json')):
             selected.append('tools/module_manifest.py')
-        if 'comfyui/nodes.txt' in changed or 'comfyui/test_sam2_pin.py' in changed:
-            selected.append('comfyui/test_sam2_pin.py')
         for test in selected:
             if test.startswith('tools/'):
                 try:

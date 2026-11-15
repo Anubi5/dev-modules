@@ -74,5 +74,5 @@ res=""; for c in solid_red:1 solid_blue:1 opaque_flat:1 speck:1 transparent:1 ne
 [ -z "$res" ] && echo "  img-check: solid colours, specks, transparent and near-black -> BLANK; gradient, square, object pass; small object too small" \
   || { echo "img-check gives the wrong verdict for:$res"; "$MOD/bin/img-check" "$t"/*.png; rm -rf "$t"; exit 1; }
 rm -rf "$t"
-[ "${1:-}" = --full ] && { cd "$MOD" && exec python3 comfy_test.py; }
+[ "${1:-}" = --full ] && { cd "$MOD" && exec python3 tests/acceptance/comfy_test.py; }
 exit 0

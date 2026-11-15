@@ -75,3 +75,8 @@ command against that request, then resume. The response must be a versioned
 animation manifest bound to the request SHA-256. The hardened WSL distro never
 launches Windows programs. Human operators can also run stages separately and
 create/inspect manifests; no unattended-recovery claim is made.
+
+
+## Local regression tests
+
+Use `python3 -B tests/run.py --module character --suite fast` from the repository root; use `--suite integration` explicitly for disposable multi-component fixtures. See the [shared test policy](../tests/README.md) for categories, prerequisites and skips. The module-root `test.sh` remains an explicit installer health check, outside the default runner.

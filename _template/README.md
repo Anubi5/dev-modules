@@ -16,7 +16,7 @@ families/       per model family: package.json (+ family.py only where needed)
 features/       optional features; per-family files inside a feature folder when they differ
 common/         mechanics shared inside this module only
 skills/<name>/  SKILL.md (+ references/, scripts/, assets/) per agentskills.io
-tests/          commands.py (subcommands and read-only fixtures for the effects contract), unit tests
+tests/          commands.py (subcommands and read-only fixtures for the effects contract), populated unit/, contract/, integration/, acceptance/ and fixtures/ categories; see ../tests/README.md
 ```
 
 `module.json` declares every command in `bin/` (or `<command> <subcommand>`) under `effects`: `read_only`,

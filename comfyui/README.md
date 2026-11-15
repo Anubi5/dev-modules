@@ -49,16 +49,16 @@ ComfyUI disables pinned-memory reading by default because host-mounted weight re
 
 ## Extend and test
 
-`generation/graph.py` binds recipes/LoRAs, `models.py` owns profiles/packages, and image/video/mesh components construct graphs or inspect data without executing jobs. Preserve `tests/workflow-baseline.json`; change graph baselines only for intentional reviewed behavior changes. Complex architectures use narrow builders; compatible variants should reuse profiles/recipes.
+`generation/graph.py` binds recipes/LoRAs, `models.py` owns profiles/packages, and image/video/mesh components construct graphs or inspect data without executing jobs. Preserve `tests/fixtures/workflow-baseline.json`; change graph baselines only for intentional reviewed behavior changes. Complex architectures use narrow builders; compatible variants should reuse profiles/recipes.
 
 A reviewed image family lives in `families/<name>/package.json` (`local-ai.family/1`) with parts, sizes/hashes, defaults, capabilities, license/source references and a bound API graph. Validate bindings against `schema.json` and test real required files/workflow. Family metadata is trusted source, never an arbitrary Python entry point. Removing a package leaves weights untouched. Krea's package is an example; its manifest points to the governing upstream terms.
 
 `ai models list/show/verify` is the shared catalogue. Discovery does not hash whole files, download, load models or infer visual quality. `verify` explicitly checks pins or fingerprints unpinned files; those outcomes differ. Unrecognized files may need support and are never presumed unused.
 
 ```bash
-python3 -B comfyui/check_workflows.py
-python3 -B -m unittest discover -s comfyui -p 'test_generation.py'
-python3 -B -m unittest discover -s comfyui -p 'test_zimage.py'
+python3 -B comfyui/tests/contract/check_workflows.py
+python3 -B tests/run.py --module comfyui --suite fast
+python3 -B tests/run.py --module comfyui --match test_zimage.py
 ```
 
 Run module `test.sh --full` only with its real workstation prerequisites. Offline graph/contract checks do not replace GPU/visual acceptance. See [root guidance](../README.md) for parser-export and model-plan checks.
@@ -88,3 +88,10 @@ source pins, the saved constraint lock, installed package freeze and required im
 match. Changed pins or broken imports need normal authorized maintenance. This avoids
 repeat dependency resolution; it does not make a fresh install offline-capable. Both
 installs still verify model declarations and never grant downloads implicitly.
+
+
+## Local regression tests
+
+Use `python3 -B tests/run.py --module comfyui --suite fast` from the repository root; use `--suite integration` explicitly for disposable multi-component fixtures. See the [shared test policy](../tests/README.md) for categories, prerequisites and skips. The module-root `test.sh` remains an explicit installer health check, outside the default runner.
+
+Input/option ownership and the finite structural follow-up are in [OWNERSHIP.md](OWNERSHIP.md). Timeout overrides are 60?7200 seconds for every generation mode and rerun. Unsupported mode options, fixed-family CFG/negative overrides and undeclared LoRA loaders fail before execution.

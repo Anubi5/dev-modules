@@ -1,5 +1,5 @@
 """ComfyUI commands for the manifest effects contract: subcommands read from each command's real --help, and
-fixtures that run every read_only entry from this source tree in a disposable HOME (see _tests/manifest_contract_test.py)."""
+fixtures that run every read_only entry from this source tree in a disposable HOME (see tests/contract/manifest_contract_test.py)."""
 from pathlib import Path
 import re
 import subprocess
@@ -14,7 +14,7 @@ PNG = bytes.fromhex('89504e470d0a1a0a0000000d4948445200000001000000010800000000'
 
 
 def help_text(script):
-    """What the command prints for --help (no GPU, network or state; checked by _tests/command_help_test.py)."""
+    """What the command prints for --help (no GPU, network or state; checked by tests/contract/command_help_test.py)."""
     return subprocess.run([sys.executable, '-B', str(MODULE / script), '--help'], capture_output=True, text=True,
                           check=True, cwd=MODULE).stdout
 

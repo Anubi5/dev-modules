@@ -8,6 +8,15 @@ import re
 ROOT = Path(__file__).resolve().parents[1]/'families'
 
 
+def has_implementation(name):
+    """Read-only discovery of a contained reviewed implementation, without executing it."""
+    if not isinstance(name, str) or not re.fullmatch('[a-z0-9][a-z0-9-]*', name):
+        return False
+    trusted = Path(__file__).resolve().parents[1] / 'families'
+    path = trusted / name / 'workflow.py'
+    return not path.is_symlink() and path.is_file() and path.resolve().is_relative_to(trusted.resolve())
+
+
 def implementation(name):
     """Load reviewed code from a fixed source tree, never a metadata-supplied path or weights."""
     import importlib.util

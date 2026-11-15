@@ -208,7 +208,7 @@ def inventory(root):
             if row['format']['status']=='invalid': invalid.append(row['id'])
         package['formats']=sorted(set(package['formats']))
         supported=(name in family_metadata or package['kind'] in ('chat','rig','upscaling')
-                   or (package['kind']=='image' and metadata.get('arch') in builders.BUILTINS)
+                   or (package['kind']=='image' and registry.has_implementation(metadata.get('arch')))
                    or (package['kind']=='video' and metadata.get('arch') in video.ARCHITECTURES)
                    or (package['kind']=='3d' and bool(metadata.get('workflow'))))
         package['completeness']='missing-components' if package['missing'] else 'invalid-format' if invalid else 'declared-components-present'

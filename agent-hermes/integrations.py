@@ -56,7 +56,9 @@ def offers(capabilities: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 continue
             ids.add(server['id'])
             found[f'mcp:{name}/{server["id"]}'] = dict(kind='mcp', module=name, id=server['id'], command=server['command'],
-                                                      args=list(server.get('args') or []), effects=list(server['effects']))
+                                                      args=list(server.get('args') or []), effects=list(server['effects']),
+                                                      command_sha256=hashlib.sha256(Path(server['command']).read_bytes()).hexdigest(),
+                                                      implementation_sha256=module.get('implementation_sha256'))
         for skill in module.get('skills', []):
             found[f'skill:{name}/{skill["name"]}'] = dict(kind='skill', module=name, name=skill['name'], path=skill['path'], sha256=skill_digest(Path(skill['path'])))
     return found

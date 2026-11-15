@@ -24,6 +24,9 @@ class Fakes:
 
     def module(self, name, mcp=(), skills=()):
         folder = self.root / 'modules' / name
+        (folder / 'bin').mkdir(parents=True,exist_ok=True)
+        for identifier, effects in mcp:
+            (folder / 'bin' / identifier).write_text('#!/bin/sh\nexit 0\n')
         for skill in skills:
             (folder / 'skills' / skill).mkdir(parents=True, exist_ok=True)
             (folder / 'skills' / skill / 'SKILL.md').write_text(f'---\nname: {skill}\n---\n')
@@ -233,6 +236,19 @@ class IntegrationTests(unittest.TestCase):
         self.assertFalse((self.home / 'eva-integration-pending.json').exists())
         self.assertFalse((self.home / 'skills/modules/example').exists())
         self.assertEqual(len(self.reconcile([True, True])['exposed']), 2)
+
+    def test_changed_mcp_implementation_requires_new_decision(self):
+        self.fake.module('blender', mcp=[('blender', ['writes'])])
+        self.reconcile([True])
+        Path(self.fake.modules[0]['mcp'][0]['command']).write_text('changed execution')
+        self.assertEqual(self.reconcile()['exposed'], [])
+        self.assertNotIn('blender', self.servers())
+        self.assertEqual(self.reconcile([True])['exposed'], ['mcp:blender/blender'])
+
+    def test_malformed_approval_file_is_preserved(self):
+        path=self.home/policy.APPROVALS;path.write_text('{invalid owner record')
+        with self.assertRaises(ValueError):self.reconcile()
+        self.assertEqual(path.read_text(),'{invalid owner record')
 
     def test_restart_recovers_journal_before_reconciliation(self):
         backup = self.home / '.eva-integration-interrupted'

@@ -73,36 +73,53 @@ class RegistryTests(unittest.TestCase):
             with patch.object(registry,'family',return_value=data),self.assertRaisesRegex(ValueError,'declared size'):
                 registry.check_parts(self.prof,root)
 
-    # Z-Image moved from profiles.json to families/zimage (Phase 3.2): same profile, place, capabilities and pins.
-    ZIMAGE_BEFORE = {
-        "arch": "zimage", "file": "z_image_turbo_int8_convrot.safetensors",
-        "text_encoder": "qwen_3_4b_fp8_mixed.safetensors", "vae": "ae.safetensors", "sampler": "res_multistep",
-        "scheduler": "simple", "cfg": 1.0, "steps": 8, "shift": 3.0, "about": "Z-Image Turbo: fast photoreal, 8 steps",
-        "licence": "Apache 2.0",
-        "source": "huggingface.co/Comfy-Org/Z-Image-Turbo + Comfy blueprint Text to Image (Z-Image-Turbo) (8 steps, CFG 1, res_multistep, shift 3)",
-        "capability_tags": ["image"], "pose_patch": "Z-Image-Turbo-Fun-Controlnet-Union.safetensors",
-        "pose_strength": 1.0, "pose_patch_optional": True}
+    # Profiles moved from profiles.json to families/<name> (Phase 3.2), exactly as they were there, with their
+    # place in the catalogue (= baseline order) and builder.
+    BEFORE = {
+        "realvis": (0, {"arch": "sdxl", "file": "RealVisXL_V5.0_fp16.safetensors", "sampler": "dpmpp_sde", "scheduler": "karras",
+                        "cfg": 4.5, "steps": 30, "about": "photoreal, flattering portraits; best with --face", "licence": "openrail++",
+                        "source": "huggingface.co/SG161222/RealVisXL_V5.0 (card: DPM++ SDE Karras, 30+ steps)", "capability_tags": ["image"]}),
+        "juggernaut": (1, {"arch": "sdxl", "file": "juggernautXL_ragnarok.safetensors", "sampler": "dpmpp_2m_sde", "scheduler": "karras",
+                           "cfg": 4.0, "steps": 35, "negative": {"photo": "blurry, low quality, watermark, text, deformed hands"},
+                           "about": "photoreal, natural documentary look, strong scenes", "licence": "see civitai.com/models/133005",
+                           "source": "civitai.com/models/133005 (Ragnarok: DPM++ 2M SDE, 30-40 steps, CFG 3-6, start with little negative)",
+                           "capability_tags": ["image"]}),
+        "sdxl-base": (2, {"arch": "sdxl", "file": "sd_xl_base_1.0.safetensors", "sampler": "dpmpp_2m", "scheduler": "karras", "cfg": 6.0,
+                          "steps": 30, "about": "original SDXL: general and artistic, weakest at photos", "licence": "openrail++",
+                          "source": "huggingface.co/stabilityai/stable-diffusion-xl-base-1.0", "capability_tags": ["image"]}),
+        "zimage": (4, {"arch": "zimage", "file": "z_image_turbo_int8_convrot.safetensors",
+                       "text_encoder": "qwen_3_4b_fp8_mixed.safetensors", "vae": "ae.safetensors", "sampler": "res_multistep",
+                       "scheduler": "simple", "cfg": 1.0, "steps": 8, "shift": 3.0, "about": "Z-Image Turbo: fast photoreal, 8 steps",
+                       "licence": "Apache 2.0",
+                       "source": "huggingface.co/Comfy-Org/Z-Image-Turbo + Comfy blueprint Text to Image (Z-Image-Turbo) (8 steps, CFG 1, res_multistep, shift 3)",
+                       "capability_tags": ["image"], "pose_patch": "Z-Image-Turbo-Fun-Controlnet-Union.safetensors",
+                       "pose_strength": 1.0, "pose_patch_optional": True}),
+    }
 
-    def test_zimage_family_keeps_its_profile_place_and_capabilities(self):
-        prof = models.profile('zimage')
-        self.assertEqual({k: v for k, v in prof.items() if k not in ('name', 'family', 'kind')}, self.ZIMAGE_BEFORE)
-        self.assertEqual((prof['family'], prof['kind']), ('zimage', 'image'))
-        self.assertEqual(list(models.PROFILES['models']).index('zimage'), 4)       # catalogue order = baseline order
-        self.assertFalse(registry.declarative(prof))
-        before = dict(features=[], uploads={}, negative=True, edit=False, expand=False, upscale=True)
-        before.update(builders.BUILTINS['zimage'])
-        self.assertEqual(builders.capabilities(prof), before)
-        with patch.object(registry, 'packages', return_value={}), self.assertRaisesRegex(ValueError, 'removed'):
-            registry.family(prof)
+    def test_migrated_families_keep_their_profile_place_and_capabilities(self):
+        for name, (place, before_profile) in self.BEFORE.items():
+            with self.subTest(family=name):
+                prof = models.profile(name)
+                self.assertEqual({k: v for k, v in prof.items() if k not in ('name', 'family', 'kind')}, before_profile)
+                self.assertEqual((prof['family'], prof['kind']), (name, 'image'))
+                self.assertEqual(list(models.PROFILES['models']).index(name), place)
+                self.assertFalse(registry.declarative(prof))
+                before = dict(features=[], uploads={}, negative=True, edit=False, expand=False, upscale=True)
+                before.update(builders.BUILTINS[prof['arch']])
+                self.assertEqual(builders.capabilities(prof), before)
+                with patch.object(registry, 'packages', return_value={}), self.assertRaisesRegex(ValueError, 'removed'):
+                    registry.family(prof)
 
     def test_family_parts_match_their_models_txt_pins(self):
         from fetch_models import declarations
-        pins = {(r['folder'], r['name']): (r['sha256'], r['bytes']) for r in declarations(Path(__file__).with_name('models.txt'))}
+        pins = {(r['folder'], r['name']): (r['sha256'].lower(), r['bytes']) for r in declarations(Path(__file__).with_name('models.txt'))}
         for name, data in registry.packages().items():
             if not data.get('builder'): continue
             for role, part in data['parts'].items():
                 with self.subTest(family=name, part=role):
-                    self.assertEqual(pins[(part['folder'], part['file'])], (part['sha256'], part['bytes']))
+                    sha, size = pins[(part['folder'], part['file'])]
+                    self.assertEqual(sha, part['sha256'])
+                    if size is not None: self.assertEqual(size, part['bytes'])   # one pin lists no size yet (3.4)
 
     def test_builder_family_never_names_a_path_or_has_a_recipe(self):
         data = json.loads(Path(__file__).with_name('families').joinpath('zimage/package.json').read_text())

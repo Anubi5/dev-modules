@@ -49,7 +49,7 @@ while read -r r ref _; do
   [ -n "${ref:-}" ] || { echo "  CHECK $r has no pinned commit in nodes.txt"; exit 1; }
   n=$(basename "$r" .git); keep+=("$n"); say "custom node $n (${ref:0:10})"
   at_commit "$r" "$ref" "custom_nodes/$n" || { echo "  CHECK could not get $n at $ref"; exit 1; }
-  [ "$reuse" = 1 ] && continue
+  [ "${reuse:-0}" = 1 ] && continue
   req="custom_nodes/$n/requirements.txt"
   if [ "$n" = ComfyUI-Impact-Pack ]; then (
     expected='git+https://github.com/facebookresearch/sam2'

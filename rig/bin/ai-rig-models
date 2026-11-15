@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+## @brief "ai-rig-models": the rig's model declarations as JSON (read-only), for the shared model inventory.
+MOD=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+exec python3 -B -c 'import json, sys; print(json.dumps({"weights": json.load(open(sys.argv[1]))["weights"]}))' "$MOD/models.json"

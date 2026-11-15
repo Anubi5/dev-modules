@@ -2,7 +2,13 @@
 ## @brief No arguments lists chat models; list/show/verify uses the shared read-only inventory.
 set -o pipefail
 case "${1:-}" in
-  help|-h|--help) echo 'ai models [list [--all] [--details] [--json] | show ID [--json] | verify ID [--json] | accept ID --record FILE]'; exit 0 ;;
+  help|-h|--help) echo 'ai models [list [--all] [--details] [--json] | show ID [--json] | verify ID [--json] | accept ID --record FILE | declared --json]'; exit 0 ;;
+  declared)   # this module's chat declarations and their installed resolution, for the shared inventory (read-only)
+    MOD=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+    exec python3 -B -c 'import json, os, sys
+m = sys.argv[1]; r = os.path.join(m, "models", "models.json")
+print(json.dumps({"chat": json.load(open(os.path.join(m, "models.json")))["chat"],
+                  "resolved": json.load(open(r)) if os.path.exists(r) else {}}))' "$MOD" ;;
   list|show|verify|accept)
     command -v ai-model-catalogue >/dev/null || { echo 'CHECK shared model inventory needs the comfyui module' >&2; exit 1; }
     exec ai-model-catalogue "$@" ;;

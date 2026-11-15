@@ -10,6 +10,8 @@ The user asks for a short animated clip (a few seconds).
 
 ## Procedure
 1. Write what happens and how the camera moves: subject, action, setting, light ("smooth camera tracking").
+   Run a model whose `ai models list` stage is `accepted` unless the owner names another for this run; `verified` or
+   `installed` models are not proven on this PC yet - say so if you use one.
 2. Choose the length: `--frames 33` (~1.4 s, ~2-6 min on the GPU) up to `--frames 121` (~5 s); lengths are 4n+1.
 3. Optional check without the GPU: `ai gen video "<prompt>" --name <name> --check`.
 4. Run ONE command and wait for it: `ai gen video "<prompt>" --name <name> [--frames 33] [--seed N]`.

@@ -15,6 +15,7 @@
     "ai-models list": ["read_only"],
     "ai-models show": ["read_only"],
     "ai-models verify": ["read_only"],
+    "ai-models accept": ["writes:state"],
     "img-ask": ["gpu"]
   },
   "skills": [],

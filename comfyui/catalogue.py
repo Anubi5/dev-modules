@@ -210,7 +210,78 @@ def inventory(root):
             if row:
                 row['compatibility']='component of '+', '.join(row['packages'])
                 # A component is not an independently runnable model.
+    hashes,accepted=hash_record(),accepted_records()
+    for package in packages:
+        package.update(stage(root,package,by_path,hashes,accepted.get(package['id'])))
     return dict(schema='local-ai.models/1',root=str(root),packages=packages,files=files,discovery_read_only=True)
+
+
+# Status shown to people and agents (Plan 3.6/3.8): declared -> installed -> verified -> accepted.
+HASHES=Path.home()/'.local/share/modules/comfyui/models/.hashes'          # written by install/update verification
+ACCEPTED=Path.home()/'.local/state/modules/comfyui/accepted.json'          # written by "accept" only
+STAGES=('declared','installed','verified','accepted')
+
+
+def hash_record():
+    """{path: (sha256, size, mtime_ns)} of the files the module's install/update verification hashed (read-only)."""
+    from fetch_models import load_record
+    try: return load_record(str(HASHES))
+    except (OSError,ValueError): return {}
+
+
+def accepted_records():
+    try:
+        data=json.loads(ACCEPTED.read_text())
+        return data if isinstance(data,dict) else {}
+    except (OSError,ValueError): return {}
+
+
+def component_hashes(root,package,by_path,hashes):
+    """{component: sha256} when every component's current size and time match a hash the verification recorded and
+    that hash is the declared pin (where one exists); None otherwise. Reads no file contents."""
+    found={}
+    for component in package['components']:
+        path=root/component; row=by_path.get(str(path.resolve()))
+        try: st=path.stat()
+        except OSError: return None
+        known=hashes.get(str(path)) or hashes.get('/models/'+component)
+        if not known or known[1]!=st.st_size or known[2]!=st.st_mtime_ns: return None
+        if row and row.get('expected_sha256') and known[0]!=row['expected_sha256']: return None
+        found[component]=known[0]
+    return found
+
+
+def stage(root,package,by_path,hashes,record):
+    """One summary per model: declared (files absent), installed (present), verified (hashes match the pins),
+    accepted (real output checked on this PC; date and commit recorded, for exactly these files)."""
+    if package['missing'] or not package['components']: return dict(stage='declared',accepted=None)
+    current=component_hashes(root,package,by_path,hashes)
+    if current is None: return dict(stage='installed',accepted=None)
+    if record and record.get('components')==current: return dict(stage='accepted',accepted=record)
+    return dict(stage='verified',accepted=None)
+
+
+def accept(report,query,record_path,note=None):
+    """Record that a real run of a verified model was checked on this PC: its job record (status succeeded, this
+    model, outputs present), the date, the module revision and the exact component hashes. @return the record"""
+    selected=select(report,query)
+    if selected not in report['packages']: raise ValueError('accept takes a model ID (ai models list)')
+    if selected['stage'] not in ('verified','accepted'):
+        raise ValueError(f"{query} is {selected['stage']}: only a verified model can be accepted (dev update verifies the files)")
+    run=json.loads(Path(record_path).read_text())
+    if run.get('status')!='succeeded' or run.get('model')!=selected['id']:
+        raise ValueError(f"{record_path} is not a succeeded run of {selected['id']}")
+    outputs=[o for o in run.get('outputs',[]) if Path(o).is_file()]
+    if not outputs: raise ValueError(f'{record_path}: its outputs are missing')
+    from datetime import datetime,timezone
+    entry=dict(at=datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),revision=run.get('module'),
+               record=str(Path(record_path).resolve()),outputs=outputs,note=note,
+               components=component_hashes(Path(report['root']),selected,
+                                           {str(Path(r['path']).resolve()):r for r in report['files']},hash_record()))
+    data=accepted_records(); data[selected['id']]=entry
+    ACCEPTED.parent.mkdir(parents=True,exist_ok=True)
+    tmp=ACCEPTED.with_suffix('.tmp'); tmp.write_text(json.dumps(data,indent=1,sort_keys=True)+'\n'); os.replace(tmp,ACCEPTED)
+    return dict(schema='local-ai.model-acceptance/1',id=selected['id'],status='accepted',**entry)
 
 
 def select(report, query):
@@ -237,21 +308,31 @@ def verify(root, report, query):
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command',choices=['list','show','verify'])
+    parser.add_argument('command',choices=['list','show','verify','accept'])
     parser.add_argument('query',nargs='?')
     parser.add_argument('--json',action='store_true')
     parser.add_argument('--all',action='store_true',help='list component files as well as logical packages')
+    parser.add_argument('--details',action='store_true',help='list: the properties behind each status')
+    parser.add_argument('--record',help='accept: the job record (.json) of a real run of this model, checked by you')
+    parser.add_argument('--note',help='accept: what was checked')
     parser.add_argument('--root',type=Path,default=Path(os.environ.get('MODELS_MOUNT','/models')))
     args=parser.parse_args(argv)
     if args.command=='list' and args.query: parser.error('list does not take a model ID; use show ID')
     if args.all and args.command!='list': parser.error('--all is only supported by list')
-    if args.command!='list' and not args.query: parser.error('show/verify require a model or package ID')
+    if args.command!='list' and not args.query: parser.error('show/verify/accept require a model or package ID')
+    if args.details and args.command!='list': parser.error('--details is only supported by list')
+    if (args.record is None)!=(args.command!='accept'): parser.error('accept needs --record FILE (and only accept takes it)')
     try:
         report=inventory(args.root)
-        result=report if args.command=='list' else select(report,args.query) if args.command=='show' else verify(args.root,report,args.query)
+        result=(report if args.command=='list' else select(report,args.query) if args.command=='show'
+                else accept(report,args.query,args.record,args.note) if args.command=='accept' else verify(args.root,report,args.query))
         if args.json or args.command!='list': print(json.dumps(result,indent=2))
         else:
-            for row in report['packages']: print(f"{row['status']:<16} {row['id']}")
+            for row in report['packages']:
+                print(f"{row.get('stage',row['status']):<10} {row['id']}")
+                if args.details and 'stage' in row:
+                    print(f"           files {row['status']}" + (f", missing {len(row['missing'])}" if row['missing'] else '')
+                          + f"; {row['compatibility']}" + (f"; accepted {row['accepted']['at']} ({row['accepted'].get('revision')})" if row['accepted'] else ''))
             components={str((args.root/component).resolve()) for package in report['packages'] for component in package['components']}
             # Unrecognized files and standalone GGUF/LoRA files stay visible. A missing
             # registry reference is never evidence that a file is unused or disposable.

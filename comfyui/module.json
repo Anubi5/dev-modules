@@ -32,6 +32,7 @@
     "ai-model-catalogue list": ["read_only"],
     "ai-model-catalogue show": ["read_only"],
     "ai-model-catalogue verify": ["read_only"],
+    "ai-model-catalogue accept": ["writes:state"],
     "img-check": ["read_only"]
   },
   "skills": ["skills/gen-image", "skills/gen-edit", "skills/gen-video", "skills/gen-3d"],

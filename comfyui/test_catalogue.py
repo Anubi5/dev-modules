@@ -82,6 +82,37 @@ class CatalogueTests(unittest.TestCase):
             self.assertEqual(catalogue.select(report,'fixture')['status'],'ready')
             self.assertEqual(catalogue.verify(self.root,report,'fixture')['files'][0]['sha256'],self.sha)
 
+    def test_status_moves_declared_installed_verified_accepted(self):
+        package=dict(name='fixture',kind='image',architecture='fixture',sha256='1'*64,
+                     parts={'model':dict(folder='diffusion_models',file='fixture.safetensors',bytes=len(self.data),sha256=self.sha)})
+        state=Path(self.temp.name)/'state'
+        with patch.object(registry,'packages',return_value={'fixture':package}),              patch.object(catalogue,'HASHES',state/'.hashes'), patch.object(catalogue,'ACCEPTED',state/'accepted.json'):
+            stage=lambda: catalogue.select(catalogue.inventory(self.root),'fixture')['stage']
+            self.assertEqual(stage(),'declared')
+            weights=self.fixture('comfy/diffusion_models/fixture.safetensors')
+            self.assertEqual(stage(),'installed')                    # present, but no verification recorded
+            state.mkdir(); st=weights.stat()
+            (state/'.hashes').write_text(f'{self.sha} {st.st_size} {st.st_mtime_ns} {weights}\n')
+            self.assertEqual(stage(),'verified')
+            run=Path(self.temp.name)/'run.json'; output=Path(self.temp.name)/'out.png'; output.write_bytes(b'x')
+            run.write_text(json.dumps(dict(status='failed',model='fixture',outputs=[str(output)])))
+            with self.assertRaisesRegex(ValueError,'not a succeeded run'):
+                catalogue.accept(catalogue.inventory(self.root),'fixture',run)
+            run.write_text(json.dumps(dict(status='succeeded',model='fixture',outputs=[str(output)],module='repo @ abc')))
+            result=catalogue.accept(catalogue.inventory(self.root),'fixture',run,'looked right')
+            self.assertEqual((result['status'],result['revision'],result['note']),('accepted','repo @ abc','looked right'))
+            self.assertEqual(stage(),'accepted')
+            weights.write_bytes(self.data+b'!')                      # a changed file is no longer the declared one
+            self.assertEqual(stage(),'declared')
+
+    def test_list_details_show_the_properties_behind_each_status(self):
+        out=io.StringIO()
+        with patch.object(catalogue,'HASHES',Path(self.temp.name)/'none'), contextlib.redirect_stdout(out):
+            self.assertEqual(catalogue.main(['list','--details','--root',str(self.root)]),0)
+        lines=out.getvalue().splitlines()
+        self.assertTrue(any(l.startswith('declared ') for l in lines))
+        self.assertTrue(any(l.strip().startswith('files ') for l in lines))
+
     def test_hash_mismatch_preserves_file_and_fails_verification(self):
         p=self.fixture('bad.gguf')
         with patch.object(catalogue,'declared_pins',return_value={'bad.gguf':'0'*64}):

@@ -13,6 +13,8 @@ The user wants a 3D model (GLB) of one object or character, from a picture or a 
    `ai gen image` (see the gen-image skill). The back of the object is invented by the model.
 2. Choose the model from the inventory (`ai models list --json`, capability 3d): the default follows the photo closely;
    a multi-view model takes up to four views in the order its description gives (front, left, back, right).
+   Run a model whose `ai models list` stage is `accepted` unless the owner names another for this run; `verified` or
+   `installed` models are not proven on this PC yet - say so if you use one.
 3. Optional check without the GPU: `ai gen 3d --image <picture> --name <name> --check`.
 4. Run ONE command and wait: `ai gen 3d --image <picture> [--image <next view> ...] --name <name>`;
    `--quality high` only when asked (slower, less GPU headroom); `--faces N` for a lighter or denser mesh;

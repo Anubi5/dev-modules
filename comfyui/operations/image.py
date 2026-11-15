@@ -23,6 +23,35 @@ def size(a, example):
     return w, h
 
 
+FEATURES = ("pose", "face", "fix_faces", "fix_hands", "hires", "upscale")
+
+
+def supported(capability):
+    """! @brief The options a family declares it supports, as typed on the command line. """
+    return [f for f in FEATURES if f in capability["features"] or (f == "upscale" and capability["upscale"])]
+
+
+def unsupported(prof, capability, missing):
+    """!
+    @brief The refusal for options a family does not support (before any GPU work): names the family, what it
+           supports and the image models that support every requested option - all from the family declarations.
+    """
+    flags = lambda names: ", ".join("--" + n.replace("_", "-") for n in names) or "none of the optional features"
+    others = []
+    for name, p in PROFILES["models"].items():
+        if p.get("kind", "image") != "image" or name == prof["name"]:
+            continue
+        try:
+            have = supported(builders.capabilities(dict(p, name=name)))
+        except ValueError:
+            continue
+        if all(m in have for m in missing):
+            others.append(name)
+    return (f"--model {prof['name']} (family {prof.get('family') or prof['arch']}) does not support {flags(missing)}; "
+            f"it supports {flags(supported(capability))}. "
+            + (f"Models that support {flags(missing)}: {', '.join(others)}" if others else f"No installed family supports {flags(missing)}"))
+
+
 def prepare(a, seed, prefix, edit=None):
     """!
     @brief The workflow and record details of one image job. @param edit  the edit operation (its own checks), or None
@@ -42,9 +71,9 @@ def prepare(a, seed, prefix, edit=None):
     capability = builders.capabilities(prof)
     allowed = capability["features"]
     used = [o for o in ("pose", "face", "fix_faces", "fix_hands", "hires") if getattr(a, o)]
-    if [o for o in used if o not in allowed]:
-        sys.exit(f"--model {prof['name']} ({arch}) does not support --{', --'.join(o.replace('_', '-') for o in used if o not in allowed)}"
-                 " - those work with the SDXL models (realvis, juggernaut, sdxl-base)" + (" and --pose with anima" if arch != "anima" else ""))
+    missing = [o for o in used if o not in allowed]
+    if missing:
+        sys.exit(unsupported(prof, capability, missing))
     if edit:
         edit.check(capability)
     if a.image and not edit:
@@ -63,7 +92,7 @@ def prepare(a, seed, prefix, edit=None):
         prompt = rt.expand_prompt(a.prompt, "edit" if refs else "t2i", w, h, refs, log=log0)
     if not capability['negative']: neg = ""
     if a.upscale and not capability['upscale']:
-        sys.exit(f"--model {prof['name']} does not support --upscale")
+        sys.exit(unsupported(prof, capability, ["upscale"]))
     wf = builders.build(prof, dict(prompt=prompt, negative=neg, seed=seed, steps=steps,
         width=w, height=h, prefix=prefix, pose_strength=pose_strength), a)
     if a.pose and rt.is_skeleton(a.pose, a.pose_skeleton): use_skeleton(wf)

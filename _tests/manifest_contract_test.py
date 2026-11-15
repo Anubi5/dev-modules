@@ -85,6 +85,7 @@ class ManifestContract(unittest.TestCase):
                 if service:
                     self.assertTrue((module / f'{service}.service').is_file(), service)
 
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'module helpers run the real commands (Linux)')
     def test_effects_cover_exactly_the_commands(self):
         """No undeclared command (not authorised) and no entry for a command that does not exist."""
         for module, data in v2_modules():
@@ -117,10 +118,11 @@ class ManifestContract(unittest.TestCase):
                     before = snapshot(home)
                     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     try:
-                        # The real user's site-packages stay importable although HOME is disposable.
-                        env = dict(os.environ, HOME=str(home), PATH=f'{fake}:{os.environ["PATH"]}', MOD=str(module), MOD_NAME=module.name,
-                                   PYTHONUSERBASE=os.environ.get('PYTHONUSERBASE', site.getuserbase()))
-                        env.update(extra)
+                        # The real user's site-packages stay importable although HOME is disposable; the recorded
+                        # systemctl always comes first in PATH.
+                        env = dict(os.environ, MOD=str(module), MOD_NAME=module.name,
+                                   PYTHONUSERBASE=os.environ.get('PYTHONUSERBASE', site.getuserbase()), **extra)
+                        env.update(HOME=str(home), PATH=f'{fake}:{env["PATH"]}')
                         result = subprocess.run(argv, cwd=home, env=env, capture_output=True, text=True, timeout=60)
                     except subprocess.TimeoutExpired:
                         self.fail(f'{key} waited (GPU lock or service)')

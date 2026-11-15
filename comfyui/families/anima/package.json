@@ -1,0 +1,62 @@
+{
+  "schema": "local-ai.family/1",
+  "name": "anima",
+  "kind": "image",
+  "architecture": "anima",
+  "builder": "anima",
+  "description": "Anima Aesthetic: anime / illustration (tags or plain text), --pose works",
+  "experimental": false,
+  "parts": {
+    "model": {
+      "folder": "diffusion_models",
+      "file": "anima-aesthetic-v1.1.safetensors",
+      "bytes": 4182230656,
+      "sha256": "3c1868387a3a1ff504bbb87c33678321965ead381fcf87afbd0264daa600c082"
+    },
+    "text_encoder": {
+      "folder": "text_encoders",
+      "file": "qwen_3_06b_base.safetensors",
+      "bytes": 1192135096,
+      "sha256": "cd2a512003e2f9f3cd3c32a9c3573f820bb28c940f73c57b1ddaa983d9223eba"
+    },
+    "vae": {
+      "folder": "vae",
+      "file": "qwen_image_vae.safetensors",
+      "bytes": 253806246,
+      "sha256": "a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f"
+    },
+    "pose_patch": {
+      "folder": "model_patches",
+      "file": "anima-lllite-pose-1.safetensors",
+      "bytes": 23310040,
+      "sha256": "ddb543be5e74ce8ca79ae45807aa0c1328a4888e00706727c6fd7100dde7c864"
+    }
+  },
+  "defaults": {
+    "pose_strength": 1.0,
+    "sampler": "er_sde",
+    "scheduler": "simple",
+    "cfg": 4.0,
+    "steps": 30,
+    "style": "art",
+    "negative": {
+      "art": "worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, sepia",
+      "photo": "worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, sepia"
+    }
+  },
+  "catalogue": {
+    "licence": "CircleStone Labs non-commercial (weights); outputs usable",
+    "source": "huggingface.co/circlestone-labs/Anima + Comfy template image_anima (30 steps, CFG 4, er_sde, simple)",
+    "capability_tags": [
+      "image"
+    ]
+  },
+  "capabilities": {
+    "features": [
+      "pose"
+    ],
+    "uploads": {
+      "pose": "30"
+    }
+  }
+}

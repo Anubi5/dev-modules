@@ -33,50 +33,10 @@
       "family": "zimage"
     },
     "anima": {
-      "arch": "anima",
-      "file": "anima-aesthetic-v1.1.safetensors",
-      "text_encoder": "qwen_3_06b_base.safetensors",
-      "vae": "qwen_image_vae.safetensors",
-      "pose_patch": "anima-lllite-pose-1.safetensors",
-      "pose_strength": 1.0,
-      "sampler": "er_sde",
-      "scheduler": "simple",
-      "cfg": 4.0,
-      "steps": 30,
-      "style": "art",
-      "negative": {
-        "art": "worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, sepia",
-        "photo": "worst quality, low quality, score_1, score_2, score_3, blurry, jpeg artifacts, sepia"
-      },
-      "about": "Anima Aesthetic: anime / illustration (tags or plain text), --pose works",
-      "licence": "CircleStone Labs non-commercial (weights); outputs usable",
-      "source": "huggingface.co/circlestone-labs/Anima + Comfy template image_anima (30 steps, CFG 4, er_sde, simple)",
-      "capability_tags": [
-        "image"
-      ]
+      "family": "anima"
     },
     "anima-turbo": {
-      "arch": "anima",
-      "file": "anima-turbo-v1.1.safetensors",
-      "text_encoder": "qwen_3_06b_base.safetensors",
-      "vae": "qwen_image_vae.safetensors",
-      "pose_patch": "anima-lllite-pose-1.safetensors",
-      "pose_strength": 1.0,
-      "sampler": "er_sde",
-      "scheduler": "simple",
-      "cfg": 1.0,
-      "steps": 10,
-      "style": "art",
-      "negative": {
-        "art": "",
-        "photo": ""
-      },
-      "about": "Anima Turbo: fast drafts (8-12 steps, CFG 1)",
-      "licence": "CircleStone Labs non-commercial (weights); outputs usable",
-      "source": "huggingface.co/circlestone-labs/Anima (Turbo: CFG 1, 8-12 steps)",
-      "capability_tags": [
-        "image"
-      ]
+      "family": "anima-turbo"
     },
     "moss": {
       "arch": "moss",

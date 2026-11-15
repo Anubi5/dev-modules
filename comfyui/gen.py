@@ -57,6 +57,8 @@ def generation_parser():
     ap.add_argument("kind", choices=list(GENERATION_KINDS),
                     help="edit = change an image by instruction; pose = a ControlNet pose (photo + skeleton)")
     ap.add_argument("--json", action="store_true", help="emit one producer JSON result; progress goes to stderr")
+    ap.add_argument("--check", action="store_true",
+                    help="validate only (model, family, features, inputs, files, needed modules); no GPU, no service, no outputs or records")
     ap.add_argument("prompt", nargs="?", default="", help="what to make; for edit: what to change; for pose: the pose")
     ap.add_argument("--from", dest="src", metavar="PHOTO", help="pose: make the skeleton from this photo (in ~/work)")
     ap.add_argument("--pose-skeleton", action="store_true", help="image: the --pose picture is already a skeleton")
@@ -220,12 +222,15 @@ def main(a=None):
     if a.src and a.kind != "pose":
         sys.exit("--from is for ai gen pose (use --pose to copy a pose into an image)")
     a.size = a.size or ("896x1152" if a.kind == "pose" else "1024x1024")
-    os.makedirs(rt.OUTPUT, exist_ok=True)
-    if shutil.disk_usage(rt.OUTPUT).free < rt.MIN_FREE:
-        sys.exit(f"less than {rt.MIN_FREE >> 30} GB free in {rt.OUTPUT}")
+    if not a.check:
+        os.makedirs(rt.OUTPUT, exist_ok=True)
+        if shutil.disk_usage(rt.OUTPUT).free < rt.MIN_FREE:
+            sys.exit(f"less than {rt.MIN_FREE >> 30} GB free in {rt.OUTPUT}")
     seed = a.seed if a.seed is not None else random.randint(1, 2**31)
     prefix = f"{datetime.date.today():%Y-%m-%d}/{rt.slug(a.name or ' '.join(a.prompt.split()[:6]) or 'pose')}"
     wf, uploads, info, limit, prof = operation.prepare(a, seed, prefix)
+    if a.check:
+        return rt.checked(a, info, wf, prof, seed, getattr(a, "needs", None))
     log = lambda s: print(f"  {s}", flush=True)
     t_start = time.time()
     info["uploads"] = [[n, s] for n, s in uploads]
@@ -239,6 +244,7 @@ def main(a=None):
     if err:
         print(f"  error: {err}")
     rec = rt.write_record(files, info, wf, "succeeded" if ok else "failed", err, prefix)
+    JOB["result"] = dict(JOB.get("result", {}), **rt.result_fields(a, info, wf, prof, seed))
     if ok and a.kind != "video" and info.get("loras"):       # ComfyUI's verdict: did it apply every LoRA layer?
         dropped = rt.lora_keys_dropped(t_start)
         if dropped:

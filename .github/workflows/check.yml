@@ -85,6 +85,7 @@ jobs:
                   echo "::error title=$2::$(tail -60 out.txt | sed -e 's/%/%25/g' | sed -e ':a;N;$!ba;s/\n/%0A/g')"; return 1; }
           run env REQUIRE_JSONSCHEMA=1 python3 -B _tests/manifest_contract_test.py
           run python3 -B _tests/skills_check.py
+          run python3 -B _tests/contract_safety_test.py
           run python3 -B _tests/architecture_check.py
       - name: Rig contract and CLI (offline)
         run: bash rig/test.sh

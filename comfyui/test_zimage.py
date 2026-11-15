@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 
 import gen
+import runtime
 from generation import image, models
 
 
@@ -29,7 +30,7 @@ class ZImageTests(unittest.TestCase):
         self.assertEqual(wf["41"]["inputs"]["denoise"], 0.2)
         self.assertEqual(wf["36"]["inputs"]["width"], 1024)
         self.assertEqual(wf["36"]["inputs"]["crop"], "disabled")
-        gen.use_skeleton(wf)
+        runtime.use_skeleton(wf)
         self.assertNotIn("31", wf)
         self.assertEqual(wf["33"]["inputs"]["image"], ["36", 0])
         self.assertEqual(wf["36"]["inputs"]["image"], ["30", 0])
@@ -42,9 +43,9 @@ class ZImageTests(unittest.TestCase):
                 calls.append(wf)
                 return outcomes[index], [str(Path(directory)/f"output-{index}.png")], None if outcomes[index] else "fixture failure"
             with patch.object(sys, "argv", ["gen.py", "image", "adult portrait", "--model", "zimage", "--count", str(count), "--seed", "0", "--json"]), \
-                 patch.object(gen, "OUTPUT", directory), patch.dict(gen.JOB, {}, clear=True), \
-                 patch.object(gen, "resolve_model", return_value=models.profile("zimage")), \
-                 patch.object(gen, "input_hashes", return_value={}), patch.object(gen, "generate", side_effect=generate), \
+                 patch.object(runtime, "OUTPUT", directory), patch.dict(gen.JOB, {}, clear=True), \
+                 patch.object(runtime, "resolve_model", return_value=models.profile("zimage")), \
+                 patch.object(runtime, "input_hashes", return_value={}), patch.object(runtime, "generate", side_effect=generate), \
                  contextlib.redirect_stdout(io.StringIO()) as output, contextlib.redirect_stderr(io.StringIO()):
                 code = gen.entry()
                 result = json.loads(output.getvalue())

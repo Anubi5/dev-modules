@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import assets
 import gen
+import runtime
 from generation import registry
 
 
@@ -34,8 +35,8 @@ class InspectionTests(unittest.TestCase):
                           (['models','--help'],0),(['models','--bad'],2),(['note','help'],0),
                           (['image','--help'],0),(['rerun','--help'],0)]:
             with self.subTest(args=args), patch.object(sys,'argv',['gen.py']+args), \
-                 patch.object(gen,'prepare',side_effect=AssertionError('GPU preparation')), \
-                 patch.object(gen,'models_report',side_effect=AssertionError('Unexpected inventory')), \
+                 patch.object(runtime,'prepare',side_effect=AssertionError('GPU preparation')), \
+                 patch.object(runtime,'models_report',side_effect=AssertionError('Unexpected inventory')), \
                  contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
                 with self.assertRaises(SystemExit) as stopped: gen.main()
                 self.assertEqual(stopped.exception.code,code)

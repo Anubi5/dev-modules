@@ -45,8 +45,8 @@ class HelpTest(unittest.TestCase):
     def test_actual_dispatch_has_no_effects(self):
         for arguments in [['--help'],['-h'],['help'],['schema','--help'],['schema','-h'],['image','--help'],['models','--help'],['jobs','--help'],['list','--help']]:
             with self.subTest(arguments=arguments), patch.object(sys,'argv',['ai gen',*arguments]), \
-                 patch.object(gen,'models_report',side_effect=AssertionError('Help scanned models')), \
-                 patch.object(gen,'dump_schema',side_effect=AssertionError('Help wrote schema')), \
+                 patch.object(gen.rt,'models_report',side_effect=AssertionError('Help scanned models')), \
+                 patch.object(gen.rt,'dump_schema',side_effect=AssertionError('Help wrote schema')), \
                  patch('subprocess.Popen',side_effect=AssertionError('Help started process')), \
                  patch('socket.socket',side_effect=AssertionError('Help accessed network')), \
                  contextlib.redirect_stdout(io.StringIO()) as output:

@@ -13,7 +13,7 @@ import unittest
 from unittest.mock import patch
 
 import helper_models
-import gen
+import runtime
 
 
 class HelperTests(unittest.TestCase):
@@ -96,8 +96,8 @@ class HelperTests(unittest.TestCase):
             helper_models.check_workflow(self.root/'absent', {'1':dict(class_type='IPAdapterUnifiedLoaderFaceID')})
 
     def test_missing_capability_stops_before_service_or_gpu_changes(self):
-        with patch.object(gen, 'MODELS', str(self.root/'absent')), patch.object(gen, 'comfy_up', side_effect=AssertionError('Service touched')):
-            self.assertIn('pose needs', gen.prepare(print, 1, {'1':dict(class_type='DWPreprocessor')}))
+        with patch.object(runtime, 'MODELS', str(self.root/'absent')), patch.object(runtime, 'comfy_up', side_effect=AssertionError('Service touched')):
+            self.assertIn('pose needs', runtime.prepare(print, 1, {'1':dict(class_type='DWPreprocessor')}))
 
     def test_service_startup_has_no_helper_hash_gate_and_stays_offline(self):
         service=Path(__file__).with_name('comfyui.service').read_text()

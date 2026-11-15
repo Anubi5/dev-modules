@@ -33,17 +33,17 @@ done < "$MOD/models.txt"
 echo "  image models:"; python3 "$MOD/gen.py" models || miss=1     # every model in profiles.json: ready / optional / MISSING
 # preflight against the live ComfyUI: every model file of every workflow variant is in its loader's list (test LoRAs excluded)
 pf=$(cd "$MOD" && python3 -c '
-import gen
-bad = sorted({m for wf in gen.all_workflows() for m in gen.missing_files(wf) if not m.startswith("LoraLoader.")})
+import runtime
+bad = sorted({m for wf in runtime.all_workflows() for m in runtime.missing_files(wf) if not m.startswith("LoraLoader.")})
 print("\n".join(bad))') || { echo "  CHECK preflight could not run"; miss=1; }
 [ -z "$pf" ] && echo "  preflight: ComfyUI sees every model file the workflows name" \
   || echo "$pf" | sed 's/^/  (preflight would refuse, fine if that model is optional and not installed: /; s/$/)/'
 n=$(python3 "$MOD/gen.py" list --json | jq '[.models[], .checkpoints[], .loras[]] | length') \
   && echo "  ai gen list: $n models, checkpoints and LoRAs found" || { echo "  CHECK ai gen list failed"; miss=1; }
 ca=$(cd "$MOD" && python3 -c '
-import gen
-m = gen.class_arch()
-left = sorted(gen.archs() - set(m.values()))
+import runtime
+m = runtime.class_arch()
+left = sorted(runtime.archs() - set(m.values()))
 print(("OK " if not left else "MISSING ") + ", ".join(f"{c}={a}" for c, a in sorted(m.items())) + (" | not recognised: " + ", ".join(left) if left else ""))')
 case "$ca" in OK*) echo "  model detection (ComfyUI's own): ${ca#OK }" ;; *) echo "  CHECK model detection: $ca"; miss=1 ;; esac
 [ $miss = 0 ] || exit 1

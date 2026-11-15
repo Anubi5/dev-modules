@@ -185,6 +185,12 @@ def implementation_identity(prof):
     root = ROOT.parent
     selected = dict(prof)
     payload = dict(profile=selected, family=data)
+    defaults = json.loads((root / 'profiles.json').read_text())
+    payload['styles'] = defaults.get('styles', {})
+    if data and data.get('builder'):
+        extra = getattr(implementation(data['builder']), 'acceptance_defaults', None)
+        if extra:
+            payload['composition_defaults'] = extra()
     pending = []
     if data and data.get('builder'):
         pending.append(Path(implementation(data['builder']).__file__))

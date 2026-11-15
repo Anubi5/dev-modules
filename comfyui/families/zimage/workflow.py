@@ -39,3 +39,8 @@ def build(p, v, o):
         fix_faces=o.fix_faces, pose="pending" if o.pose else None, pose_strength=v["pose_strength"])
 
 CAPABILITIES = dict(build=build, negative=False, features=['hires','fix_faces','pose'], uploads={'pose':'30'}, report=report)
+
+
+def acceptance_defaults():
+    """The optional family-owned repair composition depends on this reviewed refiner selection."""
+    return profile(PROFILES.get('default_sdxl', 'realvis'))

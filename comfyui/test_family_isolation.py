@@ -48,6 +48,21 @@ class FamilyIsolationTests(unittest.TestCase):
         self.assertIs(selected[0], selected[1])
         self.assertIs(selected[0], selected[2])
 
+    def test_new_video_family_is_discovered_without_a_catalogue_entry(self):
+        import subprocess
+        import sys
+        code = """from copy import deepcopy
+from generation import registry
+entries = registry.profiles()
+new = deepcopy(entries['wan2.2-ti2v-5b'])
+new['family'] = 'new-video'
+entries['new-video'] = new
+registry.profiles = lambda: entries
+from generation import models
+assert models.package('new-video', kind='video').settings['family'] == 'new-video'
+"""
+        subprocess.run([sys.executable, '-B', '-c', code], cwd=registry.ROOT.parent, check=True, timeout=10)
+
     def test_video_operation_dispatches_through_family(self):
         selected = models.package(kind='video')
         implementation = registry.implementation(registry.family(selected.settings)['builder'])

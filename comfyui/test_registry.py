@@ -128,4 +128,18 @@ class RegistryTests(unittest.TestCase):
             (p/'package.json').write_text(json.dumps(dict(data, builder='pixal3d')))
             with self.assertRaises(ValueError): registry.packages(root)
 
+    def test_unsupported_feature_names_the_family_and_who_supports_it(self):
+        from operations import image as image_op
+        zimage = models.profile('zimage')
+        text = image_op.unsupported(zimage, builders.capabilities(zimage), ['fix_hands'])
+        self.assertIn('(family zimage) does not support --fix-hands', text)
+        self.assertIn('it supports --pose, --fix-faces, --hires, --upscale', text)
+        self.assertIn('Models that support --fix-hands: realvis, juggernaut, sdxl-base', text)
+        flux = models.profile('flux3')
+        text = image_op.unsupported(flux, builders.capabilities(flux), ['pose'])
+        self.assertIn('it supports --upscale', text)
+        declared = [n for n, p in models.PROFILES['models'].items() if p.get('kind', 'image') == 'image' and n != 'flux3'
+                    and 'pose' in builders.capabilities(dict(p, name=n))['features']]
+        self.assertTrue(text.endswith('Models that support --pose: ' + ', '.join(declared)))
+
 if __name__=='__main__': unittest.main()

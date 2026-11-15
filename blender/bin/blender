@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 ## @brief The blender command (headless use: blender -b ...).
 ## @details Renders (-b/--background) take the shared GPU lock (/tmp/ai-gpu.lock, same as ai gen) and free the GPU first.
+##          AI_BLENDER_CPU_ONLY=1: the caller runs a background script that renders nothing (mesh preparation,
+##          import/export) - no GPU lock and no chat-model unload, which a CPU-only step does not need.
 B=~/.local/share/modules/blender/app/current/blender
+[ "${AI_BLENDER_CPU_ONLY:-}" = 1 ] && exec "$B" "$@"
 case " $* " in
   *" --command blender_mcp "*) ;;                                   # the long-running MCP bridge: no GPU lock
   *" -b "*|*" --background "*)

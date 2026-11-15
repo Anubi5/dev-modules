@@ -2,7 +2,11 @@
 
 SKILL.md starts with YAML frontmatter; name is 1-64 lowercase letters, digits and single hyphens and equals the
 folder; description is 1-1024 characters; only the specification's fields are used; the body stays under 500 lines.
+Every module command a skill names in code ("ai gen image", "img-check") exists: "ai NAME SUB" must be an entry in
+the effects of the module providing bin/ai-NAME (manifest v2), which _tests/manifest_contract_test.py checks against
+that command's own help. Platform commands (ai mod, ai free, ...) are not module commands and are not checked here.
 """
+import json
 from pathlib import Path
 import re
 import sys
@@ -54,13 +58,46 @@ def problems(skill):
     return found
 
 
+def commands():
+    """Module command -> its effects keys (v2 manifests) or None (v1: the command exists, subcommands unknown)."""
+    found = {}
+    for module in sorted(p for p in ROOT.iterdir() if (p / 'bin').is_dir()):
+        manifest = module / 'module.json'
+        data = json.loads(manifest.read_text(encoding='utf-8')) if manifest.is_file() else {}
+        keys = set(data.get('effects', {})) if data.get('schema') == 2 else None
+        for command in (module / 'bin').iterdir():
+            found[command.name] = None if keys is None else {k for k in keys if k.split(' ')[0] == command.name}
+    return found
+
+
+def named_commands(text):
+    """(command, subcommand or None) for each "ai NAME [SUB]" inside inline code or fenced blocks."""
+    code = re.findall(r'```.*?```', text, re.S) + re.findall(r'`[^`\n]+`', re.sub(r'```.*?```', '', text, flags=re.S))
+    for span in code:
+        for match in re.finditer(r'(?<![\w/.-])ai ([a-z][a-z0-9-]*)(?: ([a-z0-9][a-z0-9-]*))?', span):
+            yield 'ai-' + match.group(1), match.group(2)
+
+
+def unknown_commands(skill, known):
+    """Module commands the skill names that the module does not declare."""
+    found = []
+    for command, sub in named_commands((skill / 'SKILL.md').read_text(encoding='utf-8')):
+        keys = known.get(command)
+        if not keys:
+            continue                                       # platform command, or a v1 module (not yet declared)
+        if sub and command not in keys and f'{command} {sub}' not in keys:
+            found.append(f'names "{command[3:]} {sub}" but ai {command[3:]} has no such subcommand')
+    return found
+
+
 def main():
     """Check every skills/*/ folder of every module and the template."""
     bad = 0
+    known = commands()
     for skill in sorted(ROOT.glob('*/skills/*/')):
         if not (skill / 'SKILL.md').is_file():
             print(f'  {skill.relative_to(ROOT)}: no SKILL.md'); bad = 1; continue
-        for problem in problems(skill):
+        for problem in problems(skill) + unknown_commands(skill, known):
             print(f'  {skill.relative_to(ROOT)}: {problem}'); bad = 1
     print('  skill format: OK' if not bad else '  skill format: FAILED')
     return bad

@@ -59,16 +59,28 @@ UNSET_ALLOWED=FALLBACK_KEYS+('mcp_servers',)
 
 def approved_servers(home: Path) -> dict[str,dict[str,Any]]:
     """MCP servers the owner approved: id -> {command, args}. A missing or unreadable file approves nothing."""
+    if (Path(home)/'eva-integration-pending.json').exists():
+        return {}
     try:
         data=json.loads((Path(home)/APPROVALS).read_text())
         decisions=data['decisions'] if data.get('schema')==1 else {}
     except (OSError,ValueError,KeyError,AttributeError):
         return {}
+    active=data.get('active',[])
+    managed=(data.get('managed') or {}).get('servers',{})
+    if not isinstance(decisions,dict) or not isinstance(active,list) or not isinstance(managed,dict):
+        return {}
     servers={}
-    for key,record in decisions.items():
+    for key in active:
+        record=decisions.get(key) if isinstance(key,str) else None
         offer=record.get('offer') if isinstance(record,dict) else None
-        if record.get('approved') is True and isinstance(offer,dict) and offer.get('kind')=='mcp' and key.startswith('mcp:'):
-            servers[offer['id']]=dict(command=offer['command'],args=list(offer.get('args') or []))
+        if not (isinstance(record,dict) and record.get('how')=='owner' and record.get('approved') is True
+                and isinstance(offer,dict) and offer.get('kind')=='mcp' and key.startswith('mcp:')):
+            continue
+        name=offer.get('id')
+        want=dict(command=offer.get('command'),args=offer.get('args',[]))
+        if isinstance(name,str) and isinstance(want['command'],str) and isinstance(want['args'],list) and managed.get(name)==want:
+            servers[name]=want
     return servers
 
 
@@ -119,7 +131,7 @@ def evaluate(values: dict[str,Any],unreadable: tuple[str,...] | list[str]=(),app
             for name,server in servers.items():
                 want=approved.get(name)
                 got=dict(command=server.get('command'),args=list(server.get('args') or [])) if isinstance(server,dict) else None
-                if want is None or got!=want or set(server)-{'command','args','env','timeout','connect_timeout'}:
+                if want is None or got!=want or server!=want:
                     errors.append('Unapproved MCP server: '+str(name))
     if values.get('memory.provider') not in (None,'','none','builtin','built-in','default'):
         errors.append('External memory provider configured')
@@ -166,6 +178,8 @@ def inspect(executable: str,soul: Path,env: dict[str,str] | None=None) -> dict[s
             else:values[key]=json.loads(result.stdout)
         except (OSError,ValueError,subprocess.TimeoutExpired):unreadable.append(key)
     report=evaluate(values,unreadable,approved_servers(soul.parent))
+    if (soul.parent/'eva-integration-pending.json').exists():
+        report['errors'].append('Interrupted EVA integration requires recovery before launch')
     template=Path(__file__).with_name('hermes-local-SOUL.md').read_text()
     text=soul.read_text() if soul.is_file() else ''
     if template.strip() not in text:report['warnings'].append('Owned SOUL profile section changed or missing')

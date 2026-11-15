@@ -13,6 +13,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 FIELDS = {'name', 'description', 'license', 'compatibility', 'metadata', 'allowed-tools'}
+PLATFORM_COMMANDS = {'ai-mod', 'ai-free', 'ai-start', 'ai-stop', 'ai-status', 'ai-logs', 'ai-net', 'ai-hermes', 'ai-dashboard', 'ai-test', 'ai-doctor', 'ai-open', 'ai-help'}
 NAME = re.compile(r'^[a-z0-9]+(-[a-z0-9]+)*$')
 
 
@@ -83,6 +84,9 @@ def unknown_commands(skill, known):
     found = []
     for command, sub in named_commands((skill / 'SKILL.md').read_text(encoding='utf-8')):
         keys = known.get(command)
+        if command not in known and command not in PLATFORM_COMMANDS:
+            found.append(f'names missing public command ai {command[3:]}')
+            continue
         if not keys:
             continue                                       # platform command, or a v1 module (not yet declared)
         if sub and command not in keys and f'{command} {sub}' not in keys:

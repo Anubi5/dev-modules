@@ -63,11 +63,13 @@ def prepare(a, seed, prefix, edit=None):
         sys.exit("use --model or --checkpoint, not both")
     if edit:
         edit.before(a)
-    if not a.model and not a.checkpoint and (a.pose or a.face or a.fix_faces or a.fix_hands):
-        a.model = PROFILES.get("default_sdxl", "realvis")    # those tools are SDXL-only
+    if not a.model and not a.checkpoint:
+        a.model = next((PROFILES[key] for flag, key in PROFILES.get('feature_defaults', {}).items()
+                        if getattr(a, flag, False)), None)
     log0 = lambda t: print(f"  {t}", flush=True)
     prof = rt.find_checkpoint(a.checkpoint, log0) if a.checkpoint else rt.resolve_model(a.model or PROFILES["default"], log0)
-    builders.registry.check_parts(prof, rt.MODELS)
+    if not getattr(a, 'check', False):
+        builders.registry.check_parts(prof, rt.MODELS)
     arch, style = prof["arch"], a.style or prof.get("style", "photo")
     capability = builders.capabilities(prof)
     allowed = capability["features"]
@@ -95,7 +97,9 @@ def prepare(a, seed, prefix, edit=None):
         if getattr(a, "check", False):           # --check starts no service: only say what the run will need
             a.needs = dict(getattr(a, "needs", {}), **{"llm.chat": "llama-swap"})
         else:
-            prompt = rt.expand_prompt(a.prompt, "edit" if refs else "t2i", w, h, refs, log=log0)
+            lacking=rt.missing_capabilities({'llm.chat':'llama-swap'})
+            if lacking:sys.exit('Prompt improvement needs '+', '.join(lacking))
+            prompt = rt.expand_prompt(a.prompt, "edit" if refs else "t2i", w, h, refs, log=log0, templates=capability.get('prompt_templates'))
     if not capability['negative']: neg = ""
     if a.upscale and not capability['upscale']:
         sys.exit(unsupported(prof, capability, ["upscale"]))
@@ -111,7 +115,8 @@ def prepare(a, seed, prefix, edit=None):
             "pose": a.pose and {"file": a.pose, "strength": pose_strength},
             "face": a.face and {"file": a.face, "weight": a.face_weight}, "images": a.image or None,
             "loras": lora_checks or None,
-            "face_refiner": {"model": PROFILES.get("default_sdxl", "realvis"),
-                             "model_file": wf["44"]["inputs"]["ckpt_name"]} if arch == "zimage" and a.fix_faces else None}
-    limit = a.timeout or (1800 if a.hires or a.fix_hands or a.fix_faces or arch in ("flux3", "fibo2", "moss") else 900)
+            "face_refiner": None}
+    if capability.get('report'):
+        info.update(capability['report'](prof, wf, a))
+    limit = a.timeout or (1800 if a.hires or a.fix_hands or a.fix_faces else capability['timeout'])
     return wf, uploads, info, limit, prof

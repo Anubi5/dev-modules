@@ -44,6 +44,7 @@ class ZImageTests(unittest.TestCase):
                 return outcomes[index], [str(Path(directory)/f"output-{index}.png")], None if outcomes[index] else "fixture failure"
             with patch.object(sys, "argv", ["gen.py", "image", "adult portrait", "--model", "zimage", "--count", str(count), "--seed", "0", "--json"]), \
                  patch.object(runtime, "OUTPUT", directory), patch.dict(gen.JOB, {}, clear=True), \
+                 patch.object(runtime.builders.registry, "check_parts"), \
                  patch.object(runtime, "resolve_model", return_value=models.profile("zimage")), \
                  patch.object(runtime, "input_hashes", return_value={}), patch.object(runtime, "generate", side_effect=generate), \
                  contextlib.redirect_stdout(io.StringIO()) as output, contextlib.redirect_stderr(io.StringIO()):

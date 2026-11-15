@@ -18,6 +18,7 @@ class ProducerTests(unittest.TestCase):
             with self.subTest(kind=kind), tempfile.TemporaryDirectory() as directory, \
                  patch.object(sys, "argv", ["gen.py", kind, "--json", "--name=test", "--seed=7", "--", "--literal scene"]), \
                  patch.dict(gen.JOB, {}, clear=True), patch.object(runtime, "OUTPUT", directory), \
+                 patch.object(runtime.builders.registry, "check_parts"), \
                  patch.object(runtime, "generate", return_value=(True, [str(Path(directory)/"output.webp")], None)), \
                  contextlib.redirect_stdout(io.StringIO()) as output, contextlib.redirect_stderr(io.StringIO()) as progress:
                 self.assertEqual(gen.entry(), 0)
@@ -65,11 +66,41 @@ class CheckTests(unittest.TestCase):
                 if not part.get("optional"):
                     (models / "comfy" / part["folder"]).mkdir(parents=True, exist_ok=True)
                     (models / "comfy" / part["folder"] / part["file"]).write_bytes(b"x")
-            code, result, progress = self.check(["image", "a mug", "--model", "zimage", "--seed", "5", "--upscale"], models, directory)
+            original = runtime.builders.registry.family(runtime.profile('zimage'))
+            for part in original['parts'].values(): part['bytes'] = 1
+            with patch.object(runtime.builders.registry, 'family', return_value=original):
+                code, result, progress = self.check(["image", "a mug", "--model", "zimage", "--seed", "5", "--upscale"], models, directory)
         self.assertEqual((code, result["status"], result["exit_code"]), (0, "checked", 0))
         self.assertEqual((result["model"], result["family"], result["features"], result["seed"]), ("zimage", "zimage", ["upscale"], 5))
         self.assertRegex(result["workflow_sha256"], "^[0-9a-f]{64}$")
         self.assertIn("CHECK OK", progress)
+
+    def test_wrong_size_builder_family_fails_preflight(self):
+        with tempfile.TemporaryDirectory() as directory:
+            models=Path(directory)/'models'
+            for part in runtime.builders.registry.family(runtime.profile('zimage'))['parts'].values():
+                if not part.get('optional'):
+                    target=models/'comfy'/part['folder']/part['file'];target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(b'x')
+            code,result,_=self.check(['image','a mug','--model','zimage'],models,directory)
+            self.assertEqual((code,result['status']),(1,'check_failed'))
+            self.assertIn('declared size',result['error'])
+
+    def test_runtime_capability_consumption_rejects_ambiguity_and_wrong_interface(self):
+        from types import SimpleNamespace
+        for declarations,missing in [([('one',1)],False),([('one',2)],True),([('one',1),('two',1)],True),([],True)]:
+            report={'schema':1,'modules':[dict(name=n,manifest=2,capabilities=[dict(id='llm.chat',interface=v)]) for n,v in declarations]}
+            with patch.object(runtime.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout=json.dumps(report))):
+                self.assertEqual(bool(runtime.missing_capabilities({'llm.chat':'llama-swap'})),missing)
+
+    def test_batch_preflight_does_not_claim_generated_outputs(self):
+        import argparse
+        args=argparse.Namespace(seed=7,count=2,name='fixture',prompt='test',check=True)
+        def checked(item):
+            gen.JOB['result']=dict(status='checked',outputs=[],record=None)
+            return 0
+        with patch.object(gen,'main',side_effect=checked),patch.dict(gen.JOB,{},clear=True):
+            self.assertEqual(gen.image_batch(args),0)
+            self.assertEqual((gen.JOB['result']['status'],gen.JOB['result']['completed'],gen.JOB['result']['checked']),('checked',0,2))
 
     def test_missing_files_are_named_with_the_approved_way_to_get_them(self):
         with tempfile.TemporaryDirectory() as directory:

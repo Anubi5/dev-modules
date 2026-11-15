@@ -8,6 +8,58 @@ import re
 ROOT = Path(__file__).resolve().parents[1]/'families'
 
 
+def has_implementation(name):
+    """Read-only discovery of a contained reviewed implementation, without executing it."""
+    if not isinstance(name, str) or not re.fullmatch('[a-z0-9][a-z0-9-]*', name):
+        return False
+    trusted = Path(__file__).resolve().parents[1] / 'families'
+    path = trusted / name / 'workflow.py'
+    return not path.is_symlink() and path.is_file() and path.resolve().is_relative_to(trusted.resolve())
+
+
+def implementation(name):
+    """Load reviewed code from a fixed source tree, never a metadata-supplied path or weights."""
+    import importlib.util
+    import sys
+    if not isinstance(name, str) or not re.fullmatch('[a-z0-9][a-z0-9-]*', name):
+        raise ValueError('Invalid reviewed builder identity')
+    trusted = Path(__file__).resolve().parents[1] / 'families'
+    path = trusted / name / 'workflow.py'
+    if path.is_symlink() or not path.resolve().is_relative_to(trusted.resolve()) or not path.is_file():
+        raise ValueError('No reviewed builder for architecture ' + name)
+    key = 'eva_family_' + name.replace('-', '_')
+    if key not in sys.modules:
+        spec = importlib.util.spec_from_file_location(key, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        sys.modules[key] = module
+    return sys.modules[key]
+
+
+def samples(prof):
+    """Offline examples follow the selected reviewed implementation, never an external path."""
+    import importlib.util
+    owner = implementation((family(prof) or {}).get('builder', prof['arch']))
+    path = Path(owner.__file__).with_name('samples.py')
+    if path.is_symlink() or not path.resolve().is_relative_to(ROOT.resolve()):
+        raise ValueError('Escaped family sample file')
+    spec = importlib.util.spec_from_file_location(owner.__name__ + '_samples', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def reviewed_file(relative):
+    """Read-only resources must resolve within the pinned module, including through symlinks."""
+    path = PurePosixPath(relative)
+    if path.is_absolute() or '..' in path.parts or '\\' in relative or ':' in relative:
+        raise ValueError('Unsafe reviewed resource path')
+    target = ROOT.parent / path
+    if not target.is_file() or not target.resolve().is_relative_to(ROOT.parent.resolve()):
+        raise ValueError('Missing or escaped reviewed resource')
+    return target
+
+
 def assets():
     """Every asset models.txt declares: {(folder, file): (sha256, bytes or None)} - the one declaration per file."""
     import importlib.util
@@ -51,14 +103,14 @@ def packages(root=ROOT):
             # A 3D family runs a reviewed recipe file shipped with the module (recipes/*.json), named by its profile.
             workflow = PurePosixPath(str(data.get('defaults', {}).get('workflow', '')))
             if (workflow.parts[:1] != ('recipes',) or len(workflow.parts) != 2 or workflow.suffix != '.json'
-                    or not (ROOT.parent / workflow).is_file() or 'builder' in data or 'recipe' in data):
+                    or not (ROOT.parent / workflow).is_file() or not (ROOT.parent / workflow).resolve().is_relative_to(ROOT.parent.resolve()) or 'builder' in data or 'recipe' in data):
                 raise ValueError('A 3D family names one reviewed recipes/*.json file and nothing else: '+name)
             data['sha256'] = hashlib.sha256(raw).hexdigest()
             result[name] = data
             continue
         builder = data.get('builder')
         if builder is not None:
-            # A reviewed graph builder shipped with the module (generation/builders.BUILTINS), named, never a path.
+            # A reviewed graph builder shipped with the module (families/<builder>/workflow.py), named, never a path.
             if not isinstance(builder, str) or not re.fullmatch('[a-z0-9][a-z0-9-]*', builder) or 'recipe' in data:
                 raise ValueError('Family builder must be a reviewed builder name (and no recipe): '+name)
             data['sha256'] = hashlib.sha256(raw).hexdigest()
@@ -124,10 +176,60 @@ def build(prof, values):
 def check_parts(prof, models_root):
     """Cheap use-time check; full hashes belong to explicit verification."""
     data=family(prof)
-    if data is None or moved(data):return            # moved profiles: ComfyUI's preflight, as before
+    if data is None:return
     root=Path(models_root).resolve()
     for part in data['parts'].values():
         if part.get('optional'):continue                     # used only by an option that checks for it itself
         path=root/'comfy'/part['folder']/part['file']
-        if not path.resolve().is_relative_to(root) or not path.is_file() or path.stat().st_size!=part['bytes']:
-            raise ValueError(data['name']+' needs '+str(path)+' with its declared size; copy the pinned component and run ai models verify '+data['name'])
+        if not path.resolve().is_relative_to(root) or not path.is_file() or (part.get('bytes') is not None and path.stat().st_size!=part['bytes']):
+            raise ValueError(data['name']+' needs '+str(path)+' with its declared size (two-phase download plan or owner copy); copy the pinned component and run ai models verify '+data['name'])
+
+
+def implementation_identity(prof):
+    """Hash selected family data and the shipped local code it imports, without reading weights.
+
+    Unrelated family files are excluded. Selected defaults, shared graph/features and
+    the family's recipe participate; a repository-wide commit is deliberately not the key.
+    """
+    import ast
+    data = family(prof)
+    root = ROOT.parent
+    selected = dict(prof)
+    payload = dict(profile=selected, family=data)
+    defaults = json.loads((root / 'profiles.json').read_text())
+    payload['styles'] = defaults.get('styles', {})
+    if data and data.get('builder'):
+        extra = getattr(implementation(data['builder']), 'acceptance_defaults', None)
+        if extra:
+            payload['composition_defaults'] = extra()
+    pending = []
+    if data and data.get('builder'):
+        owner=implementation(data['builder'])
+        pending.append(Path(owner.__file__))
+        pending.extend(reviewed_file(p) for p in owner.CAPABILITIES.get('implementation_files',[]))
+    elif not data and has_implementation(prof.get('arch')):
+        pending.append(Path(implementation(prof['arch']).__file__))
+    if data and data['kind'] == '3d':
+        pending.append(root / data['defaults']['workflow'])
+    pending.append(root / 'generation/graph.py')
+    files = {}
+    while pending:
+        path = pending.pop().resolve()
+        if path in files or not path.is_file():
+            continue
+        if not path.is_relative_to(root.resolve()):
+            raise ValueError('Acceptance implementation escapes reviewed module')
+        raw = path.read_bytes()
+        files[path] = hashlib.sha256(raw).hexdigest()
+        if path.suffix != '.py':
+            continue
+        for node in ast.walk(ast.parse(raw)):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            base = root.joinpath(*(node.module or '').split('.')) if not node.level else path.parent.joinpath(*(['..'] * (node.level - 1)), *(node.module or '').split('.'))
+            for candidate in [base] + [base / alias.name for alias in node.names]:
+                local = candidate.with_suffix('.py')
+                if local.is_file():
+                    pending.append(local)
+    payload['code'] = {p.relative_to(root.resolve()).as_posix(): value for p, value in files.items()}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(',', ':')).encode()).hexdigest()

@@ -31,7 +31,7 @@
     "ai-free-comfyui": ["gpu"],
     "ai-model-catalogue list": ["read_only"],
     "ai-model-catalogue show": ["read_only"],
-    "ai-model-catalogue verify": ["read_only"],
+    "ai-model-catalogue verify": ["writes:state"],
     "ai-model-catalogue accept": ["writes:state"],
     "img-check": ["read_only"]
   },

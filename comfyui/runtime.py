@@ -399,15 +399,17 @@ def model_server_up(log, wait=120):
     return False
 
 
-def expand_prompt(request, kind, width=1024, height=1024, images=(), log=print):
+def expand_prompt(request, kind, width=1024, height=1024, images=(), log=print, templates=None):
     """!
-    @brief FLUX 3 needs a full scene caption: the local chat model (model-serving contract, OpenAI API) expands the
-           request with BFL's own upsampler instructions (prompts/flux3_*.txt) before the GPU is handed to ComfyUI.
+    @brief Expand with the selected family's reviewed instructions through the local model-serving contract.
+           Existing direct callers use the configured prompt_model; operations pass their family's templates.
     @param request  What the user asked.  @param kind  "t2i" or "edit".  @param images  Reference image paths (edit).
     @return The caption, or the request unchanged (with a warning) when the chat model is not available.
     """
     import base64
-    sysmsg = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts", f"flux3_{kind}.txt")).read()
+    if templates is None:
+        templates=builders.capabilities(profile(PROFILES['prompt_model']))['prompt_templates']
+    sysmsg = builders.registry.reviewed_file(templates[kind]).read_text()
     g = __import__("math").gcd(width, height)
     text = (f"TARGET CANVAS: {width // g}:{height // g}\n" if kind == "t2i" else "") + request
     content = [{"type": "text", "text": text}] + [
@@ -840,8 +842,10 @@ def _run(wf, timeout, wait, log, uploads, finish):
         job_state("unknown", prompt_id=JOB.get("pid"), error=f"{type(e).__name__}: {e}")
         return False, [], f"lost contact with ComfyUI ({e}) - the job may still finish there (prompt {JOB.get('pid')})"
     finally:
-        release(log, JOB.pop("pid", None))
-        chat_resume(paused, log)
+        try:
+            release(log, JOB.pop("pid", None))
+        finally:
+            chat_resume(paused, log)
 
 
 def all_workflows(include_packages=True):
@@ -854,26 +858,8 @@ def all_workflows(include_packages=True):
                 yield builders.registry.build(p,dict(prompt='x',negative='y',seed=1,steps=p['steps'],
                     width=1024,height=1024,prefix='t'))
             continue
-        if p["arch"] == "sdxl":
-            for pose, face, ff, fh, hires, up in itertools.product([None, "p"], [None, "f"], *[[False, True]] * 4):
-                yield sdxl("x", "y", 1, p["steps"], 1024, 1024, up, "t", pose=pose, face=face, fix_faces=ff,
-                           fix_hands=fh, hires=hires, prof=p)
-        elif p["arch"] == "anima":
-            for pose, up in itertools.product([None, "p"], [False, True]):
-                yield anima("x", "y", 1, p["steps"], 1024, 1024, "t", p, pose=pose, upscale=up)
-        elif p["arch"] == "zimage":
-            for up in (False, True):
-                yield zimage("x", 1, p["steps"], 1024, 1024, "t", p, upscale=up)
-                yield zimage("x", 1, p["steps"], 1024, 1024, "t", p, upscale=up, hires=True)
-        elif p["arch"] == "flux3":
-            for refs, up in itertools.product([(), ("a",), ("a", "b")], [False, True]):
-                yield flux3("x", 1, p["steps"], 1024, 1024, "t", p, refs=refs, upscale=up)
-        elif p["arch"] == "moss":
-            for up in (False, True):
-                yield moss("x", "y", 1, p["steps"], 1024, 1024, "t", p, upscale=up)
-        elif p["arch"] == "fibo2":
-            for refs, up in itertools.product([(), ("a",), ("a", "b")], [False, True]):
-                yield fibo2("x", 1, p["steps"], 1024, 1024, "t", p, refs=refs, upscale=up)
+        if p.get("kind", "image") == "image":
+            yield from builders.registry.samples(p).samples(p)
     for name in PROFILES["models"]:                    # every architecture with two LoRAs chained
         p = profile(name)
         if builders.registry.declarative(p): continue
@@ -881,18 +867,7 @@ def all_workflows(include_packages=True):
             r = load_recipe(p["workflow"])                 # every picture input given (all views of a multi-view model)
             yield apply_recipe(r, dict(p.get("set", {}), prefix="t", **{k: "x.png" for k, sp in r["inputs"].items() if sp.get("upload")}))
             continue
-        if p["arch"] == "sdxl":
-            w = sdxl("x", "y", 1, p["steps"], 1024, 1024, True, "t", pose="p", face="f", fix_faces=True, hires=True, prof=p)
-        elif p["arch"] == "anima":
-            w = anima("x", "y", 1, p["steps"], 1024, 1024, "t", p, pose="p")
-        elif p["arch"] == "zimage":
-            w = zimage("x", 1, p["steps"], 1024, 1024, "t", p)
-        elif p["arch"] == "flux3":
-            w = flux3("x", 1, p["steps"], 1024, 1024, "t", p, refs=("a",))
-        elif p["arch"] == "moss":
-            w = moss("x", "y", 1, p["steps"], 1024, 1024, "t", p)
-        else:
-            w = fibo2("x", 1, p["steps"], 1024, 1024, "t", p, refs=("a",))
+        w = builders.registry.samples(p).lora_sample(p)
         yield apply_loras(w, [("a.safetensors", 0.8), ("b.safetensors", -0.5)], p["arch"])
     if include_packages:
         p = profile("zimage")
@@ -978,6 +953,13 @@ def write_record(files, info, wf=None, status="succeeded", error=None, prefix=No
         rec["model_sha256"] = {os.path.basename(k): v for k, v in hashes.items() if os.path.basename(k) == info.get("model_file")}
     except OSError:
         pass
+    if info.get('model'):
+        try:
+            from generation.models import package
+            selected = package(info['model'], kind=info.get('kind') if info.get('kind') in ('video', '3d') else 'image')
+            rec['implementation_sha256'] = builders.registry.implementation_identity(dict(selected.settings, name=selected.name))
+        except (ValueError, OSError):
+            rec['implementation_sha256'] = None
     path = base + ".json"
     if wf is not None:              # the exact ComfyUI workflow (API format) as it was run: ai gen rerun, or load it in the page
         wpath = base + ".workflow.json"
@@ -1199,17 +1181,26 @@ def missing_assets(prof, wf):
 
 
 def missing_capabilities(needs):
-    """! @brief Capabilities the job needs that no installed module provides, e.g. {"llm.chat": "llama-swap"}. """
-    installed = os.path.expanduser("~/.local/share/modules")
-    out = []
-    for capability, module in needs.items():
-        try:
-            manifest = json.load(open(os.path.join(installed, module, "module.json")))
-            provided = {c["id"] if isinstance(c, dict) else c for c in manifest.get("capabilities", [])}
-        except (OSError, ValueError):
-            provided = set()
-        if capability not in provided:
-            out.append(f"{capability} (module {module})")
+    """Required optional-job providers through public, validated read-only discovery; never install them."""
+    if not needs:
+        return []
+    providers = {}
+    try:
+        result=subprocess.run(['ai','mod','capabilities','--json'],capture_output=True,text=True,timeout=30)
+        if result.returncode:
+            raise ValueError('Capability discovery failed')
+        report=json.loads(result.stdout)
+        for module in report.get('modules',[]):
+            if module.get('manifest')!=2:continue
+            for capability in module.get('capabilities',[]):
+                providers.setdefault(capability['id'],[]).append((module['name'],capability['interface']))
+    except (OSError,ValueError,KeyError,TypeError,subprocess.TimeoutExpired):
+        providers={}
+    out=[]
+    for capability,module in needs.items():
+        choices=providers.get(capability,[])
+        if len(choices)!=1 or type(choices[0][1]) is not int or choices[0][1]!=1:
+            out.append(f"{capability} (module {module})" + (' - ambiguous or incompatible interface; requires one interface-1 provider' if choices else ''))
     return out
 
 
@@ -1234,17 +1225,25 @@ def checked(a, info, wf, prof, seed, needs=None):
            lock, no service, nothing written. @return 0 when the job could run, 1 with what is missing
     """
     missing = missing_assets(prof, wf) if prof else []
+    part_error = None
+    if prof:
+        try:
+            builders.registry.check_parts(prof, MODELS)
+        except ValueError as error:
+            part_error = str(error)
     lacking = missing_capabilities(needs or {})
     problems = ([f"missing model files: {', '.join(missing)} - get them with the two-phase download plan "
                  "(Windows: dev mod update comfyui, review the plan, approve) or copy gated files by hand into "
                  "D:\\AI\\models\\comfy\\<folder>"] if missing else []) + \
                ([f"needs {', '.join(lacking)} - install that module (dev mod add <module>)"
                  + (" or leave out --improve-prompt" if any(c.startswith("llm.chat") for c in lacking) else "")] if lacking else [])
+    if part_error:
+        problems.append(part_error)
     JOB["result"] = dict(status="checked" if not problems else "check_failed", record=None, outputs=[],
                          error="; ".join(problems) or None, **result_fields(a, info, wf, prof, seed))
     for line in problems:
         print(f"CHECK {line}")
     if not problems:
         print(f"CHECK OK: ai gen {a.kind} with {info.get('model')}" + (f" (family {prof.get('family')})" if prof and prof.get('family') else "")
-              + (f", features {', '.join(requested_features(a))}" if requested_features(a) else "") + " - ready to run")
+              + (f", features {', '.join(requested_features(a))}" if requested_features(a) else "") + " - offline configuration/assets checked; GPU execution and output quality NOT TESTED")
     return 1 if problems else 0

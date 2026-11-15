@@ -13,3 +13,9 @@ img-ask "$HOME/work/inputs/render.png" 'Is the red teapot visible?' --expect yes
 ```
 
 `img-ask` uses the configured local vision model. `--expect` returns 3 if its word check fails; semantic answers remain fallible and do not replace visual inspection. Keep API services local rather than treating a placeholder client API key as authentication.
+
+The bare `ai models` serving query and `ai models declared --json` work standalone.
+Catalogue list/show/verify/accept require the optional `models.catalogue/1` provider
+(currently ComfyUI); absent providers produce an explicit error. `verify` records
+integrity metadata, while list/show remain read-only. Repeat installation reuses
+already installed compatible Python dependencies rather than resolving them online.

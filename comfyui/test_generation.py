@@ -80,6 +80,7 @@ class GenerationTests(unittest.TestCase):
              patch.dict(models.PROFILES["video_models"], {"fixture": selected}), \
              patch.object(sys, "argv", ["gen.py", "video", "a scene", "--model", "fixture", "--seed", "7"]), \
              patch.object(runtime, "OUTPUT", directory), patch.dict(gen.JOB, {}, clear=True), \
+             patch.object(runtime.builders.registry, "check_parts"), \
              patch.object(runtime, "generate", return_value=(True, ["clip.webp"], None)) as execute, \
              patch.object(runtime, "write_record", return_value=None) as record, \
              contextlib.redirect_stdout(io.StringIO()):

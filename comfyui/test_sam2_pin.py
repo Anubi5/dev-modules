@@ -27,7 +27,7 @@ class Sam2PinTests(unittest.TestCase):
 
     def install_loop(self, requirement, invalid=False, uv_fail=False):
         source = (MODULE / 'install.sh').read_text()
-        loop = source.split('# custom nodes:', 1)[1].split('say "InsightFace', 1)[0]
+        loop = source.split('# custom nodes:', 1)[1].split('\nif [ "$reuse" = 0 ]; then\nsay "InsightFace', 1)[0]
         loop = '# custom nodes:' + loop
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -73,6 +73,26 @@ class RegistryTests(unittest.TestCase):
             with patch.object(registry,'family',return_value=data),self.assertRaisesRegex(ValueError,'declared size'):
                 registry.check_parts(self.prof,root)
 
+    def test_builder_backed_parts_do_not_bypass_size_checks(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder); path=root/'comfy/diffusion_models/model.safetensors'
+            path.parent.mkdir(parents=True);path.write_bytes(b'bad')
+            data=dict(name='fixture',builder='sdxl',parts={'model':dict(folder='diffusion_models',file=path.name,bytes=4)})
+            with patch.object(registry,'family',return_value=data), self.assertRaisesRegex(ValueError,'declared size'):
+                registry.check_parts(self.prof,root)
+
+    def test_implementation_identity_excludes_unrelated_families(self):
+        p=models.profile('moss')
+        identity=registry.implementation_identity(p)
+        from copy import deepcopy
+        original=registry.packages()
+        changed=deepcopy(original);changed['zimage']['defaults']['steps']=999
+        with patch.object(registry,'packages',return_value=changed):
+            self.assertEqual(registry.implementation_identity(p),identity)
+        changed=deepcopy(original);changed['moss']['defaults']['steps']=999
+        with patch.object(registry,'packages',return_value=changed):
+            self.assertNotEqual(registry.implementation_identity(p),identity)
+
     # Deliberate profile changes after the move, each in its own behaviour-change PR.
     CHANGED_SINCE = {"flux3": {"about": "FLUX 3 Image Klein: prompt-faithful, text in images, edits (ai gen edit); "
                                         "--improve-prompt expands the caption with the local chat model"}}   # 3.6
@@ -93,8 +113,8 @@ class RegistryTests(unittest.TestCase):
                 self.assertEqual(list(models.PROFILES[section]).index(name), list(shipped[section]).index(name))
                 self.assertFalse(registry.declarative(prof))
                 if section == 'models' and prof['kind'] == 'image':
-                    before = dict(features=[], uploads={}, negative=True, edit=False, expand=False, upscale=True)
-                    before.update(builders.BUILTINS[prof['arch']])
+                    before = dict(features=[], uploads={}, negative=True, edit=False, expand=False, upscale=True, timeout=900)
+                    before.update(registry.implementation(prof['arch']).CAPABILITIES)
                     self.assertEqual(builders.capabilities(dict(prof, name=name)), before)
                 with patch.object(registry, 'packages', return_value={}), self.assertRaisesRegex(ValueError, 'removed'):
                     registry.family(prof)
@@ -121,6 +141,14 @@ class RegistryTests(unittest.TestCase):
             data['parts']['vae'].update(sha256='a'*64, bytes=1)       # a second declaration of a models.txt file
             (p/'package.json').write_text(json.dumps(data))
             with self.assertRaisesRegex(ValueError, 'must not repeat'): registry.packages(root)
+
+    def test_all_family_mandatory_parts_have_cheap_size_declarations(self):
+        for name,data in registry.packages().items():
+            for role,part in data['parts'].items():
+                if not part.get('optional'):
+                    with self.subTest(family=name,part=role):
+                        self.assertIsInstance(part['bytes'],int)
+                        self.assertGreater(part['bytes'],0)
 
     def test_builder_family_never_names_a_path_or_has_a_recipe(self):
         data = json.loads(Path(__file__).with_name('families').joinpath('zimage/package.json').read_text())

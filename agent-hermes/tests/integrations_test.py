@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import time
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -11,6 +12,50 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import hermes_profile_check as policy
 import integrations
+
+
+@unittest.skipUnless(sys.platform.startswith('linux'), 'requires a real Linux terminal')
+class TerminalDecisionTests(unittest.TestCase):
+    """Exercise the actual terminal streams, rather than mocking owner answers."""
+
+    def test_real_terminal_accepts_approval_and_refusal(self):
+        import pty
+        import select
+        import signal
+        for answer, expected in (('yes', True), ('n', False)):
+            with self.subTest(answer=answer):
+                pid, fd = pty.fork()
+                if pid == 0:
+                    try:
+                        value = integrations.ask(dict(kind='skill', module='fixture', name='fixture', path='/fixture'))
+                        os._exit(0 if value is expected else 1)
+                    except BaseException:
+                        os._exit(2)
+                reaped = False
+                try:
+                    output = b''
+                    deadline = time.monotonic() + 5
+                    while b'[y/N] ' not in output and time.monotonic() < deadline:
+                        if select.select([fd], [], [], 0.1)[0]:
+                            try:
+                                output += os.read(fd, 4096)
+                            except OSError:
+                                break
+                    self.assertIn(b'[y/N] ', output)
+                    os.write(fd, (answer + '\n').encode())
+                    while time.monotonic() < deadline:
+                        done, status = os.waitpid(pid, os.WNOHANG)
+                        if done:
+                            reaped = True
+                            self.assertEqual(os.waitstatus_to_exitcode(status), 0)
+                            break
+                        time.sleep(0.01)
+                    self.assertTrue(reaped, 'terminal decision timed out')
+                finally:
+                    if not reaped:
+                        os.kill(pid, signal.SIGKILL)
+                        os.waitpid(pid, 0)
+                    os.close(fd)
 
 
 class Fakes:
@@ -24,6 +69,9 @@ class Fakes:
 
     def module(self, name, mcp=(), skills=()):
         folder = self.root / 'modules' / name
+        (folder / 'bin').mkdir(parents=True,exist_ok=True)
+        for identifier, effects in mcp:
+            (folder / 'bin' / identifier).write_text('#!/bin/sh\nexit 0\n')
         for skill in skills:
             (folder / 'skills' / skill).mkdir(parents=True, exist_ok=True)
             (folder / 'skills' / skill / 'SKILL.md').write_text(f'---\nname: {skill}\n---\n')
@@ -53,7 +101,11 @@ class Fakes:
         for part in parents:
             target = target.setdefault(part, {})
         if verb == 'set':
-            target[leaf] = json.loads(command[4])
+            value = json.loads(command[4])
+            if command[3] == 'mcp_servers' and isinstance(value, dict):
+                target.setdefault(leaf, {}).update(value)  # official CLI deep-merges root maps
+            else:
+                target[leaf] = value
         else:
             target.pop(leaf, None)
         return SimpleNamespace(returncode=0, stdout='', stderr='')
@@ -84,35 +136,25 @@ class IntegrationTests(unittest.TestCase):
     def servers(self):
         return self.fake.config.get('mcp_servers', {})
 
-    def test_migration_keeps_what_earlier_releases_enabled(self):
-        self.fake.module('blender', mcp=[('blender', ['writes', 'gpu'])], skills=['blender-sandbox'])
-        self.fake.config['plugins']['enabled'] = ['blender']
-        old = self.home / 'skills/modules/blender-sandbox'
-        old.mkdir(parents=True); (old / '.module').write_text('blender\n'); (old / 'SKILL.md').write_text('old')
-        result = self.reconcile()
-        self.assertEqual(result['exposed'], ['mcp:blender/blender', 'skill:blender/blender-sandbox'])
-        self.assertEqual(self.fake.config['plugins']['enabled'], [])
-        self.assertEqual(self.servers()['blender']['args'], ['--transport', 'stdio'])
-        self.assertEqual(self.fake.config['platform_toolsets']['cli'], policy.BASE_TOOLSETS + ['blender'])
-        self.assertEqual((old / '.module').read_text().strip(), 'agent-hermes')
-        self.assertIn('name: blender-sandbox', (old / 'SKILL.md').read_text())
-        stored = json.loads((self.home / policy.APPROVALS).read_text())
-        self.assertEqual(stored['decisions']['mcp:blender/blender']['how'], 'migration: Hermes plugin was enabled')
-        self.assertEqual(oct((self.home / policy.APPROVALS).stat().st_mode & 0o777)[-3:], '600') if os.name == 'posix' else None
+    def test_legacy_identifiers_do_not_approve_changed_execution(self):
+        self.fake.config['plugins']['enabled'] = ['blender', 'owner-plugin']
+        self.reconcile()
+        self.fake.module('blender', mcp=[('blender', ['writes', 'gpu'])])
+        self.assertEqual(self.reconcile()['exposed'], [])
+        self.assertEqual(self.fake.config['plugins']['enabled'], ['blender', 'owner-plugin'])
+        self.assertEqual(self.reconcile([True])['exposed'], ['mcp:blender/blender'])
 
-    def test_migration_waits_for_a_module_still_on_the_old_release(self):
-        # dev update updates agent-hermes first: Blender is still the release with the Hermes plugin, no declaration
-        self.fake.config['plugins']['enabled'] = ['blender']
+    def test_unowned_skill_is_preserved_even_with_legacy_marker(self):
+        self.fake.module('blender', skills=['blender-sandbox'])
         old = self.home / 'skills/modules/blender-sandbox'
-        old.mkdir(parents=True); (old / '.module').write_text('blender\n'); (old / 'SKILL.md').write_text('old')
-        first = self.reconcile()
-        self.assertEqual(first['exposed'], [])
-        self.assertEqual(self.fake.config['plugins']['enabled'], [])
-        self.fake.module('blender', mcp=[('blender', ['writes', 'gpu'])], skills=['blender-sandbox'])   # Blender updated
-        result = self.reconcile()                                  # unattended: nobody is asked, the old state returns
-        self.assertEqual((result['exposed'], result['asked']), (['mcp:blender/blender', 'skill:blender/blender-sandbox'], 0))
-        self.assertEqual(self.servers()['blender']['args'], ['--transport', 'stdio'])
-        self.assertIn('name: blender-sandbox', (old / 'SKILL.md').read_text())
+        old.mkdir(parents=True)
+        (old / '.module').write_text('blender\n')
+        (old / 'SKILL.md').write_text('owner text')
+        self.reconcile()
+        with self.assertRaisesRegex(ValueError, 'collision'):
+            self.reconcile([True])
+        self.assertEqual((old / 'SKILL.md').read_text(), 'owner text')
+        self.assertEqual((old / '.module').read_text(), 'blender\n')
 
     def test_owner_decision_wins_over_the_old_release(self):
         self.fake.config['plugins']['enabled'] = ['blender']
@@ -166,7 +208,7 @@ class IntegrationTests(unittest.TestCase):
         self.assertNotIn('blender', self.servers())
         self.fake.discovery_fails = False
         self.fake.module('odd', mcp=[('odd', []), ('blender', ['read_only'])])   # no effects; id taken by another module
-        self.assertEqual(sorted(integrations.discover()), ['mcp:blender/blender'])
+        self.assertEqual(sorted(integrations.discover()), [])  # neither ambiguous offer wins
 
     def test_profile_accepts_approved_servers_only(self):
         self.fake.module('blender', mcp=[('blender', ['writes', 'gpu'])])
@@ -181,6 +223,168 @@ class IntegrationTests(unittest.TestCase):
         self.assertIn('Unapproved MCP server: blender', policy.evaluate(changed, approved=approved)['errors'])
         plugin = dict(values, **{'plugins.enabled': ['blender']})
         self.assertTrue(policy.evaluate(plugin, approved=approved)['errors'])
+
+    def test_unrelated_configuration_survives_approve_and_remove(self):
+        self.fake.config['plugins']['enabled'] = ['personal']
+        self.fake.config['mcp_servers'] = {'personal': {'command': 'mine', 'args': [], 'env': {'X': 'Y'}}}
+        self.fake.config['platform_toolsets']['cli'].append('personal')
+        self.fake.module('blender', mcp=[('blender', ['writes'])])
+        self.reconcile([True])
+        self.fake.modules.clear()
+        self.reconcile()
+        self.assertEqual(self.servers(), {'personal': {'command': 'mine', 'args': [], 'env': {'X': 'Y'}}})
+        self.assertEqual(self.fake.config['plugins']['enabled'], ['personal'])
+        self.assertEqual(self.fake.config['platform_toolsets']['cli'], policy.BASE_TOOLSETS + ['personal'])
+
+    def test_mcp_collision_fails_before_mutation(self):
+        from copy import deepcopy
+        self.fake.module('blender', mcp=[('blender', ['writes'])])
+        self.fake.config['mcp_servers'] = {'blender': {'command': 'owner', 'args': []}}
+        before = deepcopy(self.fake.config)
+        with self.assertRaisesRegex(ValueError, 'collision'):
+            self.reconcile([True])
+        self.assertEqual(self.fake.config, before)
+        self.assertFalse((self.home / policy.APPROVALS).exists())
+
+    def test_owner_modified_managed_entry_is_preserved(self):
+        self.fake.module('blender', mcp=[('blender', ['writes'])])
+        self.reconcile([True])
+        self.servers()['blender']['args'] = ['owner-change']
+        self.fake.modules.clear()
+        with self.assertRaisesRegex(ValueError, 'collision'):
+            self.reconcile()
+        self.assertEqual(self.servers()['blender']['args'], ['owner-change'])
+
+    def test_skill_content_change_needs_new_approval(self):
+        self.fake.module('blender', skills=['example'])
+        self.reconcile([True])
+        source = Path(self.fake.modules[0]['skills'][0]['path'])
+        (source / 'SKILL.md').write_text('new executable instructions')
+        self.assertEqual(self.reconcile()['exposed'], [])
+        self.assertFalse((self.home / 'skills/modules/example').exists())
+        self.assertEqual(self.reconcile([True])['exposed'], ['skill:blender/example'])
+
+    def test_partial_write_rolls_back_config_skills_and_decisions(self):
+        from copy import deepcopy
+        self.fake.module('blender', mcp=[('blender', ['writes'])], skills=['example'])
+        self.reconcile()
+        before = deepcopy(self.fake.config)
+        decisions = (self.home / policy.APPROVALS).read_bytes()
+        original = integrations.put
+        failed = False
+        def failing(executable, key, value):
+            nonlocal failed
+            if key == 'platform_toolsets.cli' and not failed:
+                failed = True
+                raise ValueError('injected write failure')
+            return original(executable, key, value)
+        with patch.object(integrations, 'put', side_effect=failing), self.assertRaisesRegex(ValueError, 'injected'):
+            self.reconcile([True, True])
+        self.assertEqual(self.fake.config, before)
+        self.assertEqual((self.home / policy.APPROVALS).read_bytes(), decisions)
+        self.assertFalse((self.home / 'eva-integration-pending.json').exists())
+        self.assertFalse((self.home / 'skills/modules/example').exists())
+        self.assertEqual(len(self.reconcile([True, True])['exposed']), 2)
+
+    def test_server_removal_uses_leaf_unset_with_deep_merging_cli(self):
+        self.fake.module('blender',mcp=[('blender',['writes'])])
+        self.fake.config['mcp_servers']={'personal':{'command':'owner','args':[]}}
+        self.reconcile([True])
+        self.fake.modules.clear();self.reconcile()
+        self.assertEqual(self.servers(),{'personal':{'command':'owner','args':[]}})
+
+    def test_historical_approval_cannot_authorize_restored_unowned_configuration(self):
+        from copy import deepcopy
+        self.fake.module('blender',mcp=[('blender',['writes'])])
+        self.reconcile([True])
+        old=deepcopy(self.servers())
+        self.fake.modules.clear();self.reconcile()
+        self.assertEqual(policy.approved_servers(self.home),{})
+        # An unrelated restoration of the old config does not restore current managed ownership.
+        self.fake.config['mcp_servers']=old
+        self.fake.config['platform_toolsets']['cli']=policy.BASE_TOOLSETS+['blender']
+        self.reconcile()
+        values=dict(policy.EXPECTED,**{'skills.disabled':sorted(policy.DISABLED_SKILLS),
+                    'mcp_servers':old,'platform_toolsets.cli':policy.BASE_TOOLSETS+['blender']})
+        values.update({key:None for key in policy.FALLBACK_KEYS})
+        self.assertIn('Unapproved MCP server: blender',policy.evaluate(values,approved=policy.approved_servers(self.home))['errors'])
+
+    def test_changed_mcp_implementation_requires_new_decision(self):
+        self.fake.module('blender', mcp=[('blender', ['writes'])])
+        self.reconcile([True])
+        Path(self.fake.modules[0]['mcp'][0]['command']).write_text('changed execution')
+        self.assertEqual(self.reconcile()['exposed'], [])
+        self.assertNotIn('blender', self.servers())
+        self.assertEqual(self.reconcile([True])['exposed'], ['mcp:blender/blender'])
+
+    def test_malformed_approval_file_is_preserved(self):
+        path=self.home/policy.APPROVALS;path.write_text('{invalid owner record')
+        with self.assertRaises(ValueError):self.reconcile()
+        self.assertEqual(path.read_text(),'{invalid owner record')
+
+    def test_offer_changed_during_owner_prompt_is_not_activated(self):
+        self.fake.module('blender',mcp=[('blender',['writes'])])
+        command=Path(self.fake.modules[0]['mcp'][0]['command'])
+        def approve_then_change(offer):
+            command.write_text('new unreviewed execution')
+            return True
+        with patch.object(integrations,'ask',side_effect=approve_then_change),self.assertRaisesRegex(ValueError,'changed during'):
+            integrations.reconcile('hermes',attended=True)
+        self.assertNotIn('blender',self.servers())
+        self.assertFalse((self.home/policy.APPROVALS).exists())
+
+    def test_skill_changed_during_copy_is_rolled_back(self):
+        self.fake.module('blender',skills=['example'])
+        copy=integrations.shutil.copytree
+        def changed(source,target,*args,**kwargs):
+            result=copy(source,target,*args,**kwargs)
+            (Path(target)/'SKILL.md').write_text('unreviewed concurrent content')
+            return result
+        with patch.object(integrations.shutil,'copytree',side_effect=changed),self.assertRaisesRegex(ValueError,'changed while copying'):
+            self.reconcile([True])
+        self.assertFalse((self.home/'skills/modules/example').exists())
+        self.assertFalse((self.home/policy.APPROVALS).exists())
+
+    def test_approval_commit_failure_restores_previous_skill_copy(self):
+        self.fake.module('blender',skills=['example'])
+        self.reconcile([True])
+        target=self.home/'skills/modules/example/SKILL.md'
+        original=target.read_bytes()
+        decisions=(self.home/policy.APPROVALS).read_bytes()
+        source=Path(self.fake.modules[0]['skills'][0]['path'])/'SKILL.md'
+        source.write_text('new reviewed instructions')
+        save=integrations.save;failed=False
+        def fail_commit(path,data):
+            nonlocal failed
+            if path.name==policy.APPROVALS and not failed:
+                failed=True
+                raise OSError('injected approval commit failure')
+            return save(path,data)
+        with patch.object(integrations,'save',side_effect=fail_commit),self.assertRaisesRegex(OSError,'injected'):
+            self.reconcile([True])
+        self.assertEqual(target.read_bytes(),original)
+        self.assertEqual((self.home/policy.APPROVALS).read_bytes(),decisions)
+        self.assertEqual(self.reconcile([True])['exposed'],['skill:blender/example'])
+        self.assertEqual(target.read_text(),'new reviewed instructions')
+
+    def test_restart_recovers_journal_before_reconciliation(self):
+        backup = self.home / '.eva-integration-interrupted'
+        backup.mkdir()
+        integrations.save(self.home / 'eva-integration-pending.json', dict(
+            backup=backup.name, config={'mcp_servers': {}, 'platform_toolsets.cli': policy.BASE_TOOLSETS},
+            skills={}, approvals=None))
+        self.fake.config['mcp_servers'] = {'uncommitted': {'command': 'wrong'}}
+        self.reconcile()
+        self.assertEqual(self.servers(), {})
+        self.assertFalse(backup.exists())
+
+    def test_legacy_migrated_decision_requires_owner_again(self):
+        self.fake.module('blender', mcp=[('blender', ['writes'])])
+        offer = integrations.discover()['mcp:blender/blender']
+        integrations.save(self.home / policy.APPROVALS, dict(schema=1, migrated='old', decisions={
+            'mcp:blender/blender': dict(approved=True, offer=offer, how='migration: Hermes plugin was enabled')}))
+        self.assertEqual(self.reconcile()['exposed'], [])
+        self.assertEqual(self.reconcile([True])['exposed'], ['mcp:blender/blender'])
 
 
 if __name__ == '__main__':

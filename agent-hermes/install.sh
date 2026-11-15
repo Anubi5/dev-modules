@@ -8,6 +8,11 @@ INSTALLER_SHA256=f4cdb0e20f1aca2c3871a76b962fd4db61510f549cf973759c753ac13349beb
 SRC="${HERMES_HOME:-$HOME/.hermes}/hermes-agent"
 for f in hermes_runtime.py hermes_local_setup.py hermes_profile_check.py integrations.py; do
   [ -f "$SETUP/$f" ] || { echo "  CHECK $SETUP/$f missing - incomplete module copy"; exit 1; }; done
+# Only an installer-created profile may have its bootstrap executable defaults initialized.
+# Existing owner config (including dangling links) never takes this path.
+INITIAL_PROFILE=()
+profile="${HERMES_HOME:-$HOME/.hermes}/config.yaml"
+if [ ! -e "$profile" ] && [ ! -L "$profile" ]; then INITIAL_PROFILE=(--initialize-profile); fi
 PIN=$(python3 -B -c "import sys; sys.path.insert(0, '$SETUP'); import hermes_runtime as r; print(r.PINNED_REVISION)")
 export HERMES_DISABLE_LAZY_INSTALLS=1 PATH="$HOME/.local/bin:$PATH"
 
@@ -29,7 +34,7 @@ python3 -B "$SETUP/hermes_runtime.py" install
 # Module MCP servers and skills: only what the owner approved (earlier exposures are recorded once); never asks here.
 python3 -B "$SETUP/integrations.py" reconcile --no-ask >/dev/null \
   || { echo "  CHECK Hermes module integrations could not be applied (see above)"; exit 1; }
-python3 -B "$SETUP/hermes_local_setup.py" --apply --reviewed-revision "$PIN" >/dev/null \
+python3 -B "$SETUP/hermes_local_setup.py" --apply "${INITIAL_PROFILE[@]}" --reviewed-revision "$PIN" >/dev/null \
   || { echo "  CHECK Hermes profile could not be applied (config.yaml restored from its backup)"; exit 1; }
 # SOUL.md: the reviewed local section (between its marker lines) is added or refreshed; your own text stays.
 # An older unmarked section is migrated only if it matches exactly; otherwise nothing is changed and you are told.

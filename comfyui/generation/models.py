@@ -20,9 +20,9 @@ for _catalogue in (PROFILES['models'], PROFILES.get('video_models', {})):
             _catalogue[_name] = _families.pop(_name)
         elif _name in _families or "family" in _entry:
             raise ValueError('Family package shadows an existing model profile: ' + _name)
-if any(p['kind'] != 'image' for p in _families.values()):
-    raise ValueError('A video family is listed only through its profiles.json video_models entry')
-PROFILES['models'].update(_families)
+for _name, _entry in _families.items():
+    _section = 'video_models' if _entry['kind'] == 'video' else 'models'
+    PROFILES.setdefault(_section, {})[_name] = _entry
 
 
 NEGATIVE = PROFILES["styles"]["photo"]["negative"]            # default style; kept as a name for the tests

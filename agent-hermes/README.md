@@ -12,8 +12,14 @@ Needs: internet only during `dev mod add/update agent-hermes`; no GPU of its own
   `~/.hermes/skills/modules`. Removed or changed providers are dropped at the next start; installs and unattended starts
   never ask and expose nothing new. The profile check refuses any MCP server that is not approved. The file is a
   remembered decision, not a security boundary: Hermes runs as the same user, behind internet OFF.
-  The first run records what earlier releases enabled (the Blender plugin, linked module skills) as approved and
-  replaces the plugin with Blender's declared MCP server.
+  Legacy plugin IDs and linked skill markers are retained as history, but require a fresh attended decision
+  before authorizing a declared integration. Skills bind approval to their contents. Reconciliation preserves
+  unrelated plugins, MCP servers, CLI toolsets and skills; the profile checker can refuse their execution without
+  deleting them. An unowned or owner-modified name collision stops reconciliation for owner resolution. Only
+  unchanged entries recorded in `eva-approved.json` are removed. Only the current committed managed/active set can authorize execution; historical decisions alone do not.
+  Profile setup preserves existing plugin and CLI-toolset selections and owner-disabled skills; unknown
+  executable entries can cause a refusal and are left for owner resolution. A private journal rolls back partial writes on
+  failure or the next start; if recovery fails, launch stays blocked and the journal is retained.
 - **Install/update:** if `~/.hermes/hermes-agent` already is the pinned, clean commit, it is adopted as-is
   (memory, sessions and config untouched). Otherwise Hermes' **official installer from that exact commit**
   (SHA-256 checked) installs it with `--commit <pin> --non-interactive --skip-browser --skip-computer-use`.

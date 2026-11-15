@@ -11,10 +11,12 @@ import stat
 import shutil
 import tempfile
 import subprocess
+import sys
 from typing import Any
 
 import hermes_profile_check as policy
 import hermes_runtime as runtime
+from integrations import get as config_get
 
 
 def settings(home: Path | None=None) -> dict[str,Any]:
@@ -44,7 +46,7 @@ def private_memory(home: Path) -> Path:
     return root
 
 
-def apply(executable: str,home: Path,source: Path|None=None,revision: str|None=None) -> dict[str,Any]:
+def apply(executable: str,home: Path,source: Path|None=None,revision: str|None=None,*,initialize: bool=False) -> dict[str,Any]:
     """Apply reviewed settings through the pinned official configuration CLI.
 
     Args:
@@ -79,7 +81,18 @@ def apply(executable: str,home: Path,source: Path|None=None,revision: str|None=N
     backup.chmod(0o600)
     try:
         private_memory(home)
-        for key,value in settings(home).items():
+        planned=settings(home)
+        # Executable integration settings belong to reconciliation/owner configuration.
+        # Initialize absent fields only; never reset existing plugins or CLI toolsets.
+        for key in ('plugins.enabled','platform_toolsets.cli'):
+            if not initialize and config_get(executable,key) is not None:
+                planned.pop(key,None)
+        disabled=config_get(executable,'skills.disabled')
+        if disabled is not None:
+            if not isinstance(disabled,list) or not all(isinstance(v,str) for v in disabled):
+                raise ValueError('Invalid owner skills.disabled setting; preserved')
+            planned['skills.disabled']=sorted(set(disabled)|policy.DISABLED_SKILLS)
+        for key,value in planned.items():
             # Hermes preserves string-typed CLI arguments verbatim; JSON quotes
             # would become part of the stored provider, model or endpoint.
             argument=value if isinstance(value,str) else json.dumps(value)
@@ -101,6 +114,7 @@ def apply(executable: str,home: Path,source: Path|None=None,revision: str|None=N
 def main(argv: list[str] | None=None) -> int:
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--apply',action='store_true',help='mutating; requires separately approved installation')
+    parser.add_argument('--initialize-profile',action='store_true',help='installer only: profile did not exist before this fresh installation')
     parser.add_argument('--hermes',default='hermes')
     parser.add_argument('--home',type=Path,default=Path.home()/'.hermes')
     parser.add_argument('--source',type=Path)
@@ -108,9 +122,9 @@ def main(argv: list[str] | None=None) -> int:
     args=parser.parse_args(argv)
     if not args.apply:
         print(json.dumps(dict(status='plan',settings=settings(),effects=['private local memory directory','selected Hermes configuration only'],downloads=False),indent=2));return 0
-    try:print(json.dumps(apply(args.hermes,args.home,args.source,args.reviewed_revision)));return 0
+    try:print(json.dumps(apply(args.hermes,args.home,args.source,args.reviewed_revision,initialize=args.initialize_profile)));return 0
     except (OSError,ValueError,RuntimeError,subprocess.SubprocessError) as error:
-        print(json.dumps(dict(status='failed',error=type(error).__name__,meaning='Inspect compatibility and retained private config backup; no model download was attempted')));return 1
+        print(json.dumps(dict(status='failed',error=type(error).__name__,details=str(error),meaning='Inspect compatibility and retained private config backup; no model download was attempted')),file=sys.stderr);return 1
 
 
 if __name__=='__main__':raise SystemExit(main())

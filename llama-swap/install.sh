@@ -34,7 +34,12 @@ if [ ! -x "$A/bin/llama-swap" ] || [ "$(cat "$A/llama-swap.ver" 2>/dev/null)" !=
   rm -rf "$t"
 fi
 [ -x "$A/venv/bin/python" ] || python3 -m venv "$A/venv"
-"$A/venv/bin/pip" install -q "huggingface_hub>=0.34,<2" "requests>=2.32,<3"   # bounded: no surprise major versions
+# Reuse the already prepared runtime without asking an index to resolve the same requirements.
+if "$A/venv/bin/python" -c 'import huggingface_hub, requests; from importlib.metadata import version; v=lambda n: tuple(int(x) for x in version(n).split(".")[:2]); assert (0,34)<=v("huggingface_hub")<(2,0) and (2,32)<=v("requests")<(3,0)' 2>/dev/null; then
+  echo "llama-swap Python runtime unchanged (bounded dependencies already installed)."
+else
+  "$A/venv/bin/pip" install -q "huggingface_hub>=0.34,<2" "requests>=2.32,<3"
+fi
 # model files live on D: (read-only at /models); D: is writable at /models-rw only while Windows runs "dev mod add|update"
 "$A/venv/bin/python" resolve_models.py --config models.json --state "$MOD/models" \
   --ro "${MODELS_MOUNT:-/models}/llm" --rw "${MODELS_RW:-/models-rw}/llm"

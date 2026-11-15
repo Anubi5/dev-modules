@@ -11,7 +11,14 @@ with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 
 from .registry import profiles as family_profiles
 _families = family_profiles()
-if set(_families) & set(PROFILES['models']): raise ValueError('Family package shadows an existing model profile')
+# profiles.json keeps the catalogue order; an entry {"family": NAME} is filled from families/NAME/package.json in
+# place. Any other entry with a family's name would shadow it.
+for _name, _entry in PROFILES['models'].items():
+    if _entry == {"family": _name}:
+        if _name not in _families: raise ValueError('Family package was removed: ' + _name)
+        PROFILES['models'][_name] = _families.pop(_name)
+    elif _name in _families or "family" in _entry:
+        raise ValueError('Family package shadows an existing model profile: ' + _name)
 PROFILES['models'].update(_families)
 
 

@@ -849,7 +849,7 @@ def all_workflows(include_packages=True):
     import itertools
     for name in PROFILES["models"]:
         p = profile(name)
-        if p.get('family'):
+        if builders.registry.declarative(p):
             if include_packages:
                 yield builders.registry.build(p,dict(prompt='x',negative='y',seed=1,steps=p['steps'],
                     width=1024,height=1024,prefix='t'))
@@ -876,7 +876,7 @@ def all_workflows(include_packages=True):
                 yield fibo2("x", 1, p["steps"], 1024, 1024, "t", p, refs=refs, upscale=up)
     for name in PROFILES["models"]:                    # every architecture with two LoRAs chained
         p = profile(name)
-        if p.get('family'): continue
+        if builders.registry.declarative(p): continue
         if p.get("kind") == "3d":
             r = load_recipe(p["workflow"])                 # every picture input given (all views of a multi-view model)
             yield apply_recipe(r, dict(p.get("set", {}), prefix="t", **{k: "x.png" for k, sp in r["inputs"].items() if sp.get("upload")}))

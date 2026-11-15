@@ -81,24 +81,7 @@
       ]
     },
     "zimage": {
-      "arch": "zimage",
-      "file": "z_image_turbo_int8_convrot.safetensors",
-      "text_encoder": "qwen_3_4b_fp8_mixed.safetensors",
-      "vae": "ae.safetensors",
-      "sampler": "res_multistep",
-      "scheduler": "simple",
-      "cfg": 1.0,
-      "steps": 8,
-      "shift": 3.0,
-      "about": "Z-Image Turbo: fast photoreal, 8 steps",
-      "licence": "Apache 2.0",
-      "source": "huggingface.co/Comfy-Org/Z-Image-Turbo + Comfy blueprint Text to Image (Z-Image-Turbo) (8 steps, CFG 1, res_multistep, shift 3)",
-      "capability_tags": [
-        "image"
-      ],
-      "pose_patch": "Z-Image-Turbo-Fun-Controlnet-Union.safetensors",
-      "pose_strength": 1.0,
-      "pose_patch_optional": true
+      "family": "zimage"
     },
     "anima": {
       "arch": "anima",

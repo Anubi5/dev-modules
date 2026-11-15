@@ -1,0 +1,43 @@
+{
+  "schema": "local-ai.family/1",
+  "name": "sdxl-base",
+  "kind": "image",
+  "architecture": "sdxl",
+  "builder": "sdxl",
+  "description": "original SDXL: general and artistic, weakest at photos",
+  "experimental": false,
+  "parts": {
+    "model": {
+      "folder": "checkpoints",
+      "file": "sd_xl_base_1.0.safetensors",
+      "bytes": 6938078334,
+      "sha256": "31e35c80fc4829d14f90153f4c74cd59c90b779f6afe05a74cd6120b893f7e5b"
+    }
+  },
+  "defaults": {
+    "sampler": "dpmpp_2m",
+    "scheduler": "karras",
+    "cfg": 6.0,
+    "steps": 30
+  },
+  "catalogue": {
+    "licence": "openrail++",
+    "source": "huggingface.co/stabilityai/stable-diffusion-xl-base-1.0",
+    "capability_tags": [
+      "image"
+    ]
+  },
+  "capabilities": {
+    "features": [
+      "pose",
+      "face",
+      "fix_faces",
+      "fix_hands",
+      "hires"
+    ],
+    "uploads": {
+      "pose": "30",
+      "face": "21"
+    }
+  }
+}

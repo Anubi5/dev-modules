@@ -1,0 +1,43 @@
+{
+  "schema": "local-ai.family/1",
+  "name": "realvis",
+  "kind": "image",
+  "architecture": "sdxl",
+  "builder": "sdxl",
+  "description": "photoreal, flattering portraits; best with --face",
+  "experimental": false,
+  "parts": {
+    "model": {
+      "folder": "checkpoints",
+      "file": "RealVisXL_V5.0_fp16.safetensors",
+      "bytes": 6938065488,
+      "sha256": "6a35a7855770ae9820a3c931d4964c3817b6d9e3c6f9c4dabb5b3a94e5643b80"
+    }
+  },
+  "defaults": {
+    "sampler": "dpmpp_sde",
+    "scheduler": "karras",
+    "cfg": 4.5,
+    "steps": 30
+  },
+  "catalogue": {
+    "licence": "openrail++",
+    "source": "huggingface.co/SG161222/RealVisXL_V5.0 (card: DPM++ SDE Karras, 30+ steps)",
+    "capability_tags": [
+      "image"
+    ]
+  },
+  "capabilities": {
+    "features": [
+      "pose",
+      "face",
+      "fix_faces",
+      "fix_hands",
+      "hires"
+    ],
+    "uploads": {
+      "pose": "30",
+      "face": "21"
+    }
+  }
+}

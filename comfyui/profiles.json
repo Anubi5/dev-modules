@@ -18,49 +18,13 @@
   },
   "models": {
     "realvis": {
-      "arch": "sdxl",
-      "file": "RealVisXL_V5.0_fp16.safetensors",
-      "sampler": "dpmpp_sde",
-      "scheduler": "karras",
-      "cfg": 4.5,
-      "steps": 30,
-      "about": "photoreal, flattering portraits; best with --face",
-      "licence": "openrail++",
-      "source": "huggingface.co/SG161222/RealVisXL_V5.0 (card: DPM++ SDE Karras, 30+ steps)",
-      "capability_tags": [
-        "image"
-      ]
+      "family": "realvis"
     },
     "juggernaut": {
-      "arch": "sdxl",
-      "file": "juggernautXL_ragnarok.safetensors",
-      "sampler": "dpmpp_2m_sde",
-      "scheduler": "karras",
-      "cfg": 4.0,
-      "steps": 35,
-      "negative": {
-        "photo": "blurry, low quality, watermark, text, deformed hands"
-      },
-      "about": "photoreal, natural documentary look, strong scenes",
-      "licence": "see civitai.com/models/133005",
-      "source": "civitai.com/models/133005 (Ragnarok: DPM++ 2M SDE, 30-40 steps, CFG 3-6, start with little negative)",
-      "capability_tags": [
-        "image"
-      ]
+      "family": "juggernaut"
     },
     "sdxl-base": {
-      "arch": "sdxl",
-      "file": "sd_xl_base_1.0.safetensors",
-      "sampler": "dpmpp_2m",
-      "scheduler": "karras",
-      "cfg": 6.0,
-      "steps": 30,
-      "about": "original SDXL: general and artistic, weakest at photos",
-      "licence": "openrail++",
-      "source": "huggingface.co/stabilityai/stable-diffusion-xl-base-1.0",
-      "capability_tags": [
-        "image"
-      ]
+      "family": "sdxl-base"
     },
     "flux3": {
       "arch": "flux3",

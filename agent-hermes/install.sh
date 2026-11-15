@@ -27,7 +27,8 @@ else
 fi
 python3 -B "$SETUP/hermes_runtime.py" install
 # Module MCP servers and skills: only what the owner approved (earlier exposures are recorded once); never asks here.
-python3 -B "$SETUP/integrations.py" reconcile --no-ask >/dev/null \n  || { echo "  CHECK Hermes module integrations could not be applied (see above)"; exit 1; }
+python3 -B "$SETUP/integrations.py" reconcile --no-ask >/dev/null \
+  || { echo "  CHECK Hermes module integrations could not be applied (see above)"; exit 1; }
 python3 -B "$SETUP/hermes_local_setup.py" --apply --reviewed-revision "$PIN" >/dev/null \
   || { echo "  CHECK Hermes profile could not be applied (config.yaml restored from its backup)"; exit 1; }
 # SOUL.md: the reviewed local section (between its marker lines) is added or refreshed; your own text stays.

@@ -18,7 +18,8 @@ P
 run() { EVA_SETUP="$1/setup" HERMES_HOME="$1/home" PATH="$1/bin:$PATH" bash "$here/agent-hermes/install.sh" >/dev/null 2>&1; }
 
 d=$(case_dir); stubs "$d" 0; run "$d"; rc=$?
-[ $rc -eq 0 ] && ! grep -q curl "$d/log" && grep -q hermes_local_setup "$d/log" \n  && [ "$(grep -nE '^(integrations|hermes_local_setup)$' "$d/log" | head -1 | cut -d: -f2)" = integrations ] && echo "PASS adopt pinned install" || { echo "FAIL adopt ($rc)"; fail=1; }
+[ $rc -eq 0 ] && ! grep -q curl "$d/log" && grep -q hermes_local_setup "$d/log" \
+  && [ "$(grep -nE '^(integrations|hermes_local_setup)$' "$d/log" | head -1 | cut -d: -f2)" = integrations ] && echo "PASS adopt pinned install" || { echo "FAIL adopt ($rc)"; fail=1; }
 
 d=$(case_dir); stubs "$d" 1; mkdir -p "$d/home/hermes-agent"; touch "$d/home/hermes-agent/keep"; run "$d"; rc=$?
 [ $rc -ne 0 ] && [ -f "$d/home/hermes-agent/keep" ] && ! grep -qE 'curl|runtime install|hermes_local_setup' "$d/log" \

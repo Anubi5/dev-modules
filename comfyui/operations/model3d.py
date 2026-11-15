@@ -15,6 +15,7 @@ import runtime as rt
 from generation.graph import apply_recipe
 from generation.mesh import QUALITY, glb_stats, EXIT, check_status
 from generation.models import PROFILES
+from generation import registry
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))     # the comfyui module folder
 
@@ -44,6 +45,8 @@ def run(a):
     prefix = f"{day}/{rt.slug(a.name) if a.name else rt.slug(os.path.splitext(os.path.basename(src))[0])}"
     vals = dict(QUALITY[a.quality], **{k: v for k, v in (("faces", a.faces), ("texture", a.texture)) if v is not None})
     vals.update(prof.get("set", {}), seed=seed, prefix=prefix, remove_background=not a.keep_background, **{k: "pending" for k in srcs})
+    if not getattr(a,"check",False):
+        registry.check_parts(dict(prof,name=name),rt.MODELS)
     wf = apply_recipe(recipe, vals)
     log = lambda s: print(f"  {s}", flush=True)
     log(f"{name}: {a.quality} quality ({vals['faces']} faces, upsample {vals['resolution']}, texture {vals['texture']}), seed {seed}")

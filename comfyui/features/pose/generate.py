@@ -1,5 +1,5 @@
 """Pose operation composition: explicit reference extraction or the configured Z-Image pose source."""
-from generation.models import profile
+from generation.models import profile, PROFILES
 from families.zimage.workflow import zimage
 from features.pose.dwpose import skeleton as _dwpose
 
@@ -17,7 +17,7 @@ def pose_wf(description, seed, width, height, prefix, src=None):
     if src:
         return {"30": {"class_type": "LoadImage", "inputs": {"image": src}}, "31": _dwpose(["30", 0]),
                 "35": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_pose", "images": ["31", 0]}}}
-    p = profile("zimage")
+    p = profile(PROFILES["pose_model"])
     wf = zimage(POSE_PROMPT.format(d=description), seed, p["steps"], width, height, prefix, p)
     wf.update({"31": _dwpose(["9", 0]),
                "35": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_pose", "images": ["31", 0]}}})

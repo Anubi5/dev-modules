@@ -80,5 +80,6 @@
     "face": "default_sdxl",
     "fix_faces": "default_sdxl",
     "fix_hands": "default_sdxl"
-  }
+  },
+  "pose_model": "zimage"
 }

@@ -7,7 +7,8 @@
   "optional": [],
   "mcp": [],
   "effects": {
-    "ai-rig": ["writes:work", "gpu"]
+    "ai-rig": ["writes:work", "gpu"],
+    "ai-rig-models": ["read_only"]
   },
   "skills": [],
   "ui": {"title": "Rig", "url": null, "service": null}

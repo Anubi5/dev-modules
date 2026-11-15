@@ -18,8 +18,6 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 KNOWN = {
-    ('comfyui', 'catalogue.py', 'rig'): 'Phase 4: read rig model declarations through a command/JSON contract',
-    ('comfyui', 'catalogue.py', 'llama-swap'): 'Phase 4: read chat model declarations through a command/JSON contract',
 }
 TEXT = ('.py', '.sh', '.json', '.txt', '.service')
 

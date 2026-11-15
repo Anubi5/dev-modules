@@ -5,6 +5,8 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
+import subprocess
 import sys
 
 from generation import registry, builders, video
@@ -75,11 +77,20 @@ def declared_pins():
     helpers=HERE/'helper_models.json'
     if helpers.exists():
         for row in json.loads(helpers.read_text())['files']: pins['comfy/'+row['path']]=row['sha256']
-    rig=HERE.parent/'rig/models.json'
-    if not rig.exists(): rig=Path.home()/'.local/share/modules/rig/models.json'
-    if rig.exists():
-        for row in json.loads(rig.read_text())['weights']['files']: pins['rig/'+row['path']]=row['sha256']
+    rig=declared_by('ai-rig-models')                 # the rig module's own declaration, through its command
+    for row in (rig or {}).get('weights',{}).get('files',[]): pins['rig/'+row['path']]=row['sha256']
     return pins
+
+
+def declared_by(command,*arguments):
+    """Another module's model declarations through its read-only command (JSON); None when it is not installed or
+    does not answer. Never reads another module's files."""
+    executable=shutil.which(command)
+    if not executable: return None
+    try:
+        result=subprocess.run([executable,*arguments],capture_output=True,text=True,timeout=60)
+        return json.loads(result.stdout) if result.returncode==0 else None
+    except (OSError,ValueError,subprocess.TimeoutExpired): return None
 
 
 def inventory(root):
@@ -150,13 +161,11 @@ def inventory(root):
         packages.append(dict(id='unirig',kind='rig',status='needs-something' if missing else 'ready',missing=missing,
                              components=rig,experimental=True))
     # Installed local chat selections are metadata; never invoke a server or discover executable code.
-    declared_chat=HERE.parent/'llama-swap/models.json'
-    declared_specs={row['id']:row for row in json.loads(declared_chat.read_text())['chat']} if declared_chat.exists() else {}
-    resolved=Path.home()/'.local/share/modules/llama-swap/models/models.json'
-    if resolved.exists():
-        source=resolved.parents[1]/'models.json'
-        specs={p['id']:p for p in json.loads(source.read_text())['chat']} if source.exists() else {}
-        for name,p in json.loads(resolved.read_text()).items():
+    chat=declared_by('ai-models','declared','--json') or {}   # the llama-swap module's own declaration
+    declared_specs={row['id']:row for row in chat.get('chat',[])}
+    if chat.get('resolved'):
+        specs=declared_specs
+        for name,p in chat['resolved'].items():
             paths=p.get('files') or ([p['file']] if p.get('file') else [])
             if not paths: continue
             missing=[str(path) for path in map(Path,paths) if not path.is_file() or not path.resolve().is_relative_to(root)]

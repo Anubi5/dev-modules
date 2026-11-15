@@ -277,6 +277,28 @@ class IntegrationTests(unittest.TestCase):
         with self.assertRaises(ValueError):self.reconcile()
         self.assertEqual(path.read_text(),'{invalid owner record')
 
+    def test_approval_commit_failure_restores_previous_skill_copy(self):
+        self.fake.module('blender',skills=['example'])
+        self.reconcile([True])
+        target=self.home/'skills/modules/example/SKILL.md'
+        original=target.read_bytes()
+        decisions=(self.home/policy.APPROVALS).read_bytes()
+        source=Path(self.fake.modules[0]['skills'][0]['path'])/'SKILL.md'
+        source.write_text('new reviewed instructions')
+        save=integrations.save;failed=False
+        def fail_commit(path,data):
+            nonlocal failed
+            if path.name==policy.APPROVALS and not failed:
+                failed=True
+                raise OSError('injected approval commit failure')
+            return save(path,data)
+        with patch.object(integrations,'save',side_effect=fail_commit),self.assertRaisesRegex(OSError,'injected'):
+            self.reconcile([True])
+        self.assertEqual(target.read_bytes(),original)
+        self.assertEqual((self.home/policy.APPROVALS).read_bytes(),decisions)
+        self.assertEqual(self.reconcile([True])['exposed'],['skill:blender/example'])
+        self.assertEqual(target.read_text(),'new reviewed instructions')
+
     def test_restart_recovers_journal_before_reconciliation(self):
         backup = self.home / '.eva-integration-interrupted'
         backup.mkdir()

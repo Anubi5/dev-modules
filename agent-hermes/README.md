@@ -16,7 +16,9 @@ Needs: internet only during `dev mod add/update agent-hermes`; no GPU of its own
   before authorizing a declared integration. Skills bind approval to their contents. Reconciliation preserves
   unrelated plugins, MCP servers, CLI toolsets and skills; the profile checker can refuse their execution without
   deleting them. An unowned or owner-modified name collision stops reconciliation for owner resolution. Only
-  unchanged entries recorded in `eva-approved.json` are removed. A private journal rolls back partial writes on
+  unchanged entries recorded in `eva-approved.json` are removed. Only the current committed managed/active set can authorize execution; historical decisions alone do not.
+  Profile setup preserves existing plugin and CLI-toolset selections and owner-disabled skills; unknown
+  executable entries can cause a refusal and are left for owner resolution. A private journal rolls back partial writes on
   failure or the next start; if recovery fails, launch stays blocked and the journal is retained.
 - **Install/update:** if `~/.hermes/hermes-agent` already is the pinned, clean commit, it is adopted as-is
   (memory, sessions and config untouched). Otherwise Hermes' **official installer from that exact commit**

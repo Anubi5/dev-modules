@@ -110,10 +110,10 @@ def image_batch(args):
         JOB.pop("result", None)
         code = main(item)
         results.append(dict(JOB.get("result", {}), seed=item.seed))
-        JOB["result"] = dict(status="failed" if code else "succeeded", record=None,
+        JOB["result"] = dict(status=("failed" if code else "checked" if args.check else "succeeded"), record=None,
             outputs=[path for result in results for path in result.get("outputs", [])],
             records=[result.get("record") for result in results], results=results,
-            error=results[-1].get("error"), requested=args.count, completed=sum(r.get("status") == "succeeded" for r in results))
+            error=results[-1].get("error"), requested=args.count, checked=sum(r.get("status") == "checked" for r in results), completed=sum(r.get("status") == "succeeded" for r in results))
         if code: return code
     return 0
 

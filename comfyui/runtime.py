@@ -978,6 +978,13 @@ def write_record(files, info, wf=None, status="succeeded", error=None, prefix=No
         rec["model_sha256"] = {os.path.basename(k): v for k, v in hashes.items() if os.path.basename(k) == info.get("model_file")}
     except OSError:
         pass
+    if info.get('model'):
+        try:
+            from generation.models import package
+            selected = package(info['model'], kind=info.get('kind') if info.get('kind') in ('video', '3d') else 'image')
+            rec['implementation_sha256'] = builders.registry.implementation_identity(dict(selected.settings, name=selected.name))
+        except (ValueError, OSError):
+            rec['implementation_sha256'] = None
     path = base + ".json"
     if wf is not None:              # the exact ComfyUI workflow (API format) as it was run: ai gen rerun, or load it in the page
         wpath = base + ".workflow.json"
@@ -1234,17 +1241,25 @@ def checked(a, info, wf, prof, seed, needs=None):
            lock, no service, nothing written. @return 0 when the job could run, 1 with what is missing
     """
     missing = missing_assets(prof, wf) if prof else []
+    part_error = None
+    if prof:
+        try:
+            builders.registry.check_parts(prof, MODELS)
+        except ValueError as error:
+            part_error = str(error)
     lacking = missing_capabilities(needs or {})
     problems = ([f"missing model files: {', '.join(missing)} - get them with the two-phase download plan "
                  "(Windows: dev mod update comfyui, review the plan, approve) or copy gated files by hand into "
                  "D:\\AI\\models\\comfy\\<folder>"] if missing else []) + \
                ([f"needs {', '.join(lacking)} - install that module (dev mod add <module>)"
                  + (" or leave out --improve-prompt" if any(c.startswith("llm.chat") for c in lacking) else "")] if lacking else [])
+    if part_error:
+        problems.append(part_error)
     JOB["result"] = dict(status="checked" if not problems else "check_failed", record=None, outputs=[],
                          error="; ".join(problems) or None, **result_fields(a, info, wf, prof, seed))
     for line in problems:
         print(f"CHECK {line}")
     if not problems:
         print(f"CHECK OK: ai gen {a.kind} with {info.get('model')}" + (f" (family {prof.get('family')})" if prof and prof.get('family') else "")
-              + (f", features {', '.join(requested_features(a))}" if requested_features(a) else "") + " - ready to run")
+              + (f", features {', '.join(requested_features(a))}" if requested_features(a) else "") + " - offline configuration/assets checked; GPU execution and output quality NOT TESTED")
     return 1 if problems else 0

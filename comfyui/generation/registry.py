@@ -152,10 +152,52 @@ def build(prof, values):
 def check_parts(prof, models_root):
     """Cheap use-time check; full hashes belong to explicit verification."""
     data=family(prof)
-    if data is None or moved(data):return            # moved profiles: ComfyUI's preflight, as before
+    if data is None:return
     root=Path(models_root).resolve()
     for part in data['parts'].values():
         if part.get('optional'):continue                     # used only by an option that checks for it itself
         path=root/'comfy'/part['folder']/part['file']
-        if not path.resolve().is_relative_to(root) or not path.is_file() or path.stat().st_size!=part['bytes']:
-            raise ValueError(data['name']+' needs '+str(path)+' with its declared size; copy the pinned component and run ai models verify '+data['name'])
+        if not path.resolve().is_relative_to(root) or not path.is_file() or (part.get('bytes') is not None and path.stat().st_size!=part['bytes']):
+            raise ValueError(data['name']+' needs '+str(path)+' with its declared size (two-phase download plan or owner copy); copy the pinned component and run ai models verify '+data['name'])
+
+
+def implementation_identity(prof):
+    """Hash selected family data and the shipped local code it imports, without reading weights.
+
+    Unrelated family files are excluded. Selected defaults, shared graph/features and
+    the family's recipe participate; a repository-wide commit is deliberately not the key.
+    """
+    import ast
+    data = family(prof)
+    root = ROOT.parent
+    selected = dict(prof)
+    payload = dict(profile=selected, family=data)
+    pending = []
+    if data and data.get('builder'):
+        pending.append(Path(implementation(data['builder']).__file__))
+    elif not data and has_implementation(prof.get('arch')):
+        pending.append(Path(implementation(prof['arch']).__file__))
+    if data and data['kind'] == '3d':
+        pending.append(root / data['defaults']['workflow'])
+    pending.append(root / 'generation/graph.py')
+    files = {}
+    while pending:
+        path = pending.pop().resolve()
+        if path in files or not path.is_file():
+            continue
+        if not path.is_relative_to(root.resolve()):
+            raise ValueError('Acceptance implementation escapes reviewed module')
+        raw = path.read_bytes()
+        files[path] = hashlib.sha256(raw).hexdigest()
+        if path.suffix != '.py':
+            continue
+        for node in ast.walk(ast.parse(raw)):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            base = root.joinpath(*(node.module or '').split('.')) if not node.level else path.parent.joinpath(*(['..'] * (node.level - 1)), *(node.module or '').split('.'))
+            for candidate in [base] + [base / alias.name for alias in node.names]:
+                local = candidate.with_suffix('.py')
+                if local.is_file():
+                    pending.append(local)
+    payload['code'] = {p.relative_to(root.resolve()).as_posix(): value for p, value in files.items()}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(',', ':')).encode()).hexdigest()

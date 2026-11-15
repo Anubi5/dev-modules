@@ -2,7 +2,8 @@
 ## @brief No arguments lists chat models; list/show/verify uses the shared read-only inventory.
 set -o pipefail
 case "${1:-}" in
-  help|-h|--help) echo 'ai models [list [--all] [--details] [--json] | show ID [--json] | verify ID [--json] | accept ID --record FILE | declared --json]'; exit 0 ;;
+  help|-h|--help) echo 'ai models [list [--all] [--details] [--json] | show ID [--json] | verify ID [--json] | accept ID --record FILE | declared --json]
+Bare command and declared work with llama-swap alone. list/show/verify/accept require the optional models.catalogue/1 provider (comfyui).'; exit 0 ;;
   declared)   # this module's chat declarations and their installed resolution, for the shared inventory (read-only)
     MOD=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
     exec python3 -B -c 'import json, os, sys

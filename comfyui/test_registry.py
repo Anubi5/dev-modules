@@ -73,6 +73,26 @@ class RegistryTests(unittest.TestCase):
             with patch.object(registry,'family',return_value=data),self.assertRaisesRegex(ValueError,'declared size'):
                 registry.check_parts(self.prof,root)
 
+    def test_builder_backed_parts_do_not_bypass_size_checks(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder); path=root/'comfy/diffusion_models/model.safetensors'
+            path.parent.mkdir(parents=True);path.write_bytes(b'bad')
+            data=dict(name='fixture',builder='sdxl',parts={'model':dict(folder='diffusion_models',file=path.name,bytes=4)})
+            with patch.object(registry,'family',return_value=data), self.assertRaisesRegex(ValueError,'declared size'):
+                registry.check_parts(self.prof,root)
+
+    def test_implementation_identity_excludes_unrelated_families(self):
+        p=models.profile('moss')
+        identity=registry.implementation_identity(p)
+        from copy import deepcopy
+        original=registry.packages()
+        changed=deepcopy(original);changed['zimage']['defaults']['steps']=999
+        with patch.object(registry,'packages',return_value=changed):
+            self.assertEqual(registry.implementation_identity(p),identity)
+        changed=deepcopy(original);changed['moss']['defaults']['steps']=999
+        with patch.object(registry,'packages',return_value=changed):
+            self.assertNotEqual(registry.implementation_identity(p),identity)
+
     # Deliberate profile changes after the move, each in its own behaviour-change PR.
     CHANGED_SINCE = {"flux3": {"about": "FLUX 3 Image Klein: prompt-faithful, text in images, edits (ai gen edit); "
                                         "--improve-prompt expands the caption with the local chat model"}}   # 3.6

@@ -14,9 +14,14 @@ def main():
     if args.command == 'hello':
         print('hello from the template')
         return 0
+    if not args.name or args.name in ('.', '..') or '/' in args.name or '\\' in args.name or ':' in args.name:
+        parser.error('name must be a plain output name without path separators')
     out = Path.home() / 'work/outputs/example'
     out.mkdir(parents=True, exist_ok=True)
-    (out / f'{args.name}.txt').write_text(f'hello, {args.name}\n')
+    target = out / f'{args.name}.txt'
+    if not target.resolve().is_relative_to(out.resolve()) or target.is_symlink():
+        parser.error('output destination escapes the example output folder')
+    target.write_text(f'hello, {args.name}\n')
     print(out / f'{args.name}.txt')
     return 0
 

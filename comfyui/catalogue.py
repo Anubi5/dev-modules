@@ -67,7 +67,7 @@ def sha256(path):
     return h.hexdigest()
 
 
-def declared_pins():
+def declared_pins(diagnostics=None):
     pins={}
     from fetch_models import declarations
     for row in declarations(HERE/'models.txt'):
@@ -77,24 +77,32 @@ def declared_pins():
     helpers=HERE/'helper_models.json'
     if helpers.exists():
         for row in json.loads(helpers.read_text())['files']: pins['comfy/'+row['path']]=row['sha256']
-    rig=declared_by('ai-rig-models')                 # the rig module's own declaration, through its command
+    rig=declared_by('ai-rig-models', diagnostics=diagnostics)                 # the rig module's own declaration, through its command
     for row in (rig or {}).get('weights',{}).get('files',[]): pins['rig/'+row['path']]=row['sha256']
     return pins
 
 
-def declared_by(command,*arguments):
-    """Another module's model declarations through its read-only command (JSON); None when it is not installed or
-    does not answer. Never reads another module's files."""
+def declared_by(command,*arguments,diagnostics=None):
+    """Read a provider's public declaration; retain missing/failed-provider diagnostics."""
     executable=shutil.which(command)
-    if not executable: return None
-    try:
-        result=subprocess.run([executable,*arguments],capture_output=True,text=True,timeout=60)
-        return json.loads(result.stdout) if result.returncode==0 else None
-    except (OSError,ValueError,subprocess.TimeoutExpired): return None
+    status='not-installed'
+    if executable:
+        status='failed'
+        try:
+            result=subprocess.run([executable,*arguments],capture_output=True,text=True,timeout=60)
+            if result.returncode==0:
+                data=json.loads(result.stdout)
+                if isinstance(data,dict):
+                    return data
+        except (OSError,ValueError,subprocess.TimeoutExpired):
+            pass
+    if diagnostics is not None:
+        diagnostics.append(dict(provider=command,status=status,meaning='Provider declarations unavailable; catalogue is incomplete'))
+    return None
 
 
 def inventory(root):
-    root=Path(root).resolve(); pins=declared_pins(); files=[]
+    root=Path(root).resolve(); diagnostics=[]; pins=declared_pins(diagnostics=diagnostics); files=[]
     for path in sorted(root.rglob('*')):
         if not path.is_file(): continue
         if not path.resolve().is_relative_to(root): continue
@@ -161,7 +169,7 @@ def inventory(root):
         packages.append(dict(id='unirig',kind='rig',status='needs-something' if missing else 'ready',missing=missing,
                              components=rig,experimental=True))
     # Installed local chat selections are metadata; never invoke a server or discover executable code.
-    chat=declared_by('ai-models','declared','--json') or {}   # the llama-swap module's own declaration
+    chat=declared_by('ai-models','declared','--json',diagnostics=diagnostics) or {}   # the llama-swap module's own declaration
     declared_specs={row['id']:row for row in chat.get('chat',[])}
     if chat.get('resolved'):
         specs=declared_specs
@@ -222,12 +230,14 @@ def inventory(root):
     hashes,accepted=hash_record(),accepted_records()
     for package in packages:
         package.update(stage(root,package,by_path,hashes,accepted.get(package['id'])))
-    return dict(schema='local-ai.models/1',root=str(root),packages=packages,files=files,discovery_read_only=True)
+    return dict(schema='local-ai.models/1',root=str(root),packages=packages,files=files,discovery_read_only=True,
+                discovery='degraded' if diagnostics else 'complete',provider_diagnostics=diagnostics)
 
 
 # Status shown to people and agents (Plan 3.6/3.8): declared -> installed -> verified -> accepted.
 HASHES=Path.home()/'.local/share/modules/comfyui/models/.hashes'          # written by install/update verification
-ACCEPTED=Path.home()/'.local/state/modules/comfyui/accepted.json'          # written by "accept" only
+LEGACY_ACCEPTED=Path.home()/'.local/state/modules/comfyui/accepted.json'
+ACCEPTED=Path.home()/'.local/state/eva/model-acceptance/comfyui.json'          # written by "accept" only
 STAGES=('declared','installed','verified','accepted')
 
 
@@ -240,9 +250,49 @@ def hash_record():
 
 def accepted_records():
     try:
-        data=json.loads(ACCEPTED.read_text())
+        data=json.loads((ACCEPTED if ACCEPTED.exists() else LEGACY_ACCEPTED).read_text())
         return data if isinstance(data,dict) else {}
     except (OSError,ValueError): return {}
+
+
+def migrate_acceptance():
+    """Preserve old evidence outside the runner-owned lifecycle directory; never overwrite a collision."""
+    if not LEGACY_ACCEPTED.exists():
+        return
+    legacy = json.loads(LEGACY_ACCEPTED.read_text())
+    if not isinstance(legacy, dict):
+        raise ValueError('Invalid legacy acceptance record; preserved for owner review')
+    current = json.loads(ACCEPTED.read_text()) if ACCEPTED.exists() else {}
+    if not isinstance(current, dict) or any(k in current and current[k] != v for k, v in legacy.items()):
+        raise ValueError('Acceptance migration collision; both records preserved for owner review')
+    current.update(legacy)
+    atomic_acceptance(current)
+    LEGACY_ACCEPTED.unlink()  # exact contents now preserved in the independent atomic destination
+
+
+def atomic_acceptance(data):
+    """Atomic private write with a unique temporary filename."""
+    import tempfile
+    ACCEPTED.parent.mkdir(parents=True, exist_ok=True)
+    fd, name = tempfile.mkstemp(prefix=ACCEPTED.name + '.', dir=ACCEPTED.parent)
+    try:
+        with os.fdopen(fd, 'w') as stream:
+            json.dump(data, stream, indent=1, sort_keys=True)
+            stream.write('\n')
+        os.replace(name, ACCEPTED)
+    finally:
+        Path(name).unlink(missing_ok=True)
+
+
+def acceptance_identity(package):
+    """Relevant family implementation identity; external providers retain file verification only."""
+    from generation.models import PROFILES
+    name = package['id']
+    for section in ('models', 'video_models'):
+        if name in PROFILES.get(section, {}):
+            return registry.implementation_identity(dict(PROFILES[section][name], name=name))
+    data = registry.packages().get(name)
+    return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest() if data else None
 
 
 def component_hashes(root,package,by_path,hashes):
@@ -266,7 +316,9 @@ def stage(root,package,by_path,hashes,record):
     if package['missing'] or not package['components']: return dict(stage='declared',accepted=None)
     current=component_hashes(root,package,by_path,hashes)
     if current is None: return dict(stage='installed',accepted=None)
-    if record and record.get('components')==current: return dict(stage='accepted',accepted=record)
+    identity=acceptance_identity(package)
+    if record and identity and record.get('implementation_sha256')==identity and record.get('components')==current:
+        return dict(stage='accepted',accepted=record)
     return dict(stage='verified',accepted=None)
 
 
@@ -280,16 +332,21 @@ def accept(report,query,record_path,note=None):
     run=json.loads(Path(record_path).read_text())
     if run.get('status')!='succeeded' or run.get('model')!=selected['id']:
         raise ValueError(f"{record_path} is not a succeeded run of {selected['id']}")
+    identity=acceptance_identity(selected)
+    if not identity or run.get('implementation_sha256')!=identity:
+        raise ValueError('Run implementation does not match the current family; run and review it again')
+    if not note or not note.strip():
+        raise ValueError('Acceptance needs --note describing the owner visual/semantic review')
     outputs=[o for o in run.get('outputs',[]) if Path(o).is_file()]
     if not outputs: raise ValueError(f'{record_path}: its outputs are missing')
     from datetime import datetime,timezone
     entry=dict(at=datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),revision=run.get('module'),
                record=str(Path(record_path).resolve()),outputs=outputs,note=note,
+               implementation_sha256=identity, workflow_sha256=run.get('workflow_sha256'), review='owner-attested; not automatic quality validation',
                components=component_hashes(Path(report['root']),selected,
                                            {str(Path(r['path']).resolve()):r for r in report['files']},hash_record()))
     data=accepted_records(); data[selected['id']]=entry
-    ACCEPTED.parent.mkdir(parents=True,exist_ok=True)
-    tmp=ACCEPTED.with_suffix('.tmp'); tmp.write_text(json.dumps(data,indent=1,sort_keys=True)+'\n'); os.replace(tmp,ACCEPTED)
+    atomic_acceptance(data)
     return dict(schema='local-ai.model-acceptance/1',id=selected['id'],status='accepted',**entry)
 
 

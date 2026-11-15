@@ -98,12 +98,39 @@ class CatalogueTests(unittest.TestCase):
             run.write_text(json.dumps(dict(status='failed',model='fixture',outputs=[str(output)])))
             with self.assertRaisesRegex(ValueError,'not a succeeded run'):
                 catalogue.accept(catalogue.inventory(self.root),'fixture',run)
-            run.write_text(json.dumps(dict(status='succeeded',model='fixture',outputs=[str(output)],module='repo @ abc')))
+            run.write_text(json.dumps(dict(status='succeeded',model='fixture',outputs=[str(output)],module='repo @ abc',implementation_sha256=catalogue.acceptance_identity(catalogue.select(catalogue.inventory(self.root),'fixture')))))
             result=catalogue.accept(catalogue.inventory(self.root),'fixture',run,'looked right')
             self.assertEqual((result['status'],result['revision'],result['note']),('accepted','repo @ abc','looked right'))
             self.assertEqual(stage(),'accepted')
             weights.write_bytes(self.data+b'!')                      # a changed file is no longer the declared one
             self.assertEqual(stage(),'declared')
+
+    def test_acceptance_migration_survives_runner_directory_removal(self):
+        import shutil
+        state=Path(self.temp.name)/'state'
+        legacy=state/'modules/comfyui/accepted.json';legacy.parent.mkdir(parents=True)
+        legacy.write_text(json.dumps({'fixture': {'note': 'historic owner evidence'}}))
+        destination=state/'eva/model-acceptance/comfyui.json'
+        with patch.object(catalogue,'ACCEPTED',destination), patch.object(catalogue,'LEGACY_ACCEPTED',legacy):
+            catalogue.migrate_acceptance()
+            shutil.rmtree(legacy.parent)
+            self.assertEqual(catalogue.accepted_records()['fixture']['note'],'historic owner evidence')
+            catalogue.migrate_acceptance()  # reinstall is idempotent
+
+    def test_acceptance_migration_collision_preserves_both_records(self):
+        legacy=Path(self.temp.name)/'legacy.json';destination=Path(self.temp.name)/'accepted.json'
+        legacy.write_text('{"fixture":{"note":"old"}}')
+        destination.write_text('{"fixture":{"note":"other"}}')
+        with patch.object(catalogue,'ACCEPTED',destination), patch.object(catalogue,'LEGACY_ACCEPTED',legacy):
+            with self.assertRaisesRegex(ValueError,'collision'):
+                catalogue.migrate_acceptance()
+            self.assertIn('old',legacy.read_text());self.assertIn('other',destination.read_text())
+
+    def test_missing_declaration_providers_are_explicit(self):
+        with patch.object(catalogue.shutil,'which',return_value=None):
+            report=catalogue.inventory(self.root)
+        self.assertEqual(report['discovery'],'degraded')
+        self.assertEqual({d['provider'] for d in report['provider_diagnostics']},{'ai-models','ai-rig-models'})
 
     def test_list_details_show_the_properties_behind_each_status(self):
         out=io.StringIO()

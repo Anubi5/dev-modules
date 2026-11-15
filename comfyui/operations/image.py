@@ -68,7 +68,8 @@ def prepare(a, seed, prefix, edit=None):
                         if getattr(a, flag, False)), None)
     log0 = lambda t: print(f"  {t}", flush=True)
     prof = rt.find_checkpoint(a.checkpoint, log0) if a.checkpoint else rt.resolve_model(a.model or PROFILES["default"], log0)
-    builders.registry.check_parts(prof, rt.MODELS)
+    if not getattr(a, 'check', False):
+        builders.registry.check_parts(prof, rt.MODELS)
     arch, style = prof["arch"], a.style or prof.get("style", "photo")
     capability = builders.capabilities(prof)
     allowed = capability["features"]

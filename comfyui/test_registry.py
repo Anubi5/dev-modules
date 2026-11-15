@@ -142,6 +142,14 @@ class RegistryTests(unittest.TestCase):
             (p/'package.json').write_text(json.dumps(data))
             with self.assertRaisesRegex(ValueError, 'must not repeat'): registry.packages(root)
 
+    def test_all_family_mandatory_parts_have_cheap_size_declarations(self):
+        for name,data in registry.packages().items():
+            for role,part in data['parts'].items():
+                if not part.get('optional'):
+                    with self.subTest(family=name,part=role):
+                        self.assertIsInstance(part['bytes'],int)
+                        self.assertGreater(part['bytes'],0)
+
     def test_builder_family_never_names_a_path_or_has_a_recipe(self):
         data = json.loads(Path(__file__).with_name('families').joinpath('zimage/package.json').read_text())
         with tempfile.TemporaryDirectory() as folder:

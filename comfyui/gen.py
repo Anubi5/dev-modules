@@ -65,7 +65,7 @@ def generation_parser():
     ap.add_argument("--image", metavar="IMAGE", action="append", default=[],
                     help="edit: the image to change (in ~/work); repeat for extra references (up to 4)")
     ap.add_argument("--improve-prompt", action="store_true",
-                    help="FLUX 3: first expand the request into a full caption with the local chat model (needs llama-swap)")
+                    help="image/edit: first expand the request into a full caption with the local chat model (families that declare it; needs llama-swap)")
     ap.add_argument("--no-expand", action="store_true", help=argparse.SUPPRESS)   # the default since 3.6; older commands keep working
     ap.add_argument("--name", default="", help="short name for the output files (default: from the prompt)")
     ap.add_argument("--model", metavar="NAME", help=f"image/3D profile, video package or compatible model file; default {PROFILES['default']}; use ai gen list for current names")
@@ -81,8 +81,8 @@ def generation_parser():
     ap.add_argument("--pose-strength", type=float, default=None, help="how strictly to follow the pose, 0.3-1.0 (default per model)")
     ap.add_argument("--face", metavar="IMAGE", help="image: keep this face (in ~/work; one clear face)")
     ap.add_argument("--face-weight", type=float, default=0.65, help="how strongly to keep the face, 0.3-1.2 (high values distort it)")
-    ap.add_argument("--checkpoint", metavar="NAME", help="image: any SDXL checkpoint file by (part of) its name")
-    ap.add_argument("--cfg", type=float, default=None, help="image: guidance scale (default per model; fixed for zimage, flux3, fibo2)")
+    ap.add_argument("--checkpoint", metavar="NAME", help="image: a checkpoint file (checkpoints folder) by (part of) its name")
+    ap.add_argument("--cfg", type=float, default=None, help="image: guidance scale (default per model; distilled models keep their fixed value)")
     ap.add_argument("--force-lora", action="store_true", help="image: run a LoRA even when its layers do not match the model (recorded)")
     ap.add_argument("--lora", metavar="NAME[:STRENGTH]", action="append", default=[],
                     help="image/edit: a LoRA by (part of) its file name, strength -2..2 (default 1); repeat for up to 4")

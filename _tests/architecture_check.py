@@ -22,8 +22,6 @@ KNOWN = {
     ('comfyui', 'catalogue.py', 'llama-swap'): 'Phase 4: read chat model declarations through a command/JSON contract',
     ('rig', 'cli.py', 'blender'): 'Phase 4: use the blender command instead of its private path',
     ('agent-hermes', 'hermes_eval.sh', 'comfyui'): 'Phase 4: use img-check and the skill instead of private paths',
-    ('comfyui', 'models.txt', 'text_encoders/qwen3vl_4b_int8_convrot.safetensors'): 'Phase 3.4: one declaration per asset',
-    ('comfyui', 'models.txt', 'vae/flux2-vae.safetensors'): 'Phase 3.4',
 }
 TEXT = ('.py', '.sh', '.json', '.txt', '.service')
 

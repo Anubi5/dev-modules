@@ -8,9 +8,7 @@
   "parts": {
     "model": {
       "folder": "diffusion_models",
-      "file": "pixal3d_multiview_int8_convrot.safetensors",
-      "bytes": 5584555824,
-      "sha256": "6b1eb3328930d921d3b57508d9c46cceec1c174dcedeebc14f176ab67d49f477"
+      "file": "pixal3d_multiview_int8_convrot.safetensors"
     }
   },
   "defaults": {

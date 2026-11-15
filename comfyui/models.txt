@@ -26,8 +26,6 @@ Bingsu/adetailer hand_yolov8s.pt ultralytics/bbox sha256:70b540063fbc385736d8258
 #     non-commercial): accept it at huggingface.co/black-forest-labs/flux-3-image-klein-comfy and put the 3 files into
 #     D:\AI\models\comfy\{diffusion_models,text_encoders,vae}; they are checked against these checksums.
 black-forest-labs/flux-3-image-klein-comfy diffusion_models/flux3-image-klein-int8-convrot.safetensors diffusion_models sha256:847d8933548afd93df4af2cac2498e70891bf28d9dae06d695f536992e168fe2 optional bytes:5827874779
-black-forest-labs/flux-3-image-klein-comfy text_encoders/qwen3vl_4b_int8_convrot.safetensors text_encoders sha256:32de113cbf8282b02cbff0794b637b9d6676da09314a1db5a30bcea9bf4ee01c optional bytes:4858559240
-black-forest-labs/flux-3-image-klein-comfy vae/flux2-vae.safetensors vae sha256:868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3 optional bytes:336211292
 # --- Anima (CircleStone Labs, non-commercial licence for the weights; images may be used commercially) - illustration/anime
 circlestone-labs/Anima split_files/diffusion_models/anima-aesthetic-v1.1.safetensors diffusion_models sha256:3c1868387a3a1ff504bbb87c33678321965ead381fcf87afbd0264daa600c082 bytes:4182230656
 circlestone-labs/Anima split_files/diffusion_models/anima-turbo-v1.1.safetensors diffusion_models sha256:fba11953276b57edf59d1dc4f1857ac05aa079c56f982b4d7c20298d57d3f7eb bytes:4182230656

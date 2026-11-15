@@ -36,13 +36,13 @@ class RegistryTests(unittest.TestCase):
     def test_discovery_does_not_import_a_package_python_file(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder); p=root/'krea2'; p.mkdir()
-            (p/'package.json').write_text(json.dumps(registry.family(self.prof)))
+            (p/'package.json').write_text(Path(__file__).with_name('families').joinpath('krea2/package.json').read_text())
             (p/'__init__.py').write_text("raise AssertionError('arbitrary package code executed')")
             self.assertEqual(set(registry.packages(root)),{'krea2'})
 
     def test_invalid_paths_and_bindings_are_rejected(self):
         with tempfile.TemporaryDirectory() as folder:
-            root=Path(folder); p=root/'krea2';p.mkdir(); package=deepcopy(registry.family(self.prof))
+            root=Path(folder); p=root/'krea2';p.mkdir(); package=json.loads(Path(__file__).with_name('families').joinpath('krea2/package.json').read_text())   # as stored
             for change in ['path','binding']:
                 bad=deepcopy(package)
                 if change=='path': bad['parts']['model']['file']='../../escape.safetensors'
@@ -95,16 +95,28 @@ class RegistryTests(unittest.TestCase):
                 with patch.object(registry, 'packages', return_value={}), self.assertRaisesRegex(ValueError, 'removed'):
                     registry.family(prof)
 
-    def test_family_parts_match_their_models_txt_pins(self):
+    def test_every_asset_is_declared_once(self):
+        """3.4: a file models.txt declares is named by path in packages (pin taken from models.txt); only a package's
+        own files carry a pin there; and models.txt declares each folder/file once."""
         from fetch_models import declarations
-        pins = {(r['folder'], r['name']): (r['sha256'].lower(), r['bytes']) for r in declarations(Path(__file__).with_name('models.txt'))}
-        for name, data in registry.packages().items():
-            if not data.get('builder'): continue
-            for role, part in data['parts'].items():
-                with self.subTest(family=name, part=role):
-                    sha, size = pins[(part['folder'], part['file'])]
-                    self.assertEqual(sha, part['sha256'])
-                    if size is not None: self.assertEqual(size, part['bytes'])   # one pin lists no size yet (3.4)
+        rows = declarations(Path(__file__).with_name('models.txt'))
+        keys = [(r['folder'], r['name']) for r in rows]
+        self.assertEqual(sorted(k for k in set(keys) if keys.count(k) > 1), [])
+        pins = {(r['folder'], r['name']): (r['sha256'].lower(), r['bytes']) for r in rows}
+        for path in sorted(Path(__file__).with_name('families').glob('*/package.json')):
+            raw = json.loads(path.read_text())
+            for role, part in raw['parts'].items():
+                with self.subTest(family=path.parent.name, part=role):
+                    key = (part['folder'], part['file'])
+                    self.assertEqual(key in pins, 'sha256' not in part and 'bytes' not in part)
+                    resolved = registry.packages()[raw['name']]['parts'][role]
+                    if key in pins: self.assertEqual((resolved['sha256'], resolved['bytes']), pins[key])
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); p = root/'zimage'; p.mkdir()
+            data = json.loads(Path(__file__).with_name('families').joinpath('zimage/package.json').read_text())
+            data['parts']['vae'].update(sha256='a'*64, bytes=1)       # a second declaration of a models.txt file
+            (p/'package.json').write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError, 'must not repeat'): registry.packages(root)
 
     def test_builder_family_never_names_a_path_or_has_a_recipe(self):
         data = json.loads(Path(__file__).with_name('families').joinpath('zimage/package.json').read_text())

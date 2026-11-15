@@ -9,21 +9,15 @@
   "parts": {
     "model": {
       "folder": "diffusion_models",
-      "file": "flux3-image-klein-int8-convrot.safetensors",
-      "bytes": 5827874779,
-      "sha256": "847d8933548afd93df4af2cac2498e70891bf28d9dae06d695f536992e168fe2"
+      "file": "flux3-image-klein-int8-convrot.safetensors"
     },
     "text_encoder": {
       "folder": "text_encoders",
-      "file": "qwen3vl_4b_int8_convrot.safetensors",
-      "bytes": 4858559240,
-      "sha256": "32de113cbf8282b02cbff0794b637b9d6676da09314a1db5a30bcea9bf4ee01c"
+      "file": "qwen3vl_4b_int8_convrot.safetensors"
     },
     "vae": {
       "folder": "vae",
-      "file": "flux2-vae.safetensors",
-      "bytes": 336211292,
-      "sha256": "868fe7b343cc8f3a19dbcfcafbc3d5f888802be3f89bd81b65b3621a066ce8f3"
+      "file": "flux2-vae.safetensors"
     }
   },
   "defaults": {

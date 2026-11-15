@@ -1213,7 +1213,7 @@ def missing_capabilities(needs):
     return out
 
 
-FEATURE_FLAGS = ("pose", "face", "fix_faces", "fix_hands", "hires", "upscale")
+FEATURE_FLAGS = ("pose", "face", "fix_faces", "fix_hands", "hires", "upscale", "improve_prompt")
 
 
 def requested_features(a):
@@ -1239,7 +1239,7 @@ def checked(a, info, wf, prof, seed, needs=None):
                  "(Windows: dev mod update comfyui, review the plan, approve) or copy gated files by hand into "
                  "D:\\AI\\models\\comfy\\<folder>"] if missing else []) + \
                ([f"needs {', '.join(lacking)} - install that module (dev mod add <module>)"
-                 + (" or use --no-expand" if any(c.startswith("llm.chat") for c in lacking) else "")] if lacking else [])
+                 + (" or leave out --improve-prompt" if any(c.startswith("llm.chat") for c in lacking) else "")] if lacking else [])
     JOB["result"] = dict(status="checked" if not problems else "check_failed", record=None, outputs=[],
                          error="; ".join(problems) or None, **result_fields(a, info, wf, prof, seed))
     for line in problems:

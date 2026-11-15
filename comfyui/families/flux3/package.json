@@ -4,7 +4,7 @@
   "kind": "image",
   "architecture": "flux3",
   "builder": "flux3",
-  "description": "FLUX 3 Image Klein: prompt-faithful, text in images, edits (ai gen edit); caption expanded by the local model",
+  "description": "FLUX 3 Image Klein: prompt-faithful, text in images, edits (ai gen edit); --improve-prompt expands the caption with the local chat model",
   "experimental": false,
   "parts": {
     "model": {

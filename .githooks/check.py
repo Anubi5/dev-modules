@@ -98,21 +98,16 @@ def main():
                 else:
                     run([sys.executable, '-B', str(root / 'tools/module_manifest.py'), *manifests], cwd=root)
             else:
+                checks = ['ManifestContract.test_files_exist']
                 try:
-                    import jsonschema
+                    import jsonschema  # noqa: F401
                 except ImportError:
                     print('WARNING: jsonschema unavailable; manifest schema check skipped.', file=sys.stderr)
                 else:
-                    schema = json.loads((root / '_tests/module-manifest.schema.json').read_text())
-                    for module in manifests:
-                        value = json.loads((root / module / 'module.json').read_text())
-                        jsonschema.validate(value, schema)
-                        for server in value.get('mcp', []):
-                            if not (root / module / server['command']).is_file():
-                                raise ValueError(f'{module}: missing MCP command')
-                        for skill in value.get('skills', []):
-                            if not (root / module / skill / 'SKILL.md').is_file():
-                                raise ValueError(f'{module}: missing skill')
+                    checks.append('ManifestContract.test_schema')
+                # Reuse only these two small existing metadata checks (seven manifests),
+                # never their command execution/read-only integration tests.
+                run([sys.executable, '-B', str(root / '_tests/manifest_contract_test.py'), *checks], cwd=root)
         if 'ai-sandbox/config/release.json' in changed:
             try:
                 import pydantic  # noqa: F401
@@ -127,6 +122,12 @@ def main():
         if 'comfyui/nodes.txt' in changed or 'comfyui/test_sam2_pin.py' in changed:
             selected.append('comfyui/test_sam2_pin.py')
         for test in selected:
+            if test.startswith('tools/'):
+                try:
+                    import pydantic  # noqa: F401
+                except ImportError:
+                    print('WARNING: Pydantic unavailable; schema parity check skipped.', file=sys.stderr)
+                    continue
             args = ['--check-schema'] if test.startswith('tools/') else []
             run([sys.executable, '-B', str(root / test), *args], cwd=root)
     print(f'PASS: staged local checks ({time.monotonic() - START:.2f}s)')

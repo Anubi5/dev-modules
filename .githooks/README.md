@@ -11,7 +11,7 @@ Checks use the index, including partially staged files. The subprocess budget is
 or schema packages warn and skip that check. Nothing installs or downloads tools.
 Set `EVA_HOOK_PYTHON` to an existing Python executable when it is not on PATH;
 alternatively save its path in this checkout with `git config --local eva.hookPython <path>`.
-add existing native PowerShell to PATH for its parser. Bash on Windows is Git's
+Add existing native PowerShell to PATH for its parser. Bash on Windows is Git's
 Bash: the WSL launch alias is never used.
 
 Normal commits use these local checks. Bug fixes run their specific regression

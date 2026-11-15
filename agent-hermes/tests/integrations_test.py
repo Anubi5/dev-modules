@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import time
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -11,6 +12,50 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import hermes_profile_check as policy
 import integrations
+
+
+@unittest.skipUnless(sys.platform.startswith('linux'), 'requires a real Linux terminal')
+class TerminalDecisionTests(unittest.TestCase):
+    """Exercise the actual terminal streams, rather than mocking owner answers."""
+
+    def test_real_terminal_accepts_approval_and_refusal(self):
+        import pty
+        import select
+        import signal
+        for answer, expected in (('yes', True), ('n', False)):
+            with self.subTest(answer=answer):
+                pid, fd = pty.fork()
+                if pid == 0:
+                    try:
+                        value = integrations.ask(dict(kind='skill', module='fixture', name='fixture', path='/fixture'))
+                        os._exit(0 if value is expected else 1)
+                    except BaseException:
+                        os._exit(2)
+                reaped = False
+                try:
+                    output = b''
+                    deadline = time.monotonic() + 5
+                    while b'[y/N] ' not in output and time.monotonic() < deadline:
+                        if select.select([fd], [], [], 0.1)[0]:
+                            try:
+                                output += os.read(fd, 4096)
+                            except OSError:
+                                break
+                    self.assertIn(b'[y/N] ', output)
+                    os.write(fd, (answer + '\n').encode())
+                    while time.monotonic() < deadline:
+                        done, status = os.waitpid(pid, os.WNOHANG)
+                        if done:
+                            reaped = True
+                            self.assertEqual(os.waitstatus_to_exitcode(status), 0)
+                            break
+                        time.sleep(0.01)
+                    self.assertTrue(reaped, 'terminal decision timed out')
+                finally:
+                    if not reaped:
+                        os.kill(pid, signal.SIGKILL)
+                        os.waitpid(pid, 0)
+                    os.close(fd)
 
 
 class Fakes:

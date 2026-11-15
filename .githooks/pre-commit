@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+git diff --cached --check
+python_path=${EVA_HOOK_PYTHON:-$(git config --get eva.hookPython || true)}
+if [ -n "$python_path" ]; then
+  exec "$python_path" -B .githooks/check.py
+fi
+for python in python3 python; do
+  location=$(command -v "$python" || true)
+  case "$location" in *WindowsApps*|'') continue ;; esac
+  exec "$python" -B .githooks/check.py
+done
+echo 'WARNING: Python unavailable; only whitespace checked. Set EVA_HOOK_PYTHON to an installed interpreter.' >&2

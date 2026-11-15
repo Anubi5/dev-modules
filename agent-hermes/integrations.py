@@ -112,10 +112,11 @@ def describe(offer: dict[str, Any]) -> str:
 def ask(offer: dict[str, Any]) -> bool | None:
     """Ask on the terminal; None when nobody can answer."""
     try:
-        with open('/dev/tty', 'r+') as tty:
-            tty.write(f'  Let Hermes use the {describe(offer)}? [y/N] ')
-            tty.flush()
-            return tty.readline().strip().lower() in ('y', 'yes')
+        # Buffered read/write mode requires seeking; a terminal is not seekable.
+        with open('/dev/tty', 'r') as reader, open('/dev/tty', 'w') as writer:
+            writer.write(f'  Let Hermes use the {describe(offer)}? [y/N] ')
+            writer.flush()
+            return reader.readline().strip().lower() in ('y', 'yes')
     except OSError:
         return None
 

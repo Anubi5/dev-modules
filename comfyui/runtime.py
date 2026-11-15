@@ -1169,3 +1169,82 @@ def asset_cmd(argv):
         return 1 if bad else 0
     return 2
 
+
+
+def module_revision():
+    """! @brief The installed comfyui module's source ("<repo> @ <commit>"), or None outside an installed module. """
+    try:
+        return open(os.path.expanduser("~/.local/state/modules/comfyui/source")).read().strip() or None
+    except OSError:
+        return None
+
+
+def missing_assets(prof, wf):
+    """!
+    @brief Files a job needs that are not on disk: the family's required parts (or the chosen model file) and the
+           helper models its workflow names. Reads only the folder listings and file sizes - no service, no GPU.
+    @return list of "folder/file"
+    """
+    roots = [os.path.join(MODELS, "comfy"), os.path.expanduser("~/.local/share/modules/comfyui/models")]
+    data = builders.registry.family(prof) if prof.get("family") else None
+    parts = ([(p["folder"], p["file"]) for p in data["parts"].values() if not p.get("optional")] if data else
+             [("checkpoints" if prof["arch"] == "sdxl" else "diffusion_models", prof["file"])])
+    missing = [f"{d}/{f}" for d, f in parts if not any(os.path.exists(os.path.join(r, d, f)) for r in roots)]
+    from helper_models import check_workflow
+    try:
+        check_workflow(os.path.join(MODELS, "comfy"), wf)
+    except (OSError, ValueError) as error:
+        missing.append(str(error))
+    return missing
+
+
+def missing_capabilities(needs):
+    """! @brief Capabilities the job needs that no installed module provides, e.g. {"llm.chat": "llama-swap"}. """
+    installed = os.path.expanduser("~/.local/share/modules")
+    out = []
+    for capability, module in needs.items():
+        try:
+            manifest = json.load(open(os.path.join(installed, module, "module.json")))
+            provided = {c["id"] if isinstance(c, dict) else c for c in manifest.get("capabilities", [])}
+        except (OSError, ValueError):
+            provided = set()
+        if capability not in provided:
+            out.append(f"{capability} (module {module})")
+    return out
+
+
+FEATURE_FLAGS = ("pose", "face", "fix_faces", "fix_hands", "hires", "upscale")
+
+
+def requested_features(a):
+    """! @brief The optional features a request asked for, by name (the --options as typed, plus lora/references). """
+    return ([f for f in FEATURE_FLAGS if getattr(a, f, False)] + (["lora"] if getattr(a, "lora", None) else [])
+            + (["references"] if getattr(a, "image", None) and a.kind == "edit" else []))
+
+
+def result_fields(a, info, wf, prof, seed):
+    """! @brief What every producer result reports beside status/outputs/record: model, family, features, seed, ... """
+    return dict(model=info.get("model"), family=(prof or {}).get("family"), features=requested_features(a), seed=seed,
+                workflow_sha256=wf_sha(wf) if wf is not None else None, revision=module_revision())
+
+
+def checked(a, info, wf, prof, seed, needs=None):
+    """!
+    @brief --check: everything was validated (model, family, features, inputs); now the files and capabilities. No GPU
+           lock, no service, nothing written. @return 0 when the job could run, 1 with what is missing
+    """
+    missing = missing_assets(prof, wf) if prof else []
+    lacking = missing_capabilities(needs or {})
+    problems = ([f"missing model files: {', '.join(missing)} - get them with the two-phase download plan "
+                 "(Windows: dev mod update comfyui, review the plan, approve) or copy gated files by hand into "
+                 "D:\\AI\\models\\comfy\\<folder>"] if missing else []) + \
+               ([f"needs {', '.join(lacking)} - install that module (dev mod add <module>)"
+                 + (" or use --no-expand" if any(c.startswith("llm.chat") for c in lacking) else "")] if lacking else [])
+    JOB["result"] = dict(status="checked" if not problems else "check_failed", record=None, outputs=[],
+                         error="; ".join(problems) or None, **result_fields(a, info, wf, prof, seed))
+    for line in problems:
+        print(f"CHECK {line}")
+    if not problems:
+        print(f"CHECK OK: ai gen {a.kind} with {info.get('model')}" + (f" (family {prof.get('family')})" if prof and prof.get('family') else "")
+              + (f", features {', '.join(requested_features(a))}" if requested_features(a) else "") + " - ready to run")
+    return 1 if problems else 0

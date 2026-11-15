@@ -52,9 +52,13 @@ def run(a):
             **({"views": dict(zip(slots, a.image))} if len(slots) > 1 else {}),
             **{k: vals[k] for k in ("faces", "resolution", "texture", "remove_background")}, "recipe": prof["workflow"],
             "uploads": [list(u) for u in uploads]}
+    if getattr(a, "check", False):
+        return rt.checked(a, info, wf, dict(prof, name=name), seed)
     rt.JOB["pending"] = (info, wf, prefix)          # a stop before the end still gets a record (entry)
     status, files, err = job_3d(wf, uploads, info, a.timeout or 2400, log)
-    return report_3d(status, files, info, wf, err, prefix, seed, log)
+    code = report_3d(status, files, info, wf, err, prefix, seed, log)
+    rt.JOB["result"] = dict(rt.JOB.get("result", {}), **rt.result_fields(a, info, wf, dict(prof, name=name), seed))
+    return code
 
 
 def job_3d(wf, uploads, info, timeout, log=print):

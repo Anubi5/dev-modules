@@ -89,7 +89,10 @@ def prepare(a, seed, prefix, edit=None):
     refs = [rt.check_input(f) for f in a.image]
     uploads += [(f"2{i}0", f) for i, f in enumerate(refs)]
     if capability['expand'] and not a.no_expand:
-        prompt = rt.expand_prompt(a.prompt, "edit" if refs else "t2i", w, h, refs, log=log0)
+        if getattr(a, "check", False):           # --check starts no service: only say what the run will need
+            a.needs = dict(getattr(a, "needs", {}), **{"llm.chat": "llama-swap"})
+        else:
+            prompt = rt.expand_prompt(a.prompt, "edit" if refs else "t2i", w, h, refs, log=log0)
     if not capability['negative']: neg = ""
     if a.upscale and not capability['upscale']:
         sys.exit(unsupported(prof, capability, ["upscale"]))

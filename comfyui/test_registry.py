@@ -77,19 +77,21 @@ class RegistryTests(unittest.TestCase):
         """Profiles moved from profiles.json to families/<name> (Phase 3.2) are exactly what they were there
         (tests/profiles-before-3.2.json), in the same catalogue place (= baseline order), with the same builder."""
         before_all = json.loads(Path(__file__).with_name('tests').joinpath('profiles-before-3.2.json').read_text())
-        shipped = json.loads(Path(__file__).with_name('profiles.json').read_text())['models']
-        moved = [n for n, e in shipped.items() if e == {'family': n}]
+        shipped = json.loads(Path(__file__).with_name('profiles.json').read_text())
+        moved = [(s, n) for s in ('models', 'video_models') for n, e in shipped.get(s, {}).items() if e == {'family': n}]
         self.assertTrue(moved)
-        for name in moved:
+        for section, name in moved:
             with self.subTest(family=name):
-                prof = models.profile(name)
-                self.assertEqual({k: v for k, v in prof.items() if k not in ('name', 'family', 'kind')}, before_all[name])
-                self.assertEqual((prof['family'], prof['kind']), (name, 'image'))
-                self.assertEqual(list(models.PROFILES['models']).index(name), list(before_all).index(name))
+                prof = dict(models.PROFILES[section][name])
+                self.assertEqual({k: v for k, v in prof.items() if k not in ('family', 'kind')},
+                                 {k: v for k, v in before_all[name].items() if k != 'kind'})
+                self.assertEqual((prof['family'], prof['kind']), (name, before_all[name].get('kind', 'image')))
+                self.assertEqual(list(models.PROFILES[section]).index(name), list(shipped[section]).index(name))
                 self.assertFalse(registry.declarative(prof))
-                before = dict(features=[], uploads={}, negative=True, edit=False, expand=False, upscale=True)
-                before.update(builders.BUILTINS[prof['arch']])
-                self.assertEqual(builders.capabilities(prof), before)
+                if section == 'models' and prof['kind'] == 'image':
+                    before = dict(features=[], uploads={}, negative=True, edit=False, expand=False, upscale=True)
+                    before.update(builders.BUILTINS[prof['arch']])
+                    self.assertEqual(builders.capabilities(dict(prof, name=name)), before)
                 with patch.object(registry, 'packages', return_value={}), self.assertRaisesRegex(ValueError, 'removed'):
                     registry.family(prof)
 

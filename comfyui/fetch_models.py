@@ -50,7 +50,9 @@ def download_plan(listing=None, root=None):
     here=Path(__file__).resolve().parent;root=Path(root or os.environ.get('MODELS_MOUNT','/models'))
     policies=json.loads((here/'download_licenses.json').read_text());sizes={}
     for package in sorted(here.glob('families/*/package.json')):
-        for part in json.loads(package.read_text())['parts'].values():sizes[(part['folder']+'/'+part['file'],part['sha256'].lower())]=part['bytes']
+        data=json.loads(package.read_text())
+        if 'recipe' not in data:continue   # profiles moved into families (3.2) keep models.txt's own sizes until 3.4
+        for part in data['parts'].values():sizes[(part['folder']+'/'+part['file'],part['sha256'].lower())]=part['bytes']
     files=[]
     for row in declarations(listing or here/'models.txt'):
         rel=row['folder']+'/'+row['name'];target=root/'comfy'/rel

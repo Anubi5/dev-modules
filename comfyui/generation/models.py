@@ -13,12 +13,15 @@ from .registry import profiles as family_profiles
 _families = family_profiles()
 # profiles.json keeps the catalogue order; an entry {"family": NAME} is filled from families/NAME/package.json in
 # place. Any other entry with a family's name would shadow it.
-for _name, _entry in PROFILES['models'].items():
-    if _entry == {"family": _name}:
-        if _name not in _families: raise ValueError('Family package was removed: ' + _name)
-        PROFILES['models'][_name] = _families.pop(_name)
-    elif _name in _families or "family" in _entry:
-        raise ValueError('Family package shadows an existing model profile: ' + _name)
+for _catalogue in (PROFILES['models'], PROFILES.get('video_models', {})):
+    for _name, _entry in _catalogue.items():
+        if _entry == {"family": _name}:
+            if _name not in _families: raise ValueError('Family package was removed: ' + _name)
+            _catalogue[_name] = _families.pop(_name)
+        elif _name in _families or "family" in _entry:
+            raise ValueError('Family package shadows an existing model profile: ' + _name)
+if any(p['kind'] != 'image' for p in _families.values()):
+    raise ValueError('A video family is listed only through its profiles.json video_models entry')
 PROFILES['models'].update(_families)
 
 

@@ -16,11 +16,13 @@ def packages(root=ROOT):
             raise ValueError('Family metadata must stay in the reviewed source root')
         raw = path.read_bytes(); data = json.loads(raw)
         name = data.get('name', '')
-        if data.get('schema') != 'local-ai.family/1' or not re.fullmatch('[a-z0-9][a-z0-9-]*', name):
+        if data.get('schema') != 'local-ai.family/1' or not re.fullmatch('[a-z0-9][a-z0-9.-]*', name):
             raise ValueError('Invalid family package: '+str(path))
         if name in result: raise ValueError('Duplicate family package: '+name)
-        if data.get('kind') != 'image' or not data.get('architecture') or not data.get('parts'):
-            raise ValueError('Incomplete image family: '+name)
+        if data.get('kind') not in ('image', 'video') or not data.get('architecture') or not data.get('parts'):
+            raise ValueError('Incomplete family: '+name)
+        if data['kind'] != 'image' and data.get('builder') is None:
+            raise ValueError('A video family needs its reviewed builder: '+name)
         for part in data['parts'].values():
             relative = PurePosixPath(part['folder'])/part['file']
             if relative.is_absolute() or '..' in relative.parts or '\\' in str(relative) or ':' in str(relative):
@@ -55,7 +57,8 @@ def profiles():
         p = deepcopy(data['defaults'])
         p.update(arch=data['architecture'], kind=data['kind'], family=name)
         p.update(deepcopy(data.get('catalogue', {})))
-        p['about'] = data.get('description', name)
+        if 'description' in data or data['kind'] == 'image':
+            p['about'] = data.get('description', name)
         for role, part in data['parts'].items():
             p['file' if role == 'model' else role] = part['file']
             if part.get('optional'):

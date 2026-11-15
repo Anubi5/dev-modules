@@ -117,9 +117,11 @@ def inventory(root):
                              components=['comfy/'+part['folder']+'/'+part['file'] for part in p['parts'].values()],
                              description=p.get('description',name),defaults=p.get('defaults',{}),capabilities=p.get('capabilities',{})))
     legacy=json.loads((HERE/'profiles.json').read_text())
-    if any(e=={'family':n} for n,e in legacy['models'].items()):   # {"family": NAME}: that family's profile, in place
-        from generation.models import PROFILES
-        legacy['models']={n:(PROFILES['models'][n] if e=={'family':n} else e) for n,e in legacy['models'].items()}
+    for section in ('models','video_models'):              # {"family": NAME}: that family's profile, in place
+        entries=legacy.get(section,{})
+        if any(e=={'family':n} for n,e in entries.items()):
+            from generation.models import PROFILES
+            legacy[section]={n:(PROFILES[section][n] if e=={'family':n} else e) for n,e in entries.items()}
     for name,p in dict(legacy['models'],**legacy.get('video_models',{}),**legacy.get('assets',{})).items():
         references={p[key] for key in ['file','text_encoder','vae'] if isinstance(p.get(key),str)}
         if p.get('kind')=='3d':

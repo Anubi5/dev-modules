@@ -277,6 +277,29 @@ class IntegrationTests(unittest.TestCase):
         with self.assertRaises(ValueError):self.reconcile()
         self.assertEqual(path.read_text(),'{invalid owner record')
 
+    def test_offer_changed_during_owner_prompt_is_not_activated(self):
+        self.fake.module('blender',mcp=[('blender',['writes'])])
+        command=Path(self.fake.modules[0]['mcp'][0]['command'])
+        def approve_then_change(offer):
+            command.write_text('new unreviewed execution')
+            return True
+        with patch.object(integrations,'ask',side_effect=approve_then_change),self.assertRaisesRegex(ValueError,'changed during'):
+            integrations.reconcile('hermes',attended=True)
+        self.assertNotIn('blender',self.servers())
+        self.assertFalse((self.home/policy.APPROVALS).exists())
+
+    def test_skill_changed_during_copy_is_rolled_back(self):
+        self.fake.module('blender',skills=['example'])
+        copy=integrations.shutil.copytree
+        def changed(source,target,*args,**kwargs):
+            result=copy(source,target,*args,**kwargs)
+            (Path(target)/'SKILL.md').write_text('unreviewed concurrent content')
+            return result
+        with patch.object(integrations.shutil,'copytree',side_effect=changed),self.assertRaisesRegex(ValueError,'changed while copying'):
+            self.reconcile([True])
+        self.assertFalse((self.home/'skills/modules/example').exists())
+        self.assertFalse((self.home/policy.APPROVALS).exists())
+
     def test_approval_commit_failure_restores_previous_skill_copy(self):
         self.fake.module('blender',skills=['example'])
         self.reconcile([True])

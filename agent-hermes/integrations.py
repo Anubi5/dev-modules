@@ -225,7 +225,10 @@ def apply(executable: str, approved: dict[str, dict[str, Any]], root: Path,
         if name in wanted:
             raise ValueError(f'Ambiguous skill name: {name}')
         source = Path(offer['path'])
-        wanted[name] = (source, skill_digest(source))
+        fingerprint=skill_digest(source)
+        if fingerprint!=offer.get('sha256'):
+            raise ValueError(f'Skill offer changed during review: {name}')
+        wanted[name] = (source, fingerprint)
     skills = root / 'skills/modules'
     if skills.is_symlink() or (root / 'skills').is_symlink():
         raise ValueError('Managed skill parent is a symlink')
@@ -250,6 +253,8 @@ def apply(executable: str, approved: dict[str, dict[str, Any]], root: Path,
             source, fingerprint = wanted[name]
             shutil.copytree(source, target)
             (target / '.module').write_text(ME + '\n')
+            if skill_digest(target)!=fingerprint:
+                raise ValueError(f'Skill changed while copying: {name}')
     return dict(servers=servers, toolsets=added, skills={n: d for n, (_, d) in wanted.items()})
 
 
@@ -312,9 +317,20 @@ def recover(executable: str, root: Path) -> None:
     shutil.rmtree(backup)
 
 
+def verify_offers(approved: dict[str, dict[str, Any]]) -> None:
+    """Do not commit an offer changed by a concurrent lifecycle operation or during an owner prompt."""
+    if not approved:
+        return
+    current=discover()
+    for key,offer in approved.items():
+        if current.get(key)!=offer:
+            raise ValueError(f'Integration offer changed during reconciliation: {key}; review it again')
+
+
 def commit_integration(executable: str, approved: dict[str, dict[str, Any]], root: Path,
                        data: dict[str, Any], before: dict[str, Any] | None) -> None:
     """Journal the bounded write set, update it, then commit approvals; failure restores the previous state."""
+    verify_offers(approved)
     previous = (before or {}).get('managed', {})
     names = set(previous.get('skills', {})) | {o['name'] for o in approved.values() if o['kind'] == 'skill'}
     # Validate names before using them as filesystem paths, including remembered records.
@@ -337,6 +353,7 @@ def commit_integration(executable: str, approved: dict[str, dict[str, Any]], roo
         save(journal, snapshot)
         try:
             data['managed'] = apply(executable, approved, root, previous)
+            verify_offers(approved)
             save(root / policy.APPROVALS, data)
         except BaseException:
             recover(executable, root)

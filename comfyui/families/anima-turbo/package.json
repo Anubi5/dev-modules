@@ -9,27 +9,19 @@
   "parts": {
     "model": {
       "folder": "diffusion_models",
-      "file": "anima-turbo-v1.1.safetensors",
-      "bytes": 4182230656,
-      "sha256": "fba11953276b57edf59d1dc4f1857ac05aa079c56f982b4d7c20298d57d3f7eb"
+      "file": "anima-turbo-v1.1.safetensors"
     },
     "text_encoder": {
       "folder": "text_encoders",
-      "file": "qwen_3_06b_base.safetensors",
-      "bytes": 1192135096,
-      "sha256": "cd2a512003e2f9f3cd3c32a9c3573f820bb28c940f73c57b1ddaa983d9223eba"
+      "file": "qwen_3_06b_base.safetensors"
     },
     "vae": {
       "folder": "vae",
-      "file": "qwen_image_vae.safetensors",
-      "bytes": 253806246,
-      "sha256": "a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f"
+      "file": "qwen_image_vae.safetensors"
     },
     "pose_patch": {
       "folder": "model_patches",
-      "file": "anima-lllite-pose-1.safetensors",
-      "bytes": 23310040,
-      "sha256": "ddb543be5e74ce8ca79ae45807aa0c1328a4888e00706727c6fd7100dde7c864"
+      "file": "anima-lllite-pose-1.safetensors"
     }
   },
   "defaults": {

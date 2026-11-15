@@ -8,21 +8,15 @@
   "parts": {
     "model": {
       "folder": "diffusion_models",
-      "file": "Wan2.2-TI2V-5B-Q8_0.gguf",
-      "bytes": 5400179040,
-      "sha256": "57bece983817ab2f957546683bb670f13be7d99022d45674840cd999a050ea8f"
+      "file": "Wan2.2-TI2V-5B-Q8_0.gguf"
     },
     "text_encoder": {
       "folder": "text_encoders",
-      "file": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
-      "bytes": 6735906897,
-      "sha256": "c3355d30191f1f066b26d93fba017ae9809dce6c627dda5f6a66eaa651204f68"
+      "file": "umt5_xxl_fp8_e4m3fn_scaled.safetensors"
     },
     "vae": {
       "folder": "vae",
-      "file": "wan2.2_vae.safetensors",
-      "bytes": 1409400960,
-      "sha256": "e40321bd36b9709991dae2530eb4ac303dd168276980d3e9bc4b6e2b75fed156"
+      "file": "wan2.2_vae.safetensors"
     }
   },
   "defaults": {

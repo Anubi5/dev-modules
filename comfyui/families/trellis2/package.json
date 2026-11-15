@@ -8,9 +8,7 @@
   "parts": {
     "model": {
       "folder": "diffusion_models",
-      "file": "trellis_2_int8_convrot.safetensors",
-      "bytes": 5253048192,
-      "sha256": "d01952ad137213f6a868f86b6b877026276f84af5eec23069217475a0bad3a31"
+      "file": "trellis_2_int8_convrot.safetensors"
     }
   },
   "defaults": {

@@ -19,9 +19,7 @@
     },
     "vae": {
       "folder": "vae",
-      "file": "qwen_image_vae.safetensors",
-      "bytes": 253806246,
-      "sha256": "a70580f0213e67967ee9c95f05bb400e8fb08307e017a924bf3441223e023d1f"
+      "file": "qwen_image_vae.safetensors"
     }
   },
   "defaults": {

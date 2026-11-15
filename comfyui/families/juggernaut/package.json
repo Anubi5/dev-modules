@@ -9,9 +9,7 @@
   "parts": {
     "model": {
       "folder": "checkpoints",
-      "file": "juggernautXL_ragnarok.safetensors",
-      "bytes": 7105350162,
-      "sha256": "dd08fa32f98d05a2443ca1419e46df1575a0811f6e3b246d9dd47ff20f5eb66a"
+      "file": "juggernautXL_ragnarok.safetensors"
     }
   },
   "defaults": {

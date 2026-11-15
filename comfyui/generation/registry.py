@@ -8,6 +8,15 @@ import re
 ROOT = Path(__file__).resolve().parents[1]/'families'
 
 
+def assets():
+    """Every asset models.txt declares: {(folder, file): (sha256, bytes or None)} - the one declaration per file."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('fetch_models_declarations', ROOT.parent/'fetch_models.py')
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    return {(r['folder'], r['name']): (r['sha256'].lower(), r['bytes'])
+            for r in module.declarations(ROOT.parent/'models.txt') if r['sha256']}
+
+
 def packages(root=ROOT):
     result = {}
     if not root.exists(): return result
@@ -21,6 +30,21 @@ def packages(root=ROOT):
         if name in result: raise ValueError('Duplicate family package: '+name)
         if data.get('kind') not in ('image', 'video', '3d') or not data.get('architecture') or not data.get('parts'):
             raise ValueError('Incomplete family: '+name)
+        declared = assets()
+        for part in data['parts'].values():
+            relative = PurePosixPath(part['folder'])/part['file']
+            if relative.is_absolute() or '..' in relative.parts or '\\' in str(relative) or ':' in str(relative):
+                raise ValueError('Unsafe family model path: '+name)
+            pin = declared.get((part['folder'], part['file']))
+            if pin is not None:            # declared once, in models.txt: the package names the file only
+                if 'sha256' in part or 'bytes' in part:
+                    raise ValueError(f'{part["folder"]}/{part["file"]} is declared in models.txt; {name} must not repeat its pin')
+                part['sha256'], part['bytes'] = pin
+            elif (not re.fullmatch('[a-f0-9]{64}', str(part.get('sha256'))) or not isinstance(part.get('bytes'), int)
+                    or part['bytes'] <= 0):
+                raise ValueError('Family parts not in models.txt require a size and SHA-256: '+name)
+            if not isinstance(part.get('optional', False), bool):
+                raise ValueError('Family part "optional" must be true or false: '+name)
         if data['kind'] == 'video' and data.get('builder') is None:
             raise ValueError('A video family needs its reviewed builder: '+name)
         if data['kind'] == '3d':
@@ -32,14 +56,6 @@ def packages(root=ROOT):
             data['sha256'] = hashlib.sha256(raw).hexdigest()
             result[name] = data
             continue
-        for part in data['parts'].values():
-            relative = PurePosixPath(part['folder'])/part['file']
-            if relative.is_absolute() or '..' in relative.parts or '\\' in str(relative) or ':' in str(relative):
-                raise ValueError('Unsafe family model path: '+name)
-            if not re.fullmatch('[a-f0-9]{64}', part['sha256']) or part['bytes'] <= 0:
-                raise ValueError('Family parts require a size and SHA-256: '+name)
-            if not isinstance(part.get('optional', False), bool):
-                raise ValueError('Family part "optional" must be true or false: '+name)
         builder = data.get('builder')
         if builder is not None:
             # A reviewed graph builder shipped with the module (generation/builders.BUILTINS), named, never a path.

@@ -66,11 +66,21 @@ def approved_servers(home: Path) -> dict[str,dict[str,Any]]:
         decisions=data['decisions'] if data.get('schema')==1 else {}
     except (OSError,ValueError,KeyError,AttributeError):
         return {}
+    active=data.get('active',[])
+    managed=(data.get('managed') or {}).get('servers',{})
+    if not isinstance(decisions,dict) or not isinstance(active,list) or not isinstance(managed,dict):
+        return {}
     servers={}
-    for key,record in decisions.items():
+    for key in active:
+        record=decisions.get(key) if isinstance(key,str) else None
         offer=record.get('offer') if isinstance(record,dict) else None
-        if isinstance(record,dict) and record.get('how') == 'owner' and record.get('approved') is True and isinstance(offer,dict) and offer.get('kind')=='mcp' and key.startswith('mcp:'):
-            servers[offer['id']]=dict(command=offer['command'],args=list(offer.get('args') or []))
+        if not (isinstance(record,dict) and record.get('how')=='owner' and record.get('approved') is True
+                and isinstance(offer,dict) and offer.get('kind')=='mcp' and key.startswith('mcp:')):
+            continue
+        name=offer.get('id')
+        want=dict(command=offer.get('command'),args=offer.get('args',[]))
+        if isinstance(name,str) and isinstance(want['command'],str) and isinstance(want['args'],list) and managed.get(name)==want:
+            servers[name]=want
     return servers
 
 

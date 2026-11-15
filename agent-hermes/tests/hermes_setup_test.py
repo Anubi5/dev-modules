@@ -34,6 +34,8 @@ class SetupTests(unittest.TestCase):
             home=Path(directory);config=home/'config.yaml';original=b'unknown_key: preserved\nmodel: {provider: original}\n'
             config.write_bytes(original);calls=[]
             def run(command,**kwargs):
+                if command[2]=='get':
+                    return SimpleNamespace(returncode=1,stdout='',stderr='Config key not set')
                 calls.append(command)
                 self.assertEqual(command[:3],['hermes','config','set'])
                 self.assertEqual(kwargs['env']['HERMES_DISABLE_LAZY_INSTALLS'],'1')
@@ -51,7 +53,9 @@ class SetupTests(unittest.TestCase):
     def test_failed_readback_restores_backup_and_retains_it(self):
         with tempfile.TemporaryDirectory() as directory:
             home=Path(directory);config=home/'config.yaml';config.write_text('custom: preserved')
-            def write(command,**kwargs):config.write_text('changed');return SimpleNamespace(returncode=0)
+            def write(command,**kwargs):
+                if command[2]=='get':return SimpleNamespace(returncode=1,stdout='',stderr='Config key not set')
+                config.write_text('changed');return SimpleNamespace(returncode=0)
             with patch.dict(os.environ,HERMES_HOME=str(home)),patch.object(setup.subprocess,'run',side_effect=write), \
                  patch.object(setup,'private_memory'),patch.object(setup.runtime,'verify_installed',return_value={'revision':setup.runtime.PINNED_REVISION}), \
                  patch.object(setup.policy,'inspect',return_value={'errors':['fixture failure'],'warnings':[]}):
@@ -65,6 +69,7 @@ class SetupTests(unittest.TestCase):
             home=Path(directory);config=home/'config.yaml';original=b'custom: preserved\n'
             config.write_bytes(original);stored={}
             def write(command,**kwargs):
+                if command[2]=='get':return SimpleNamespace(returncode=1,stdout='',stderr='Config key not set')
                 key,argument=command[3:]
                 # Upstream DEFAULT_CONFIG string fields are preserved verbatim.
                 expected=setup.settings()[key]
@@ -81,6 +86,26 @@ class SetupTests(unittest.TestCase):
             self.assertIs(stored['memory.user_profile_enabled'],False)
             self.assertIsInstance(stored['plugins.enabled'],list)
             self.assertEqual(config.read_bytes(),original)
+
+    def test_profile_apply_preserves_owner_plugins_toolsets_and_disabled_skills(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home=Path(directory);config=home/'config.yaml';config.write_text('owner: untouched')
+            current={'plugins.enabled':['personal'], 'platform_toolsets.cli':['terminal','personal'],
+                     'skills.disabled':['owner-disabled']}
+            writes={}
+            def query(command,**kwargs):
+                if command[2]=='get':
+                    return SimpleNamespace(returncode=0,stdout=json.dumps(current[command[-1]]),stderr='')
+                writes[command[3]]=command[4]
+                return SimpleNamespace(returncode=0)
+            with patch.dict(os.environ,HERMES_HOME=str(home)),patch.object(setup.subprocess,'run',side_effect=query), \
+                 patch.object(setup,'private_memory'),patch.object(setup.runtime,'verify_installed',return_value={'revision':setup.runtime.PINNED_REVISION}), \
+                 patch.object(setup.policy,'inspect',return_value={'errors':[],'warnings':[]}):
+                setup.apply('hermes',home)
+            self.assertNotIn('plugins.enabled',writes)
+            self.assertNotIn('platform_toolsets.cli',writes)
+            self.assertIn('owner-disabled',json.loads(writes['skills.disabled']))
+            self.assertTrue(setup.policy.DISABLED_SKILLS.issubset(json.loads(writes['skills.disabled'])))
 
     @unittest.skipUnless(os.name=='posix','POSIX permissions require Linux; no Windows policy changes')
     def test_memory_permissions_and_contents_are_preserved(self):

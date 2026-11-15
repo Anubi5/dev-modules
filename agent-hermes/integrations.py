@@ -345,6 +345,7 @@ def _reconcile(executable: str, attended: bool) -> dict[str, Any]:
         data['decisions'][key] = dict(approved=answer, offer=offer, decided=now(), how='owner')
     approved = {k: o for k, o in offered.items() if data['decisions'].get(k, {}).get('approved') is True
                 and data['decisions'][k].get('offer') == o}
+    data['active'] = sorted(approved)
     commit_integration(executable, approved, root, data, before)
     return dict(status='reconciled', exposed=sorted(approved), asked=asked, undecided=skipped)
 

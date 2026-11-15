@@ -237,6 +237,22 @@ class IntegrationTests(unittest.TestCase):
         self.assertFalse((self.home / 'skills/modules/example').exists())
         self.assertEqual(len(self.reconcile([True, True])['exposed']), 2)
 
+    def test_historical_approval_cannot_authorize_restored_unowned_configuration(self):
+        from copy import deepcopy
+        self.fake.module('blender',mcp=[('blender',['writes'])])
+        self.reconcile([True])
+        old=deepcopy(self.servers())
+        self.fake.modules.clear();self.reconcile()
+        self.assertEqual(policy.approved_servers(self.home),{})
+        # An unrelated restoration of the old config does not restore current managed ownership.
+        self.fake.config['mcp_servers']=old
+        self.fake.config['platform_toolsets']['cli']=policy.BASE_TOOLSETS+['blender']
+        self.reconcile()
+        values=dict(policy.EXPECTED,**{'skills.disabled':sorted(policy.DISABLED_SKILLS),
+                    'mcp_servers':old,'platform_toolsets.cli':policy.BASE_TOOLSETS+['blender']})
+        values.update({key:None for key in policy.FALLBACK_KEYS})
+        self.assertIn('Unapproved MCP server: blender',policy.evaluate(values,approved=policy.approved_servers(self.home))['errors'])
+
     def test_changed_mcp_implementation_requires_new_decision(self):
         self.fake.module('blender', mcp=[('blender', ['writes'])])
         self.reconcile([True])

@@ -68,7 +68,8 @@ class ProfileTests(unittest.TestCase):
     def test_module_toolset_needs_an_approved_mcp_server(self):
         self.values['platform_toolsets.cli']=checker.BASE_TOOLSETS+['blender']
         self.assertTrue(self.inspect()['errors'])
-        (self.soul.parent/checker.APPROVALS).write_text(json.dumps(dict(schema=1,decisions={'mcp:blender/blender':dict(
+        (self.soul.parent/checker.APPROVALS).write_text(json.dumps(dict(schema=1,active=['mcp:blender/blender'],
+            managed=dict(servers={'blender':dict(command='/m/blender/bin/b',args=[])}),decisions={'mcp:blender/blender':dict(
             approved=True,how='owner',offer=dict(kind='mcp',id='blender',command='/m/blender/bin/b',args=[]))})))
         self.assertEqual(self.inspect()['errors'],[])
 

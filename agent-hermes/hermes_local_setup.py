@@ -15,6 +15,7 @@ from typing import Any
 
 import hermes_profile_check as policy
 import hermes_runtime as runtime
+from integrations import get as config_get
 
 
 def settings(home: Path | None=None) -> dict[str,Any]:
@@ -79,7 +80,18 @@ def apply(executable: str,home: Path,source: Path|None=None,revision: str|None=N
     backup.chmod(0o600)
     try:
         private_memory(home)
-        for key,value in settings(home).items():
+        planned=settings(home)
+        # Executable integration settings belong to reconciliation/owner configuration.
+        # Initialize absent fields only; never reset existing plugins or CLI toolsets.
+        for key in ('plugins.enabled','platform_toolsets.cli'):
+            if config_get(executable,key) is not None:
+                planned.pop(key,None)
+        disabled=config_get(executable,'skills.disabled')
+        if disabled is not None:
+            if not isinstance(disabled,list) or not all(isinstance(v,str) for v in disabled):
+                raise ValueError('Invalid owner skills.disabled setting; preserved')
+            planned['skills.disabled']=sorted(set(disabled)|policy.DISABLED_SKILLS)
+        for key,value in planned.items():
             # Hermes preserves string-typed CLI arguments verbatim; JSON quotes
             # would become part of the stored provider, model or endpoint.
             argument=value if isinstance(value,str) else json.dumps(value)

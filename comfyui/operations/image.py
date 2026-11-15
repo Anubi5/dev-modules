@@ -63,8 +63,9 @@ def prepare(a, seed, prefix, edit=None):
         sys.exit("use --model or --checkpoint, not both")
     if edit:
         edit.before(a)
-    if not a.model and not a.checkpoint and (a.pose or a.face or a.fix_faces or a.fix_hands):
-        a.model = PROFILES.get("default_sdxl", "realvis")    # those tools are SDXL-only
+    if not a.model and not a.checkpoint:
+        a.model = next((PROFILES[key] for flag, key in PROFILES.get('feature_defaults', {}).items()
+                        if getattr(a, flag, False)), None)
     log0 = lambda t: print(f"  {t}", flush=True)
     prof = rt.find_checkpoint(a.checkpoint, log0) if a.checkpoint else rt.resolve_model(a.model or PROFILES["default"], log0)
     builders.registry.check_parts(prof, rt.MODELS)
@@ -111,7 +112,8 @@ def prepare(a, seed, prefix, edit=None):
             "pose": a.pose and {"file": a.pose, "strength": pose_strength},
             "face": a.face and {"file": a.face, "weight": a.face_weight}, "images": a.image or None,
             "loras": lora_checks or None,
-            "face_refiner": {"model": PROFILES.get("default_sdxl", "realvis"),
-                             "model_file": wf["44"]["inputs"]["ckpt_name"]} if arch == "zimage" and a.fix_faces else None}
-    limit = a.timeout or (1800 if a.hires or a.fix_hands or a.fix_faces or arch in ("flux3", "fibo2", "moss") else 900)
+            "face_refiner": None}
+    if capability.get('report'):
+        info.update(capability['report'](prof, wf, a))
+    limit = a.timeout or (1800 if a.hires or a.fix_hands or a.fix_faces else capability['timeout'])
     return wf, uploads, info, limit, prof

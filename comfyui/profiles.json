@@ -74,5 +74,11 @@
       ],
       "about": "Declared ComfyUI upscaler component; used by supported image workflows"
     }
+  },
+  "feature_defaults": {
+    "pose": "default_sdxl",
+    "face": "default_sdxl",
+    "fix_faces": "default_sdxl",
+    "fix_hands": "default_sdxl"
   }
 }

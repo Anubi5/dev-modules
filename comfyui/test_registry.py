@@ -93,8 +93,8 @@ class RegistryTests(unittest.TestCase):
                 self.assertEqual(list(models.PROFILES[section]).index(name), list(shipped[section]).index(name))
                 self.assertFalse(registry.declarative(prof))
                 if section == 'models' and prof['kind'] == 'image':
-                    before = dict(features=[], uploads={}, negative=True, edit=False, expand=False, upscale=True)
-                    before.update(builders.BUILTINS[prof['arch']])
+                    before = dict(features=[], uploads={}, negative=True, edit=False, expand=False, upscale=True, timeout=900)
+                    before.update(registry.implementation(prof['arch']).CAPABILITIES)
                     self.assertEqual(builders.capabilities(dict(prof, name=name)), before)
                 with patch.object(registry, 'packages', return_value={}), self.assertRaisesRegex(ValueError, 'removed'):
                     registry.family(prof)

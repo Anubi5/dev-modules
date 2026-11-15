@@ -6,7 +6,7 @@ import sys
 
 import runtime as rt
 from generation.models import PROFILES
-from generation.video import wan
+from generation.video import build
 
 
 def validate(a):
@@ -22,7 +22,7 @@ def prepare(a, seed, prefix):
         sys.exit("--pose/--face/--fix-faces/--fix-hands/--hires/--checkpoint/--image are for images")
     uploads = []
     neg = a.negative if a.negative is not None else "static, blurry, distorted, low quality, watermark"
-    wf, limit = wan(a.prompt, neg, seed, a.steps or 20, frames, prefix, model=a.model), a.timeout or 3600
+    wf, limit = build(a.prompt, neg, seed, a.steps or 20, frames, prefix, model=a.model), a.timeout or 3600
     info = {"kind": "video", "prompt": a.prompt, "negative": neg, "seed": seed, "model": a.model or PROFILES.get("default_video", "wan2.2-ti2v-5b"),
             "steps": a.steps or 20, "frames": frames}
     return wf, uploads, info, limit, None

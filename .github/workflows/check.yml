@@ -61,6 +61,7 @@ jobs:
       - name: Family registry and read-only model catalogue (offline)
         run: |
           python3 -m unittest discover -s comfyui -p 'test_registry.py'
+          python3 -m unittest discover -s comfyui -p 'test_family_isolation.py'
           python3 -m unittest discover -s comfyui -p 'test_catalogue.py'
       - name: Character file contracts and composition (offline)
         run: bash character/test.sh

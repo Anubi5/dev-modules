@@ -8,6 +8,25 @@ import re
 ROOT = Path(__file__).resolve().parents[1]/'families'
 
 
+def implementation(name):
+    """Load reviewed code from a fixed source tree, never a metadata-supplied path or weights."""
+    import importlib.util
+    import sys
+    if not isinstance(name, str) or not re.fullmatch('[a-z0-9][a-z0-9-]*', name):
+        raise ValueError('Invalid reviewed builder identity')
+    trusted = Path(__file__).resolve().parents[1] / 'families'
+    path = trusted / name / 'workflow.py'
+    if path.is_symlink() or not path.resolve().is_relative_to(trusted.resolve()) or not path.is_file():
+        raise ValueError('No reviewed builder for architecture ' + name)
+    key = 'eva_family_' + name.replace('-', '_')
+    if key not in sys.modules:
+        spec = importlib.util.spec_from_file_location(key, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        sys.modules[key] = module
+    return sys.modules[key]
+
+
 def assets():
     """Every asset models.txt declares: {(folder, file): (sha256, bytes or None)} - the one declaration per file."""
     import importlib.util
@@ -58,7 +77,7 @@ def packages(root=ROOT):
             continue
         builder = data.get('builder')
         if builder is not None:
-            # A reviewed graph builder shipped with the module (generation/builders.BUILTINS), named, never a path.
+            # A reviewed graph builder shipped with the module (families/<builder>/workflow.py), named, never a path.
             if not isinstance(builder, str) or not re.fullmatch('[a-z0-9][a-z0-9-]*', builder) or 'recipe' in data:
                 raise ValueError('Family builder must be a reviewed builder name (and no recipe): '+name)
             data['sha256'] = hashlib.sha256(raw).hexdigest()

@@ -34,6 +34,6 @@
     "ai-model-catalogue verify": ["read_only"],
     "img-check": ["read_only"]
   },
-  "skills": ["skills/gpu-generate"],
+  "skills": ["skills/gen-image", "skills/gen-edit", "skills/gen-video", "skills/gen-3d"],
   "ui": {"title": "ComfyUI", "url": "http://127.0.0.1:8188/", "service": "comfyui"}
 }

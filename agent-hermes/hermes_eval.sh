@@ -123,7 +123,7 @@ fi
 # 4 - one image with the GPU skill
 if want 4; then
   ask 4 30 "Generate a photo of a ceramic coffee mug with steam rising, on a wooden kitchen table by a window, soft morning light. Name the result hermes-mug. Then tell me the file path."
-  f=$(fresh hermes-mug); img_ok $f; result 4 "one image (gpu-generate skill)" $? "new hermes-mug image made in this run, opens, not blank"
+  f=$(fresh hermes-mug); img_ok $f; result 4 "one image (gen-image skill)" $? "new hermes-mug image made in this run, opens, not blank"
 fi
 
 # 5 - multi-step: consistent character in two poses (the README recipe)

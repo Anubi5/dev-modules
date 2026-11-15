@@ -5,7 +5,7 @@ description: Read this BEFORE any Blender work in this sandbox - what is already
 
 # Blender in this sandbox
 
-Work in Blender through the **official Blender Lab MCP tools** (Hermes plugin `blender`; its skill explains the tools).
+Work in Blender through the **official Blender Lab MCP tools** (MCP server `blender`, declared by this module; the tool descriptions explain each tool).
 Everything they need is already installed and pinned here - do not download or install Blender or the add-on.
 
 ## What is set up

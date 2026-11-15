@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 MOD=$(dirname "$(dirname "$(readlink -f "$0")")")
+# Agent harnesses pass only declared environment to stdio servers: the bridge address defaults here.
+export BLENDER_MCP_HOST=${BLENDER_MCP_HOST:-127.0.0.1} BLENDER_MCP_PORT=${BLENDER_MCP_PORT:-9876}
 exec python3 -B "$MOD/mcp_runtime.py" run --module "$MOD" -- "$@"

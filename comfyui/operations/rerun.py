@@ -28,6 +28,7 @@ def rerun(argv):
     ap.add_argument("--allow-drift", action="store_true", help="run even when a model file or input picture changed")
     ap.add_argument("--fast", action="store_true", help="compare cached hashes (size and time) instead of re-reading files")
     a = ap.parse_args(argv)
+    rt.validate_timeout(a.timeout)
     p = os.path.realpath(os.path.expanduser(a.workflow))
     if not p.startswith(rt.WORK + os.sep) or not p.endswith(".workflow.json"):
         sys.exit("ai gen rerun: a .workflow.json inside ~/work (e.g. ~/work/outputs/comfy/<date>/x_00001_.workflow.json)")

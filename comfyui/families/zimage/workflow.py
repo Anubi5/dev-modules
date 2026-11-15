@@ -38,7 +38,7 @@ def build(p, v, o):
     return zimage(v['prompt'], v['seed'], v['steps'], v['width'], v['height'], v['prefix'], p, upscale=o.upscale, hires=o.hires,
         fix_faces=o.fix_faces, pose="pending" if o.pose else None, pose_strength=v["pose_strength"])
 
-CAPABILITIES = dict(build=build, negative=False, features=['hires','fix_faces','pose'], uploads={'pose':'30'}, report=report)
+CAPABILITIES = dict(lora={'model': ['1', 0], 'clip': ['2', 0], 'loaders': {'1': ['UNETLoader'], '2': ['CLIPLoader']}}, fixed_cfg=True, build=build, negative=False, features=['hires','fix_faces','pose'], uploads={'pose':'30'}, report=report)
 
 
 def acceptance_defaults():

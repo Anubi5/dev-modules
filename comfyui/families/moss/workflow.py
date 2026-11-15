@@ -17,4 +17,4 @@ def moss(prompt, negative, seed, steps, width, height, prefix, prof, upscale=Fal
 def build(p, v, o):
     return moss(v['prompt'], v['negative'], v['seed'], v['steps'], v['width'], v['height'], v['prefix'], p, upscale=o.upscale)
 
-CAPABILITIES = dict(build=build, timeout=1800)
+CAPABILITIES = dict(lora={'model': ['1', 0], 'clip': ['2', 0], 'loaders': {'1': ['UNETLoader'], '2': ['CLIPLoader']}}, build=build, timeout=1800)

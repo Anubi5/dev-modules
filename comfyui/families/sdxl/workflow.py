@@ -67,4 +67,4 @@ def build(p, v, o):
         fix_faces=o.fix_faces, fix_hands=o.fix_hands, hires=o.hires, pose_strength=v['pose_strength'],
         face_weight=o.face_weight, prof=p)
 
-CAPABILITIES = dict(build=build, features=['pose','face','fix_faces','fix_hands','hires'], uploads={'pose':'30','face':'21'})
+CAPABILITIES = dict(lora={'model': ['4', 0], 'clip': ['4', 1], 'loaders': {'4': ['CheckpointLoaderSimple']}}, build=build, features=['pose','face','fix_faces','fix_hands','hires'], uploads={'pose':'30','face':'21'})

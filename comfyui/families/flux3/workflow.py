@@ -29,4 +29,4 @@ def build(p, v, o):
 
 PROMPT_TEMPLATES = {kind: 'families/flux3/prompts/' + kind + '.txt' for kind in ('t2i', 'edit')}
 
-CAPABILITIES = dict(prompt_templates=PROMPT_TEMPLATES, implementation_files=list(PROMPT_TEMPLATES.values()), build=build, negative=False, edit=True, expand=True, timeout=1800)
+CAPABILITIES = dict(lora={'model': ['1', 0], 'clip': ['2', 0], 'loaders': {'1': ['UNETLoader'], '2': ['CLIPLoader']}}, fixed_cfg=True, prompt_templates=PROMPT_TEMPLATES, implementation_files=list(PROMPT_TEMPLATES.values()), build=build, negative=False, edit=True, expand=True, timeout=1800)

@@ -20,6 +20,9 @@ from generation import registry
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))     # the comfyui module folder
 
 
+OPTIONS = {'model', 'image', 'texture', 'quality', 'keep_background', 'faces'}
+
+
 def run(a):
     """!
     @brief ai gen 3d --image PHOTO: a textured 3D model (GLB) from one picture - or, for a multi-view model, from up to

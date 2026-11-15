@@ -11,6 +11,9 @@ from generation import registry
 from operations import image
 
 
+OPTIONS = {'size', 'src'}
+
+
 def prepare(a, seed, prefix):
     """! @return (workflow, uploads, info, time limit, None) """
     w, h = image.size(a, "896x1152")

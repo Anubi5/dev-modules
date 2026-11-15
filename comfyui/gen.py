@@ -71,7 +71,7 @@ def generation_parser():
     ap.add_argument("--model", metavar="NAME", help=f"image/3D profile, video package or compatible model file; default {PROFILES['default']}; use ai gen list for current names")
     ap.add_argument("--style", choices=list(PROFILES["styles"]), default=None, help="image: photo or art (default: per model)")
     ap.add_argument("--negative", default=None, help='what to avoid (default: per model and style; "" = nothing)')
-    ap.add_argument("--count", type=int, default=1, help="image: 1-8 sequential images; seeds increment from --seed (or one random starting seed)")
+    ap.add_argument("--count", type=int, default=None, help="image: 1-8 sequential images; seeds increment from --seed (or one random starting seed)")
     ap.add_argument("--seed", type=int, default=None, help="integer random seed; omitted: choose a fresh random seed")
     ap.add_argument("--steps", type=int, default=None, help="image/video/edit/pose: sampling steps, 1-60; default per selected model")
     ap.add_argument("--size", default=None, help="image size WxH (multiples of 64; default 1024x1024, pose 896x1152)")
@@ -80,7 +80,7 @@ def generation_parser():
     ap.add_argument("--pose", metavar="IMAGE", help="image: copy the body pose from this picture (in ~/work)")
     ap.add_argument("--pose-strength", type=float, default=None, help="how strictly to follow the pose, 0.3-1.0 (default per model)")
     ap.add_argument("--face", metavar="IMAGE", help="image: keep this face (in ~/work; one clear face)")
-    ap.add_argument("--face-weight", type=float, default=0.65, help="how strongly to keep the face, 0.3-1.2 (high values distort it)")
+    ap.add_argument("--face-weight", type=float, default=None, help="how strongly to keep the face, 0.3-1.2 (high values distort it)")
     ap.add_argument("--checkpoint", metavar="NAME", help="image: a checkpoint file (checkpoints folder) by (part of) its name")
     ap.add_argument("--cfg", type=float, default=None, help="image: guidance scale (default per model; distilled models keep their fixed value)")
     ap.add_argument("--force-lora", action="store_true", help="image: run a LoRA even when its layers do not match the model (recorded)")
@@ -88,9 +88,9 @@ def generation_parser():
                     help="image/edit: a LoRA by (part of) its file name, strength -2..2 (default 1); repeat for up to 4")
     ap.add_argument("--fix-faces", action="store_true", help="image: redraw faces in more detail")
     ap.add_argument("--fix-hands", action="store_true", help="image: redraw hands in more detail")
-    ap.add_argument("--frames", type=int, default=33, help="video length, 4n+1 (33 ~ 1.4 s, 121 ~ 5 s)")
+    ap.add_argument("--frames", type=int, default=None, help="video length, 4n+1 (33 ~ 1.4 s, 121 ~ 5 s)")
     ap.add_argument("--timeout", type=int, default=None, help="seconds (default 900 image, 3600 video)")
-    ap.add_argument("--quality", choices=list(QUALITY), default="normal", help="3d: normal (fast, more GPU headroom) or high")
+    ap.add_argument("--quality", choices=list(QUALITY), default=None, help="3d: normal (fast, more GPU headroom) or high")
     ap.add_argument("--faces", type=int, default=None, help="3d: triangles in the final model (default per --quality)")
     ap.add_argument("--texture", type=int, default=None, help="3d: texture size 1024 | 2048 | 4096 (default per --quality)")
     ap.add_argument("--keep-background", action="store_true", help="3d: the picture is already cut out (no background removal)")
@@ -203,6 +203,29 @@ def main(a=None):
     # Optional positional prompts may follow options and '--', including literal
     # prompts beginning with '-'. Use argparse's supported intermixed parser.
     a = a or ap.parse_intermixed_args()
+    rt.validate_timeout(a.timeout)
+    operation = model3d if a.kind == "3d" else OPERATIONS[a.kind]
+    common = {"kind", "prompt", "json", "check", "name", "seed", "timeout"}
+    if not hasattr(a, '_provided_options'):
+        a._provided_options = {action.dest for action in ap._actions
+                               if (value := getattr(a, action.dest, None)) is not None
+                               and value is not False and value != []}
+    for action in ap._actions:
+        if action.dest in a._provided_options and action.dest not in common | operation.OPTIONS:
+            ap.error(f"{action.option_strings[0]} is not supported for {a.kind}")
+    if a.kind == "3d" and a.prompt:
+        ap.error("3d takes --image, not a text prompt")
+    if 'face_weight' in a._provided_options and not a.face:
+        ap.error("--face-weight requires --face")
+    for key, default in {"count": 1, "face_weight": 0.65, "frames": 33, "quality": "normal"}.items():
+        if getattr(a, key) is None:
+            setattr(a, key, default)
+    if a.pose_strength is not None and not a.pose:
+        ap.error("--pose-strength requires --pose")
+    if a.pose_skeleton and not a.pose:
+        ap.error("--pose-skeleton requires --pose")
+    if a.force_lora and not a.lora:
+        ap.error("--force-lora requires --lora")
     if not 1 <= a.count <= 8: ap.error("--count must be 1-8")
     if a.count != 1:
         if a.kind != "image": ap.error("--count is for image generation")
@@ -214,8 +237,6 @@ def main(a=None):
     # limits for a 12 GB GPU (and against a runaway agent): larger jobs fail or block the GPU for hours
     if a.steps is not None and not 1 <= a.steps <= rt.MAX_STEPS:
         sys.exit(f"--steps must be 1-{rt.MAX_STEPS}")
-    if a.timeout is not None and not 60 <= a.timeout <= rt.MAX_TIMEOUT:
-        sys.exit(f"--timeout must be 60-{rt.MAX_TIMEOUT} s")
     operation = OPERATIONS[a.kind]
     if hasattr(operation, "validate"):
         operation.validate(a)

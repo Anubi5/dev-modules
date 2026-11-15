@@ -49,6 +49,13 @@ JOB = {}                                                               # prompt 
 MIN_FREE = 2 << 30                                                     # bytes free needed in the output folder
 
 
+def validate_timeout(value):
+    """Validate the same per-job timeout before any operation touches files or services."""
+    if value is not None and (type(value) is not int or not 60 <= value <= MAX_TIMEOUT):
+        sys.exit(f"--timeout must be 60-{MAX_TIMEOUT} s")
+    return value
+
+
 def env(key, default):
     """!
     @brief Reads one KEY="value" setting from sandbox.env.
@@ -282,8 +289,11 @@ def find_loras(specs):
             strength = float(st) if st else None          # None: the LoRA's note, else 1.0 (resolve_loras)
         except ValueError:
             sys.exit(f"--lora {spec}: strength must be a number, e.g. {name}:0.8")
-        if strength is not None and not -2.0 <= strength <= 2.0:
-            sys.exit(f"--lora {spec}: strength must be -2 to 2")
+        if strength is not None:
+            try:
+                strength = assets.lora_strength(strength)
+            except ValueError as error:
+                sys.exit(f"--lora {spec}: {error}")
         exact = [f for f in found if os.path.basename(f).lower() in (name.lower(), name.lower() + ".safetensors")]
         hit = exact or [f for f in found if name.lower() in f.lower()]
         if len(hit) != 1:
@@ -293,7 +303,6 @@ def find_loras(specs):
     return out
 
 
-FIXED = {"zimage", "flux3", "fibo2"}      # distilled / CFG-1 workflows: CFG and negative prompt are hard requirements
 
 
 def model_path(prof):
@@ -312,16 +321,16 @@ def resolve_loras(a, prof, neg, log=print):
     @return (loras [(file, strength)], prompt, negative, profile, checks [dict for the record])
     """
     prompt, specs, checks = a.prompt, find_loras(a.lora), []
-    fixed = prof["arch"] in FIXED
+    fixed = builders.capabilities(prof).get("fixed_cfg", False)
     if a.cfg is not None and not 0.5 <= a.cfg <= 30:
         sys.exit("--cfg must be 0.5-30")
     if a.cfg is not None:
         if fixed:
-            log(f"note: --cfg ignored - {prof['name']} runs at its fixed CFG {prof['cfg']}")
+            sys.exit(f"--cfg is not supported for {prof['name']}: fixed CFG {prof['cfg']}")
         else:
             prof = dict(prof, cfg=a.cfg)
-    if fixed and a.negative:
-        log(f"note: --negative ignored - {prof['name']} uses no negative prompt")
+    if fixed and a.negative is not None:
+        sys.exit(f"--negative is not supported for {prof['name']}")
     mpath, loras, want = model_path(prof), [], {"cfg": {}, "negative": {}}
     for name, strength in specs:
         path = next((os.path.join(d, name) for d in LORA_DIRS if os.path.exists(os.path.join(d, name))), None)
@@ -330,6 +339,10 @@ def resolve_loras(a, prof, neg, log=print):
             strength = note.get("strength", 1.0)
             if "strength" in note:
                 log(f"LoRA {name}: strength {strength} (from its note)")
+        try:
+            strength = assets.lora_strength(strength)
+        except ValueError as error:
+            sys.exit(f"LoRA {name} note: {error}")
         trig = note.get("trigger")
         if trig and trig.lower() not in prompt.lower():
             prompt = f"{trig}, {prompt}"

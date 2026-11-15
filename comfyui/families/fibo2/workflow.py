@@ -24,4 +24,4 @@ def build(p, v, o):
     return fibo2(v['prompt'], v['seed'], v['steps'], v['width'], v['height'], v['prefix'], p,
         refs=['pending']*len(o.image), upscale=o.upscale)
 
-CAPABILITIES = dict(build=build, negative=False, edit=True, timeout=1800)
+CAPABILITIES = dict(lora={'model': ['1', 0], 'clip': ['2', 0], 'loaders': {'1': ['UNETLoader'], '2': ['CLIPLoader']}}, fixed_cfg=True, build=build, negative=False, edit=True, timeout=1800)

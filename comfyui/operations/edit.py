@@ -10,6 +10,9 @@ from generation import builders
 from operations import image
 
 
+OPTIONS = {'model', 'image', 'steps', 'cfg', 'size', 'upscale', 'negative', 'no_expand', 'force_lora', 'lora', 'improve_prompt'}
+
+
 def before(a):
     """! @brief Edit's own inputs, checked before the model is resolved; the default edit model when none is given. """
     if not a.image or len(a.image) > 4:

@@ -21,4 +21,4 @@ def build(p, v, o):
     return anima(v['prompt'], v['negative'], v['seed'], v['steps'], v['width'], v['height'],
         v['prefix'], p, pose='pending' if o.pose else None, pose_strength=v['pose_strength'], upscale=o.upscale)
 
-CAPABILITIES = dict(build=build, features=['pose'], uploads={'pose':'30'})
+CAPABILITIES = dict(lora={'model': ['1', 0], 'clip': ['2', 0], 'loaders': {'1': ['UNETLoader'], '2': ['CLIPLoader']}}, build=build, features=['pose'], uploads={'pose':'30'})

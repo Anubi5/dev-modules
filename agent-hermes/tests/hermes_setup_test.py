@@ -107,6 +107,20 @@ class SetupTests(unittest.TestCase):
             self.assertIn('owner-disabled',json.loads(writes['skills.disabled']))
             self.assertTrue(setup.policy.DISABLED_SKILLS.issubset(json.loads(writes['skills.disabled'])))
 
+    def test_fresh_installer_created_profile_gets_reviewed_executable_defaults(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home=Path(directory);config=home/'config.yaml';config.write_text('bootstrap: new')
+            writes={}
+            def query(command,**kwargs):
+                if command[2]=='get':return SimpleNamespace(returncode=0,stdout='[]',stderr='')
+                writes[command[3]]=command[4];return SimpleNamespace(returncode=0)
+            with patch.dict(os.environ,HERMES_HOME=str(home)),patch.object(setup.subprocess,'run',side_effect=query), \
+                 patch.object(setup,'private_memory'),patch.object(setup.runtime,'verify_installed',return_value={'revision':setup.runtime.PINNED_REVISION}), \
+                 patch.object(setup.policy,'inspect',return_value={'errors':[],'warnings':[]}):
+                setup.apply('hermes',home,initialize=True)
+            self.assertEqual(json.loads(writes['plugins.enabled']),[])
+            self.assertEqual(json.loads(writes['platform_toolsets.cli']),setup.policy.BASE_TOOLSETS)
+
     @unittest.skipUnless(os.name=='posix','POSIX permissions require Linux; no Windows policy changes')
     def test_memory_permissions_and_contents_are_preserved(self):
         with tempfile.TemporaryDirectory() as directory:

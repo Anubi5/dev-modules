@@ -12,6 +12,8 @@ The user asks for a picture, illustration, concept art, texture, reference image
 1. Choose the model from the shared inventory: `ai models list --json`, then `ai models show <id> --json` (capability,
    description, defaults, missing parts). `ready` means the files are present, not that the output was accepted. Leave
    `--model` out unless the user asks for one or the inventory gives a reason. Never download or install anything.
+   Run a model whose `ai models list` stage is `accepted` unless the owner names another for this run; `verified` or
+   `installed` models are not proven on this PC yet - say so if you use one.
 2. Write a concrete prompt: subject, setting, style, lighting, camera. For photos describe it like a photographer
    ("RAW photo", 35/50/85mm, window light or overcast, "natural skin texture", "film grain"); words like "vibrant",
    "hyperdetailed" or "masterpiece" look more artificial, not less. Add `--negative` only if needed (`""` = none).

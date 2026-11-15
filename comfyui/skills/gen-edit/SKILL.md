@@ -14,6 +14,8 @@ The user wants an existing picture changed, or a person or object from one pictu
 2. Pick the edit model from the inventory (`ai models list --json`): models whose description says they edit.
    FLUX 3 is the default. Fibo 2.0 (`--model fibo2`, non-commercial licence) is the second: refer to the pictures as
    <image_1>, <image_2> and describe the FINAL state of what changes - do not write "keep X unchanged".
+   Run a model whose `ai models list` stage is `accepted` unless the owner names another for this run; `verified` or
+   `installed` models are not proven on this PC yet - say so if you use one.
 3. Describe the change; everything else stays. To change the setting, say so ("change the background completely").
    FLUX 3 uses the instruction as typed; `--improve-prompt` first expands it with the local chat model.
 4. Optional check without the GPU: `ai gen edit "<change>" --image <file> --name <name> --check`.

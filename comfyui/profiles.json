@@ -39,24 +39,7 @@
       "family": "anima-turbo"
     },
     "moss": {
-      "arch": "moss",
-      "file": "moss_image_sft_int8_convrot.safetensors",
-      "text_encoder": "qwen3.5_9b_w4a8_gptq.safetensors",
-      "vae": "flux2-vae_small.safetensors",
-      "sampler": "er_sde",
-      "scheduler": "simple",
-      "cfg": 2.5,
-      "steps": 25,
-      "negative": {
-        "photo": "nsfw, worst quality, bad anatomy, watermark, jpeg artifact",
-        "art": "nsfw, worst quality, bad anatomy, watermark, jpeg artifact"
-      },
-      "about": "MOSS-Image SFT: legible text in images (posters, signs, infographics), 1-2 MP",
-      "licence": "Apache 2.0",
-      "source": "huggingface.co/Comfy-Org/MOSS-Image + Comfy template image_moss_image_t2i (25 steps, CFG 2.5, er_sde, simple)",
-      "capability_tags": [
-        "image"
-      ]
+      "family": "moss"
     },
     "fibo2": {
       "arch": "fibo2",

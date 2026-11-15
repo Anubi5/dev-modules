@@ -1,0 +1,47 @@
+{
+  "schema": "local-ai.family/1",
+  "name": "moss",
+  "kind": "image",
+  "architecture": "moss",
+  "builder": "moss",
+  "description": "MOSS-Image SFT: legible text in images (posters, signs, infographics), 1-2 MP",
+  "experimental": false,
+  "parts": {
+    "model": {
+      "folder": "diffusion_models",
+      "file": "moss_image_sft_int8_convrot.safetensors",
+      "bytes": 5413698958,
+      "sha256": "b4d1475bc7eeffd7b809e82ea13a1fba1fb85c4e18365af3813722faa5c0fe4f"
+    },
+    "text_encoder": {
+      "folder": "text_encoders",
+      "file": "qwen3.5_9b_w4a8_gptq.safetensors",
+      "bytes": 7343591088,
+      "sha256": "4cc6a1543ad2061806da46f35f90cadb4801dcba246c44782cf42ec0feb6407c"
+    },
+    "vae": {
+      "folder": "vae",
+      "file": "flux2-vae_small.safetensors",
+      "bytes": 249521340,
+      "sha256": "d8d52ba036475f5fb07c8b435e176d3d97ebfa82f0d1a1c317f9cc1e25bd013b"
+    }
+  },
+  "defaults": {
+    "sampler": "er_sde",
+    "scheduler": "simple",
+    "cfg": 2.5,
+    "steps": 25,
+    "negative": {
+      "photo": "nsfw, worst quality, bad anatomy, watermark, jpeg artifact",
+      "art": "nsfw, worst quality, bad anatomy, watermark, jpeg artifact"
+    }
+  },
+  "catalogue": {
+    "licence": "Apache 2.0",
+    "source": "huggingface.co/Comfy-Org/MOSS-Image + Comfy template image_moss_image_t2i (25 steps, CFG 2.5, er_sde, simple)",
+    "capability_tags": [
+      "image"
+    ]
+  },
+  "capabilities": {}
+}

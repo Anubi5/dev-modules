@@ -30,7 +30,7 @@ class RegistryTests(unittest.TestCase):
     def test_removing_package_refuses_that_family_but_keeps_existing_builders(self):
         with patch.object(registry,'packages',return_value={}):
             with self.assertRaisesRegex(ValueError,'removed'): builders.build(self.prof,self.values,self.options)
-            p=models.profile('moss')                     # a model with no family package keeps its builder
+            p={k:v for k,v in models.profile('moss').items() if k!='family'}   # a profile naming no family keeps its builder
             self.assertEqual(builders.build(p,self.values,self.options),image.moss(self.values['prompt'],'',19,8,1024,1024,'test',p))
 
     def test_discovery_does_not_import_a_package_python_file(self):

@@ -7,8 +7,9 @@ reconcile (launch.sh, at every "dev hermes" start; install.sh with --no-ask):
   3. writes the approved MCP servers (and their toolsets) into Hermes' config through its own CLI, copies approved
      skills into ~/.hermes/skills/modules (marker .module = agent-hermes) and drops whatever is no longer offered
      or approved. A server without declared effects, or one whose id another module already uses, is not offered.
-migrate (once, before the first reconcile): records what earlier releases enabled without asking - the Blender
-  Hermes plugin and the module skills the runner linked - as approved, so nothing visible disappears.
+migrate (once, before the first reconcile): remembers what earlier releases enabled without asking - the Blender
+  Hermes plugin and the module skills the runner linked; each is approved as soon as its module declares it (that
+  module may still be the old release when agent-hermes is updated first), so nothing visible disappears.
 
 eva-approved.json is a remembered decision and an audit trail, not a security boundary: everything here runs as the
 same user. The limits stay elsewhere: internet OFF, downloads approved on Windows, declared effects, unknown = not
@@ -141,17 +142,31 @@ def put(executable: str, key: str, value: Any) -> None:
         raise ValueError(f'hermes config set {key} did not take effect')
 
 
-def migrate(executable: str, data: dict[str, Any], offered: dict[str, dict[str, Any]], root: Path) -> None:
-    """First run: what earlier releases enabled without asking (Blender plugin, linked module skills) stays approved."""
+def migrate(executable: str, data: dict[str, Any], root: Path) -> None:
+    """First run: remember what earlier releases enabled without asking - Hermes plugins and the module skills the
+    runner linked. The module that declares it may still be the old release (agent-hermes is often updated first),
+    so the memory is kept and carry_over() approves each item once its module declares it."""
     plugins = get(executable, 'plugins.enabled') or []
-    for key, offer in offered.items():
-        if offer['kind'] == 'mcp' and offer['id'] in plugins:
-            data['decisions'][key] = dict(approved=True, offer=offer, decided=now(), how='migration: Hermes plugin was enabled')
-        elif offer['kind'] == 'skill':
-            linked = root / 'skills/modules' / offer['name'] / '.module'
-            if linked.is_file() and linked.read_text().strip() == offer['module']:
-                data['decisions'][key] = dict(approved=True, offer=offer, decided=now(), how='migration: skill was linked')
+    skills = root / 'skills/modules'
+    linked = sorted(f'{marker.read_text().strip()}/{marker.parent.name}' for marker in skills.glob('*/.module')
+                    if marker.is_file() and marker.read_text().strip() != ME) if skills.is_dir() else []
+    data['legacy'] = dict(plugins=sorted(p for p in plugins if isinstance(p, str)), skills=linked)
     data['migrated'] = now()
+
+
+def carry_over(data: dict[str, Any], offered: dict[str, dict[str, Any]]) -> None:
+    """Approve what an earlier release had enabled (see migrate), unless the owner has decided about it since."""
+    legacy = data.get('legacy') or {}
+    for key, offer in sorted(offered.items()):
+        if key in data['decisions']:
+            continue
+        if offer['kind'] == 'mcp' and offer['id'] in legacy.get('plugins', []):
+            how = 'migration: Hermes plugin was enabled'
+        elif offer['kind'] == 'skill' and f'{offer["module"]}/{offer["name"]}' in legacy.get('skills', []):
+            how = 'migration: skill was linked'
+        else:
+            continue
+        data['decisions'][key] = dict(approved=True, offer=offer, decided=now(), how=how)
 
 
 def apply(executable: str, approved: dict[str, dict[str, Any]], root: Path) -> None:
@@ -192,7 +207,8 @@ def reconcile(executable: str, attended: bool) -> dict[str, Any]:
     offered = discover()
     data = load(path)
     if 'migrated' not in data:
-        migrate(executable, data, offered, root)
+        migrate(executable, data, root)
+    carry_over(data, offered)
     asked = skipped = 0
     for key, offer in sorted(offered.items()):
         record = data['decisions'].get(key)

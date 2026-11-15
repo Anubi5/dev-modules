@@ -1,0 +1,26 @@
+{
+  "schema": "local-ai.family/1",
+  "name": "pixal3d-mv",
+  "kind": "3d",
+  "architecture": "pixal3d",
+  "description": "Pixal3D multi-view: up to 4 views (front, left, back, right - e.g. a character turnaround) to one textured 3D model",
+  "experimental": false,
+  "parts": {
+    "model": {
+      "folder": "diffusion_models",
+      "file": "pixal3d_multiview_int8_convrot.safetensors",
+      "bytes": 5584555824,
+      "sha256": "6b1eb3328930d921d3b57508d9c46cceec1c174dcedeebc14f176ab67d49f477"
+    }
+  },
+  "defaults": {
+    "workflow": "recipes/multiview-to-3d.json"
+  },
+  "catalogue": {
+    "licence": "MIT (image encoder: Meta DINOv3 licence)",
+    "source": "huggingface.co/Comfy-Org/Pixal3D (ComfyUI template 3d_pixal3d_multi_views)",
+    "capability_tags": [
+      "3d"
+    ]
+  }
+}

@@ -117,4 +117,15 @@ class RegistryTests(unittest.TestCase):
             with self.assertRaises(ValueError): registry.packages(root)
 
 
+    def test_3d_family_names_only_a_reviewed_recipe_file(self):
+        data = json.loads(Path(__file__).with_name('families').joinpath('pixal3d/package.json').read_text())
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); p = root/'pixal3d'; p.mkdir()
+            (p/'package.json').write_text(json.dumps(data)); self.assertEqual(set(registry.packages(root)), {'pixal3d'})
+            for bad in ('../recipes/image-to-3d.json', 'recipes/missing.json', '/etc/passwd', 'recipes/../profiles.json'):
+                (p/'package.json').write_text(json.dumps(dict(data, defaults=dict(data['defaults'], workflow=bad))))
+                with self.subTest(workflow=bad), self.assertRaises(ValueError): registry.packages(root)
+            (p/'package.json').write_text(json.dumps(dict(data, builder='pixal3d')))
+            with self.assertRaises(ValueError): registry.packages(root)
+
 if __name__=='__main__': unittest.main()

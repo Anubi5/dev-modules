@@ -1,0 +1,29 @@
+{
+  "schema": "local-ai.family/1",
+  "name": "trellis2",
+  "kind": "3d",
+  "architecture": "trellis2",
+  "description": "TRELLIS.2 (Microsoft): one picture to a textured 3D model; fallback to pixal3d",
+  "experimental": false,
+  "parts": {
+    "model": {
+      "folder": "diffusion_models",
+      "file": "trellis_2_int8_convrot.safetensors",
+      "bytes": 5253048192,
+      "sha256": "d01952ad137213f6a868f86b6b877026276f84af5eec23069217475a0bad3a31"
+    }
+  },
+  "defaults": {
+    "workflow": "recipes/image-to-3d.json",
+    "set": {
+      "trellis2": true
+    }
+  },
+  "catalogue": {
+    "licence": "MIT (image encoder: Meta DINOv3 licence)",
+    "source": "huggingface.co/Comfy-Org/TRELLIS.2",
+    "capability_tags": [
+      "3d"
+    ]
+  }
+}

@@ -51,7 +51,7 @@ def download_plan(listing=None, root=None):
     policies=json.loads((here/'download_licenses.json').read_text());sizes={}
     for package in sorted(here.glob('families/*/package.json')):
         data=json.loads(package.read_text())
-        if 'recipe' not in data:continue   # profiles moved into families (3.2) keep models.txt's own sizes until 3.4
+        if data.get('builder') or data.get('kind')=='3d':continue   # moved profiles (3.2) keep models.txt's sizes until 3.4
         for part in data['parts'].values():sizes[(part['folder']+'/'+part['file'],part['sha256'].lower())]=part['bytes']
     files=[]
     for row in declarations(listing or here/'models.txt'):

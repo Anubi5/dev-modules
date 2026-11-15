@@ -25,7 +25,7 @@ Needs: internet only during `dev mod add/update agent-hermes`; no GPU of its own
   hash in `install.sh`. Changing one without the other fails the install on purpose.
 - **Self-contained:** everything Hermes-specific is here: pin, profile (`hermes_local_setup.py`,
   `hermes_profile_check.py`, `hermes-local-SOUL.md`), `launch.sh`, the `hermes-dashboard` user service,
-  the tool test (`hermes_test.sh`), the evaluation (`hermes_eval.sh`) and acceptance harnesses (`tests/`).
+  the tool test (`hermes_test.sh`), and the evaluation and acceptance harnesses (`tests/`, e.g. `tests/hermes_eval.sh`).
   The platform only provides the agent gate: `ai hermes` / `ai dashboard` require internet OFF and a failing
   reachability probe, then call `launch.sh` / start the service. The gate is a launch check, not confinement.
 - **Your data:** `state.txt` declares what `dev state save` keeps outside the distro (memory, sessions, SOUL);

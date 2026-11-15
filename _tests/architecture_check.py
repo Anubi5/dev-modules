@@ -21,7 +21,6 @@ KNOWN = {
     ('comfyui', 'catalogue.py', 'rig'): 'Phase 4: read rig model declarations through a command/JSON contract',
     ('comfyui', 'catalogue.py', 'llama-swap'): 'Phase 4: read chat model declarations through a command/JSON contract',
     ('rig', 'cli.py', 'blender'): 'Phase 4: use the blender command instead of its private path',
-    ('agent-hermes', 'hermes_eval.sh', 'comfyui'): 'Phase 4: use img-check and the skill instead of private paths',
 }
 TEXT = ('.py', '.sh', '.json', '.txt', '.service')
 

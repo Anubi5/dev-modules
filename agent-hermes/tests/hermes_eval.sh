@@ -128,7 +128,7 @@ fi
 
 # 5 - multi-step: consistent character in two poses (the README recipe)
 if want 5; then
-  ask 5 60 "Create a consistent character in two poses, following the recipe 'one character in several poses' in ~/.local/share/modules/comfyui/README.md. Character: a man in his 40s, short grey beard, round glasses, navy wool coat, beige scarf, brown leather boots. Pose 1: standing with hands in coat pockets. Pose 2: sitting on a park bench reading a book (an awkward pose - use the route the recipe recommends for it). Name the files hermes-char-ref, hermes-char-pose1, hermes-char-pose2. Then list the files you made."
+  ask 5 60 "Create a consistent character in two poses, following the 'same character in several poses' recipe your gen-image skill points to. Character: a man in his 40s, short grey beard, round glasses, navy wool coat, beige scarf, brown leather boots. Pose 1: standing with hands in coat pockets. Pose 2: sitting on a park bench reading a book (an awkward pose - use the route the recipe recommends for it). Name the files hermes-char-ref, hermes-char-pose1, hermes-char-pose2. Then list the files you made."
   c=0; files=(); for f in hermes-char-ref hermes-char-pose1 hermes-char-pose2; do g=$(fresh $f); [ -n "$g" ] && files+=("$g") || { c=1; echo "  missing: $f"; }; done
   img_ok "${files[@]}" || c=1
   result 5 "character in 2 poses (recipe)" $c "3 new images (ref, pose1, pose2) made in this run, open, not blank"

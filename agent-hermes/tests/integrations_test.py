@@ -56,7 +56,11 @@ class Fakes:
         for part in parents:
             target = target.setdefault(part, {})
         if verb == 'set':
-            target[leaf] = json.loads(command[4])
+            value = json.loads(command[4])
+            if command[3] == 'mcp_servers' and isinstance(value, dict):
+                target.setdefault(leaf, {}).update(value)  # official CLI deep-merges root maps
+            else:
+                target[leaf] = value
         else:
             target.pop(leaf, None)
         return SimpleNamespace(returncode=0, stdout='', stderr='')
@@ -236,6 +240,13 @@ class IntegrationTests(unittest.TestCase):
         self.assertFalse((self.home / 'eva-integration-pending.json').exists())
         self.assertFalse((self.home / 'skills/modules/example').exists())
         self.assertEqual(len(self.reconcile([True, True])['exposed']), 2)
+
+    def test_server_removal_uses_leaf_unset_with_deep_merging_cli(self):
+        self.fake.module('blender',mcp=[('blender',['writes'])])
+        self.fake.config['mcp_servers']={'personal':{'command':'owner','args':[]}}
+        self.reconcile([True])
+        self.fake.modules.clear();self.reconcile()
+        self.assertEqual(self.servers(),{'personal':{'command':'owner','args':[]}})
 
     def test_historical_approval_cannot_authorize_restored_unowned_configuration(self):
         from copy import deepcopy

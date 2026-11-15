@@ -141,6 +141,27 @@ def put(executable: str, key: str, value: Any) -> None:
         raise ValueError(f'hermes config set {key} did not take effect')
 
 
+def sync_servers(executable: str, wanted: dict[str, Any]) -> None:
+    """Use official leaf operations: setting an empty mapping does not remove Hermes config children."""
+    import re
+    current = get(executable, 'mcp_servers') or {}
+    if not isinstance(current, dict):
+        raise ValueError('Invalid Hermes MCP configuration')
+    for name in sorted(set(current) | set(wanted)):
+        if current.get(name) == wanted.get(name) and (name in current) == (name in wanted):
+            continue
+        if not re.fullmatch('[a-z0-9][a-z0-9-]{0,40}', name):
+            raise ValueError(f'Cannot safely change MCP config key: {name}')
+        key = 'mcp_servers.' + name
+        if name not in wanted:
+            if hermes(executable, 'config', 'unset', key).returncode or name in (get(executable, 'mcp_servers') or {}):
+                raise ValueError(f'hermes config unset {key} did not take effect')
+        else:
+            put(executable, key, wanted[name])
+    if (get(executable, 'mcp_servers') or {}) != wanted:
+        raise ValueError('Hermes MCP leaf reconciliation did not take effect')
+
+
 def migrate(executable: str, data: dict[str, Any], root: Path) -> None:
     """First run: remember what earlier releases enabled without asking - Hermes plugins and the module skills the
     runner linked. The module that declares it may still be the old release (agent-hermes is often updated first),
@@ -218,7 +239,7 @@ def apply(executable: str, approved: dict[str, dict[str, Any]], root: Path,
         return {}
     # The caller has already journalled these config keys and every affected target.
     if merged != current:
-        put(executable, 'mcp_servers', merged)
+        sync_servers(executable, merged)
     if kept + added != toolsets:
         put(executable, 'platform_toolsets.cli', kept + added)
     for name in sorted(set(old_skills) | set(wanted)):
@@ -262,6 +283,11 @@ def recover(executable: str, root: Path) -> None:
     if backup.parent != root or not backup.name.startswith('.eva-integration-'):
         raise ValueError('Invalid integration recovery path')
     for key, value in data['config'].items():
+        if key == 'mcp_servers':
+            sync_servers(executable, value or {})
+            if value is None and hermes(executable, 'config', 'unset', key).returncode:
+                raise ValueError('Integration rollback failed: mcp_servers')
+            continue
         if value is None:
             if hermes(executable, 'config', 'unset', key).returncode:
                 raise ValueError(f'Integration rollback failed: {key}')

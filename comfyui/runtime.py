@@ -399,15 +399,17 @@ def model_server_up(log, wait=120):
     return False
 
 
-def expand_prompt(request, kind, width=1024, height=1024, images=(), log=print):
+def expand_prompt(request, kind, width=1024, height=1024, images=(), log=print, templates=None):
     """!
-    @brief FLUX 3 needs a full scene caption: the local chat model (model-serving contract, OpenAI API) expands the
-           request with BFL's own upsampler instructions (prompts/flux3_*.txt) before the GPU is handed to ComfyUI.
+    @brief Expand with the selected family's reviewed instructions through the local model-serving contract.
+           Existing direct callers use the configured prompt_model; operations pass their family's templates.
     @param request  What the user asked.  @param kind  "t2i" or "edit".  @param images  Reference image paths (edit).
     @return The caption, or the request unchanged (with a warning) when the chat model is not available.
     """
     import base64
-    sysmsg = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts", f"flux3_{kind}.txt")).read()
+    if templates is None:
+        templates=builders.capabilities(profile(PROFILES['prompt_model']))['prompt_templates']
+    sysmsg = builders.registry.reviewed_file(templates[kind]).read_text()
     g = __import__("math").gcd(width, height)
     text = (f"TARGET CANVAS: {width // g}:{height // g}\n" if kind == "t2i" else "") + request
     content = [{"type": "text", "text": text}] + [

@@ -27,4 +27,6 @@ def build(p, v, o):
     return flux3(v['prompt'], v['seed'], v['steps'], v['width'], v['height'], v['prefix'], p,
         refs=['pending']*len(o.image), upscale=o.upscale)
 
-CAPABILITIES = dict(build=build, negative=False, edit=True, expand=True, timeout=1800)
+PROMPT_TEMPLATES = {kind: 'families/flux3/prompts/' + kind + '.txt' for kind in ('t2i', 'edit')}
+
+CAPABILITIES = dict(prompt_templates=PROMPT_TEMPLATES, implementation_files=list(PROMPT_TEMPLATES.values()), build=build, negative=False, edit=True, expand=True, timeout=1800)

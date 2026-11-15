@@ -81,5 +81,6 @@
     "fix_faces": "default_sdxl",
     "fix_hands": "default_sdxl"
   },
-  "pose_model": "zimage"
+  "pose_model": "zimage",
+  "prompt_model": "flux3"
 }

@@ -63,6 +63,22 @@ assert models.package('new-video', kind='video').settings['family'] == 'new-vide
 """
         subprocess.run([sys.executable, '-B', '-c', code], cwd=registry.ROOT.parent, check=True, timeout=10)
 
+    def test_prompt_templates_belong_to_the_family_and_affect_acceptance_identity(self):
+        import hashlib
+        p=models.profile('flux3');capability=builders.capabilities(p)
+        for path in capability['prompt_templates'].values():
+            self.assertTrue(path.startswith('families/flux3/prompts/'))
+            self.assertTrue(registry.reviewed_file(path).is_file())
+        before=registry.implementation_identity(p)
+        original=Path.read_bytes
+        def changed(path):
+            value=original(path)
+            return value+b'changed reviewed instructions' if path.name=='t2i.txt' else value
+        with patch.object(Path,'read_bytes',changed):
+            self.assertNotEqual(registry.implementation_identity(p),before)
+        for bad in ('../outside','/etc/passwd','C:\\outside'):
+            with self.assertRaises(ValueError):registry.reviewed_file(bad)
+
     def test_video_operation_dispatches_through_family(self):
         selected = models.package(kind='video')
         implementation = registry.implementation(registry.family(selected.settings)['builder'])

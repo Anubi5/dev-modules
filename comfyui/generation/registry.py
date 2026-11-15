@@ -49,6 +49,17 @@ def samples(prof):
     return module
 
 
+def reviewed_file(relative):
+    """Read-only resources must resolve within the pinned module, including through symlinks."""
+    path = PurePosixPath(relative)
+    if path.is_absolute() or '..' in path.parts or '\\' in relative or ':' in relative:
+        raise ValueError('Unsafe reviewed resource path')
+    target = ROOT.parent / path
+    if not target.is_file() or not target.resolve().is_relative_to(ROOT.parent.resolve()):
+        raise ValueError('Missing or escaped reviewed resource')
+    return target
+
+
 def assets():
     """Every asset models.txt declares: {(folder, file): (sha256, bytes or None)} - the one declaration per file."""
     import importlib.util
@@ -193,7 +204,9 @@ def implementation_identity(prof):
             payload['composition_defaults'] = extra()
     pending = []
     if data and data.get('builder'):
-        pending.append(Path(implementation(data['builder']).__file__))
+        owner=implementation(data['builder'])
+        pending.append(Path(owner.__file__))
+        pending.extend(reviewed_file(p) for p in owner.CAPABILITIES.get('implementation_files',[]))
     elif not data and has_implementation(prof.get('arch')):
         pending.append(Path(implementation(prof['arch']).__file__))
     if data and data['kind'] == '3d':

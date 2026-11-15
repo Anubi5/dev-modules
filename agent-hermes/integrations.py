@@ -1,21 +1,17 @@
-"""Expose other modules' declared MCP servers and skills to Hermes only after the owner decides (pull integration).
+"""Owner-attended module integration, preserving unrelated Hermes configuration.
 
-reconcile (launch.sh, at every "dev hermes" start; install.sh with --no-ask):
-  1. reads "ai mod capabilities --json" (what installed module.json files declare; discovery never authorises);
-  2. asks the owner once, at an attended start only, about every MCP server or skill not decided yet or whose
-     declared command, arguments or effects changed; the answer is kept in ~/.hermes/eva-approved.json;
-  3. writes the approved MCP servers (and their toolsets) into Hermes' config through its own CLI, copies approved
-     skills into ~/.hermes/skills/modules (marker .module = agent-hermes) and drops whatever is no longer offered
-     or approved. A server without declared effects, or one whose id another module already uses, is not offered.
-migrate (once, before the first reconcile): remembers what earlier releases enabled without asking - the Blender
-  Hermes plugin and the module skills the runner linked; each is approved as soon as its module declares it (that
-  module may still be the old release when agent-hermes is updated first), so nothing visible disappears.
-
-eva-approved.json is a remembered decision and an audit trail, not a security boundary: everything here runs as the
-same user. The limits stay elsewhere: internet OFF, downloads approved on Windows, declared effects, unknown = not
-exposed, and the profile check refuses any configured MCP server that is not approved.
+Offers are inert discovery. Exact owner decisions bind MCP commands/arguments/effects
+and skill contents. Legacy plugin IDs and marker files never authorize new execution.
+Only unchanged recorded EVA entries may be replaced or removed; collisions require
+owner resolution. Plugins and unrelated MCP servers, CLI toolsets and skills are
+preserved. The profile checker may refuse those entries without deleting them.
+A private bounded journal restores configuration, skills and decisions after failure
+or restart. Same-UID execution remains an operational trust boundary, not isolation.
 """
 import argparse
+from contextlib import contextmanager
+from copy import deepcopy
+import hashlib
 from datetime import datetime, timezone
 import json
 import os
@@ -47,20 +43,22 @@ def valid_effects(effects: Any) -> bool:
 def offers(capabilities: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """What other installed modules declare for agents, keyed mcp:<module>/<id> and skill:<module>/<name>."""
     found: dict[str, dict[str, Any]] = {}
+    from collections import Counter
+    counts = Counter(s.get('id') for m in capabilities.get('modules', []) for s in m.get('mcp', []))
     ids: set[str] = set()
     for module in sorted(capabilities.get('modules', []), key=lambda m: m.get('name', '')):
         name = module.get('name')
         if name == ME or module.get('manifest') != 2:
             continue
         for server in module.get('mcp', []):
-            if not valid_effects(server.get('effects')) or server.get('id') in ids:
+            if not valid_effects(server.get('effects')) or counts[server.get('id')] != 1:
                 print(f'  Hermes: {name} MCP server {server.get("id")} not offered (effects undeclared or id already used)', file=sys.stderr)
                 continue
             ids.add(server['id'])
             found[f'mcp:{name}/{server["id"]}'] = dict(kind='mcp', module=name, id=server['id'], command=server['command'],
                                                       args=list(server.get('args') or []), effects=list(server['effects']))
         for skill in module.get('skills', []):
-            found[f'skill:{name}/{skill["name"]}'] = dict(kind='skill', module=name, name=skill['name'], path=skill['path'])
+            found[f'skill:{name}/{skill["name"]}'] = dict(kind='skill', module=name, name=skill['name'], path=skill['path'], sha256=skill_digest(Path(skill['path'])))
     return found
 
 
@@ -155,64 +153,187 @@ def migrate(executable: str, data: dict[str, Any], root: Path) -> None:
 
 
 def carry_over(data: dict[str, Any], offered: dict[str, dict[str, Any]]) -> None:
-    """Approve what an earlier release had enabled (see migrate), unless the owner has decided about it since."""
-    legacy = data.get('legacy') or {}
-    for key, offer in sorted(offered.items()):
-        if key in data['decisions']:
-            continue
-        if offer['kind'] == 'mcp' and offer['id'] in legacy.get('plugins', []):
-            how = 'migration: Hermes plugin was enabled'
-        elif offer['kind'] == 'skill' and f'{offer["module"]}/{offer["name"]}' in legacy.get('skills', []):
-            how = 'migration: skill was linked'
-        else:
-            continue
-        data['decisions'][key] = dict(approved=True, offer=offer, decided=now(), how=how)
+    """Legacy identifiers are evidence of prior use, never approval of a new execution definition."""
+    for record in data['decisions'].values():
+        if isinstance(record, dict) and str(record.get('how', '')).startswith('migration:'):
+            record['approved'] = False
+            record['how'] = 'legacy identity requires owner review'
 
 
-def apply(executable: str, approved: dict[str, dict[str, Any]], root: Path) -> None:
-    """Make Hermes' config and managed skill copies match the approved offers exactly."""
-    if get(executable, 'plugins.enabled'):
-        put(executable, 'plugins.enabled', [])                      # integrations arrive as MCP servers, not plugins
-    servers = {o['id']: dict(command=o['command'], args=o['args']) for o in approved.values() if o['kind'] == 'mcp'}
+def skill_digest(path: Path) -> str:
+    """Fingerprint a plain skill tree; never copy links to executable content outside the offer."""
+    if path.is_symlink() or not path.is_dir():
+        raise ValueError(f'Skill is not a plain directory: {path}')
+    digest = hashlib.sha256()
+    for item in sorted(path.rglob('*')):
+        if item.is_symlink():
+            raise ValueError(f'Skill contains a symlink: {item}')
+        if item.is_file() and item.name != '.module':
+            digest.update(item.relative_to(path).as_posix().encode() + b'\0' + item.read_bytes() + b'\0')
+    if not (path / 'SKILL.md').is_file():
+        raise ValueError(f'Skill has no SKILL.md: {path}')
+    return digest.hexdigest()
+
+
+def apply(executable: str, approved: dict[str, dict[str, Any]], root: Path,
+          previous: dict[str, Any] | None = None, *, validate_only: bool = False) -> dict[str, Any]:
+    """Reconcile only unchanged, recorded EVA entries; collisions fail before any mutation."""
+    previous = previous or {}
     current = get(executable, 'mcp_servers') or {}
-    for name in sorted(set(current) - set(servers)):
-        if hermes(executable, 'config', 'unset', f'mcp_servers.{name}').returncode:
-            raise ValueError(f'hermes config unset mcp_servers.{name} failed')
-    for name, server in sorted(servers.items()):
-        if current.get(name) != server:
-            put(executable, f'mcp_servers.{name}', server)
-    toolsets = policy.BASE_TOOLSETS + sorted(servers)
-    if get(executable, 'platform_toolsets.cli') != toolsets:
-        put(executable, 'platform_toolsets.cli', toolsets)
-    skills = root / 'skills/modules'
-    wanted = {o['name']: Path(o['path']) for o in approved.values() if o['kind'] == 'skill'}
-    for folder in sorted(skills.iterdir()) if skills.is_dir() else []:
-        marker = folder / '.module'
-        if folder.name not in wanted and marker.is_file():         # ours, or an old runner link of a module skill
-            shutil.rmtree(folder)
-    for name, source in sorted(wanted.items()):
-        if not (source / 'SKILL.md').is_file():
+    toolsets = get(executable, 'platform_toolsets.cli')
+    if not isinstance(current, dict) or not isinstance(toolsets, list):
+        raise ValueError('Hermes MCP/toolset configuration has an unexpected type')
+    servers = {o['id']: dict(command=o['command'], args=o['args']) for o in approved.values() if o['kind'] == 'mcp'}
+    old_servers = previous.get('servers', {})
+    for name, old in old_servers.items():
+        if name in current and current[name] != old:
+            raise ValueError(f'Owner-modified MCP server collision: {name}')
+    for name in servers:
+        if name in current and name not in old_servers:
+            raise ValueError(f'Unowned MCP server collision: {name}')
+    merged = {k: v for k, v in current.items() if k not in old_servers}
+    merged.update(servers)
+    kept = [t for t in toolsets if t not in previous.get('toolsets', [])]
+    added = [name for name in sorted(servers) if name not in kept]
+    wanted = {}
+    for offer in approved.values():
+        if offer['kind'] != 'skill':
             continue
+        name = offer['name']
+        if name in wanted:
+            raise ValueError(f'Ambiguous skill name: {name}')
+        source = Path(offer['path'])
+        wanted[name] = (source, skill_digest(source))
+    skills = root / 'skills/modules'
+    if skills.is_symlink() or (root / 'skills').is_symlink():
+        raise ValueError('Managed skill parent is a symlink')
+    old_skills = previous.get('skills', {})
+    for name in set(old_skills) | set(wanted):
+        target = skills / name
+        if target.exists() or target.is_symlink():
+            if name not in old_skills or skill_digest(target) != old_skills[name]:
+                raise ValueError(f'Unowned or owner-modified skill collision: {name}')
+    if validate_only:
+        return {}
+    # The caller has already journalled these config keys and every affected target.
+    if merged != current:
+        put(executable, 'mcp_servers', merged)
+    if kept + added != toolsets:
+        put(executable, 'platform_toolsets.cli', kept + added)
+    for name in sorted(set(old_skills) | set(wanted)):
         target = skills / name
         if target.exists():
             shutil.rmtree(target)
-        shutil.copytree(source, target, symlinks=True)
-        (target / '.module').write_text(ME + '\n')
+        if name in wanted:
+            source, fingerprint = wanted[name]
+            shutil.copytree(source, target)
+            (target / '.module').write_text(ME + '\n')
+    return dict(servers=servers, toolsets=added, skills={n: d for n, (_, d) in wanted.items()})
 
 
-def reconcile(executable: str, attended: bool) -> dict[str, Any]:
+@contextmanager
+def locked(root: Path):
+    """Serialize reconciliations; the OS releases this advisory lock after process death."""
+    with (root / '.eva-integration.lock').open('a+b') as stream:
+        if os.name == 'posix':
+            import fcntl
+            fcntl.flock(stream, fcntl.LOCK_EX)
+        else:
+            import msvcrt
+            stream.seek(0); stream.write(b'0'); stream.flush(); stream.seek(0)
+            msvcrt.locking(stream.fileno(), msvcrt.LK_LOCK, 1)
+        try:
+            yield
+        finally:
+            if os.name == 'posix':
+                fcntl.flock(stream, fcntl.LOCK_UN)
+            else:
+                stream.seek(0); msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+
+
+def recover(executable: str, root: Path) -> None:
+    """Roll back an interrupted reconciliation before permitting launch; retain evidence on failure."""
+    journal = root / 'eva-integration-pending.json'
+    if not journal.exists():
+        return
+    data = json.loads(journal.read_text())
+    backup = root / data['backup']
+    if backup.parent != root or not backup.name.startswith('.eva-integration-'):
+        raise ValueError('Invalid integration recovery path')
+    for key, value in data['config'].items():
+        if value is None:
+            if hermes(executable, 'config', 'unset', key).returncode:
+                raise ValueError(f'Integration rollback failed: {key}')
+        else:
+            put(executable, key, value)
+    for name, existed in data['skills'].items():
+        if Path(name).name != name or name in ('.', '..'):
+            raise ValueError('Invalid integration recovery skill')
+        target = root / 'skills/modules' / name
+        if target.is_symlink():
+            raise ValueError(f'Integration recovery refuses symlink: {target}')
+        if target.exists():
+            shutil.rmtree(target)
+        if existed:
+            shutil.copytree(backup / name, target)
+    approval = root / policy.APPROVALS
+    if data['approvals'] is None:
+        approval.unlink(missing_ok=True)
+    else:
+        save(approval, data['approvals'])
+    journal.unlink()
+    shutil.rmtree(backup)
+
+
+def commit_integration(executable: str, approved: dict[str, dict[str, Any]], root: Path,
+                       data: dict[str, Any], before: dict[str, Any] | None) -> None:
+    """Journal the bounded write set, update it, then commit approvals; failure restores the previous state."""
+    previous = (before or {}).get('managed', {})
+    names = set(previous.get('skills', {})) | {o['name'] for o in approved.values() if o['kind'] == 'skill'}
+    # Validate names before using them as filesystem paths, including remembered records.
+    if any(not isinstance(n, str) or Path(n).name != n or n in ('.', '..') or '/' in n or '\\' in n for n in names):
+        raise ValueError('Invalid integration skill name')
+    apply(executable, approved, root, previous, validate_only=True)
+    backup = Path(tempfile.mkdtemp(prefix='.eva-integration-', dir=root))
+    journal = root / 'eva-integration-pending.json'
+    snapshot = dict(config={key: get(executable, key) for key in ('mcp_servers', 'platform_toolsets.cli')},
+                    skills={}, approvals=before, backup=backup.name)
+    try:
+        for name in names:
+            target = root / 'skills/modules' / name
+            if target.is_symlink() or (root / 'skills/modules').is_symlink() or (root / 'skills').is_symlink():
+                raise ValueError(f'Integration target is a symlink: {target}')
+            snapshot['skills'][name] = target.exists()
+            if target.exists():
+                skill_digest(target)
+                shutil.copytree(target, backup / name)
+        save(journal, snapshot)
+        try:
+            data['managed'] = apply(executable, approved, root, previous)
+            save(root / policy.APPROVALS, data)
+        except BaseException:
+            recover(executable, root)
+            raise
+        journal.unlink()  # Commit point: approvals and configuration agree.
+    finally:
+        if not journal.exists() and backup.exists():
+            shutil.rmtree(backup)
+
+
+def _reconcile(executable: str, attended: bool) -> dict[str, Any]:
     """Decide what is new, then expose exactly what the owner approved. Returns a short summary."""
     root = home()
     path = root / policy.APPROVALS
     offered = discover()
-    data = load(path)
+    before = load(path) if path.exists() else None
+    data = deepcopy(before) if before else dict(schema=1, decisions={})
     if 'migrated' not in data:
         migrate(executable, data, root)
     carry_over(data, offered)
     asked = skipped = 0
     for key, offer in sorted(offered.items()):
         record = data['decisions'].get(key)
-        if record and record.get('offer') == offer:
+        if record and record.get('offer') == offer and record.get('how') != 'legacy identity requires owner review':
             continue
         answer = ask(offer) if attended else None
         if answer is None:
@@ -223,9 +344,17 @@ def reconcile(executable: str, attended: bool) -> dict[str, Any]:
         data['decisions'][key] = dict(approved=answer, offer=offer, decided=now(), how='owner')
     approved = {k: o for k, o in offered.items() if data['decisions'].get(k, {}).get('approved') is True
                 and data['decisions'][k].get('offer') == o}
-    save(path, data)
-    apply(executable, approved, root)
+    commit_integration(executable, approved, root, data, before)
     return dict(status='reconciled', exposed=sorted(approved), asked=asked, undecided=skipped)
+
+
+def reconcile(executable: str, attended: bool) -> dict[str, Any]:
+    """Recover interrupted writes and serialize the complete owner-decision/configuration update."""
+    root = home()
+    root.mkdir(parents=True, exist_ok=True)
+    with locked(root):
+        recover(executable, root)
+        return _reconcile(executable, attended)
 
 
 def main(argv: list[str] | None = None) -> int:

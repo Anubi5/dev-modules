@@ -1,1 +1,6 @@
 .githooks/* text eol=lf
+
+# Linux sources and extensionless entry points must survive Windows checkouts.
+*.sh text eol=lf
+*.py text eol=lf
+**/bin/* text eol=lf

@@ -47,3 +47,6 @@ The user asks for a picture, illustration, concept art, texture, reference image
 - Limits: sides 512-1536 px (multiples of 64), up to 60 steps. Inputs must be .png/.jpg/.webp inside `~/work`.
 - `--face` only with fictional characters or people who agreed; never put a real person into sexual or degrading images.
 - Same character in several poses: follow the recipe in the comfyui module README.
+
+Timeout overrides use `--timeout N`, with N from 60 to 7200 seconds. Options belonging to another operation are rejected before execution.
+Fixed-CFG families (Z-Image, FLUX 3, Fibo 2 and Krea 2) reject `--cfg` and `--negative`; use only the controls declared by the selected family. LoRAs require declared loader compatibility and finite strengths from -2 to 2, including saved notes.

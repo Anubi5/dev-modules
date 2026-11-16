@@ -1,4 +1,5 @@
 """Small offline checks against the index; shared verbatim by both EVA repositories."""
+import argparse
 import ast
 from contextlib import contextmanager
 import json
@@ -11,6 +12,9 @@ import tempfile
 import time
 
 START = time.monotonic()
+RELEASE = False
+SKIPPED = []
+RAN = []
 
 
 @contextmanager
@@ -48,16 +52,30 @@ def optional(name):
         for candidate in (git.parent.parent / 'bin/bash.exe', git.parent.parent / 'usr/bin/bash.exe'):
             if candidate.is_file():
                 return str(candidate)
-    print(f'WARNING: {name} unavailable; its optional syntax check is skipped.', file=sys.stderr)
     return None
+
+
+def skipped(reason):
+    """Make omitted validation explicit; required release checks fail closed."""
+    SKIPPED.append(reason)
+    print('SKIP: '+reason, file=sys.stderr)
+    if RELEASE:
+        raise ValueError('required release validator unavailable: '+reason)
 
 
 def main():
     """Check changed files and only the contracts their paths select."""
+    global RELEASE
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--release', action='store_true', help='validate all indexed source and required contracts; fail unavailable validators')
+    RELEASE = parser.parse_args().release
     run(['git', 'diff', '--cached', '--check'])
+    RAN.append('indexed whitespace')
     changed = run(['git', 'diff', '--cached', '--name-only', '--diff-filter=ACMR', '-z'],
                   stdout=subprocess.PIPE).stdout.decode('utf-8').rstrip('\0').split('\0')
     changed = [p for p in changed if p]
+    if RELEASE:
+        changed = run(['git', 'ls-files', '-z'], stdout=subprocess.PIPE).stdout.decode('utf-8').rstrip('\0').split('\0')
     # An index snapshot makes partially staged changes and staged deletions authoritative.
     with snapshot() as directory:
         root = Path(directory)
@@ -71,8 +89,10 @@ def main():
             data = path.read_bytes()
             if name.endswith('.py'):
                 ast.parse(data, filename=name)
+                RAN.append('Python syntax: '+name)
             elif name.endswith('.json'):
                 json.loads(data)
+                RAN.append('JSON syntax: '+name)
             elif name.endswith(('.ps1', '.psm1', '.psd1')):
                 powershell.append(str(path))
             elif name.endswith('.sh') or (data.startswith(b'#!') and b'bash' in data.split(b'\n', 1)[0]):
@@ -82,55 +102,66 @@ def main():
             if bash:
                 for path in shells:
                     run([bash, '-n', path])
+                    RAN.append('Bash syntax: '+str(Path(path).relative_to(root)))
+            else:
+                skipped('Bash syntax validator unavailable')
         if powershell:
             pwsh = optional('pwsh') or (optional('powershell') if os.name == 'nt' else None)
             if pwsh:
                 script = "$bad=0; $input | ConvertFrom-Json | ForEach-Object { $e=$null; [void][System.Management.Automation.Language.Parser]::ParseFile($_,[ref]$null,[ref]$e); if($e){$e | Out-String | Write-Host; $bad=1} }; exit $bad"
                 run([pwsh, '-NoProfile', '-NonInteractive', '-Command', script],
                     input=json.dumps(powershell), text=True)
+                RAN.append(f'PowerShell syntax: {len(powershell)} files')
+            else:
+                skipped('PowerShell syntax validator unavailable')
         manifests = sorted({str(Path(p).parent) for p in changed if p.endswith('/module.json')})
         if manifests:
             if (root / 'tools/module_manifest.py').is_file():
                 try:
                     import pydantic  # noqa: F401
                 except ImportError:
-                    print('WARNING: Pydantic unavailable; manifest schema check skipped.', file=sys.stderr)
+                    skipped('Pydantic unavailable; manifest schema check unavailable')
                 else:
                     run([sys.executable, '-B', str(root / 'tools/module_manifest.py'), *manifests], cwd=root)
+                    RAN.append('manifest schema and file contracts')
             else:
                 checks = ['ManifestContract.test_files_exist']
                 try:
                     import jsonschema  # noqa: F401
                 except ImportError:
-                    print('WARNING: jsonschema unavailable; manifest schema check skipped.', file=sys.stderr)
+                    skipped('jsonschema unavailable; manifest schema check unavailable')
                 else:
                     checks.append('ManifestContract.test_schema')
                 # Reuse only these two small existing metadata checks (seven manifests),
                 # never their command execution/read-only integration tests.
-                run([sys.executable, '-B', str(root / '_tests/manifest_contract_test.py'), *checks], cwd=root)
+                run([sys.executable, '-B', str(root / 'tests/contract/manifest_contract_test.py'), *checks], cwd=root)
+                RAN.append('manifest file contracts'+(' and schema' if len(checks)>1 else ''))
         if 'ai-sandbox/config/release.json' in changed:
             try:
                 import pydantic  # noqa: F401
             except ImportError:
-                print('WARNING: Pydantic unavailable; release schema check skipped.', file=sys.stderr)
+                skipped('Pydantic unavailable; release schema check unavailable')
             else:
                 run([sys.executable, '-B', str(root / 'tools/release_contract.py')], cwd=root)
+                RAN.append('release contract')
         # Existing narrow, pure offline contracts; never invoke shell-dependent test suites here.
         selected = []
         if any(p in changed for p in ('tools/module_manifest.py', 'tools/module-manifest.schema.json')):
             selected.append('tools/module_manifest.py')
-        if 'comfyui/nodes.txt' in changed or 'comfyui/test_sam2_pin.py' in changed:
-            selected.append('comfyui/test_sam2_pin.py')
         for test in selected:
             if test.startswith('tools/'):
                 try:
                     import pydantic  # noqa: F401
                 except ImportError:
-                    print('WARNING: Pydantic unavailable; schema parity check skipped.', file=sys.stderr)
+                    skipped('Pydantic unavailable; schema parity check unavailable')
                     continue
             args = ['--check-schema'] if test.startswith('tools/') else []
             run([sys.executable, '-B', str(root / test), *args], cwd=root)
-    print(f'PASS: staged local checks ({time.monotonic() - START:.2f}s)')
+            RAN.append('published schema parity')
+    for check in RAN:
+        print('RAN: '+check)
+    label = 'INCOMPLETE' if SKIPPED else 'PASS'
+    print(f'{label}: {"release index" if RELEASE else "staged local"} checks; {len(RAN)} ran, {len(SKIPPED)} skipped ({time.monotonic() - START:.2f}s)')
 
 
 if __name__ == '__main__':

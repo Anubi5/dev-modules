@@ -10,6 +10,9 @@ from generation import registry
 from generation.video import build
 
 
+OPTIONS = {'frames', 'model', 'steps', 'negative'}
+
+
 def validate(a):
     """! @brief Video's own limit, checked with the general ones before anything else. """
     if not 5 <= a.frames <= rt.MAX_FRAMES:

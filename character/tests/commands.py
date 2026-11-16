@@ -1,4 +1,4 @@
-"""character commands for the manifest effects contract (see _tests/manifest_contract_test.py)."""
+"""character commands for the manifest effects contract (see tests/contract/manifest_contract_test.py)."""
 from pathlib import Path
 import re
 import subprocess

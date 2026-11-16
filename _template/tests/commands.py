@@ -1,4 +1,4 @@
-"""Subcommands and read-only fixtures for the manifest effects contract (_tests/manifest_contract_test.py)."""
+"""Subcommands and read-only fixtures for the manifest effects contract (tests/contract/manifest_contract_test.py)."""
 from pathlib import Path
 import re
 import subprocess

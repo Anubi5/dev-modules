@@ -31,10 +31,15 @@ Needs: internet only during `dev mod add/update agent-hermes`; no GPU of its own
   hash in `install.sh`. Changing one without the other fails the install on purpose.
 - **Self-contained:** everything Hermes-specific is here: pin, profile (`hermes_local_setup.py`,
   `hermes_profile_check.py`, `hermes-local-SOUL.md`), `launch.sh`, the `hermes-dashboard` user service,
-  the tool test (`hermes_test.sh`), and the evaluation and acceptance harnesses (`tests/`, e.g. `tests/hermes_eval.sh`).
+  the tool test (`tests/acceptance/hermes_test.sh`), and the evaluation and acceptance harnesses (`tests/`, e.g. `tests/acceptance/hermes_eval.sh`).
   The platform only provides the agent gate: `ai hermes` / `ai dashboard` require internet OFF and a failing
   reachability probe, then call `launch.sh` / start the service. The gate is a launch check, not confinement.
 - **Your data:** `state.txt` declares what `dev state save` keeps outside the distro (memory, sessions, SOUL);
   the profile itself is re-applied by this module, so `config.yaml` is not carried over.
 - **Remove:** `dev mod remove agent-hermes` leaves `~/.hermes` (source, memory, sessions) in place.
 - Install `agent-hermes` before `blender`: Blender adds the official Hermes Blender plugin.
+
+
+## Local regression tests
+
+Use `python3 -B tests/run.py --module agent-hermes --suite fast` from the repository root; use `--suite integration` explicitly for disposable multi-component fixtures. See the [shared test policy](../tests/README.md) for categories, prerequisites and skips. The module-root `test.sh` remains an explicit installer health check, outside the default runner.

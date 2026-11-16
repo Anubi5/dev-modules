@@ -22,3 +22,5 @@ The user asks for a short animated clip (a few seconds).
 ## Rules
 - One `ai gen` at a time; never call the ComfyUI API directly. `GPU busy`: wait, retry once. `FAILED`: report it.
 - Limits: up to 121 frames, up to 60 steps. Do not send chat requests while a job runs.
+
+Timeout overrides use `--timeout N`, with N from 60 to 7200 seconds. Options belonging to another operation are rejected before execution.

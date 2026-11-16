@@ -9,11 +9,22 @@ def apply_loras(wf, loras, arch):
     """
     if not loras:
         return wf
-    model, clip = (["4", 0], ["4", 1]) if arch == "sdxl" else (["1", 0], ["2", 0])
+    from generation import registry
+    if not registry.has_implementation(arch):
+        raise ValueError(f"LoRA support is not declared for architecture {arch}")
+    spec = registry.implementation(arch).CAPABILITIES.get('lora')
+    if not spec:
+        raise ValueError(f"LoRA support is not declared for architecture {arch}")
+    for node, allowed in spec['loaders'].items():
+        if wf.get(node, {}).get('class_type') not in allowed:
+            raise ValueError(f"LoRA loader is incompatible with {arch} at node {node}")
+    model, clip = list(spec['model']), list(spec['clip'])
     base_model, base_clip = model, clip
     ids = []
     for i, (name, strength) in enumerate(loras):
         nid = f"6{i}"
+        if nid in wf:
+            raise ValueError(f"LoRA node would overwrite existing node {nid}")
         wf[nid] = {"class_type": "LoraLoader", "inputs": {"model": model, "clip": clip, "lora_name": name,
                                                           "strength_model": strength, "strength_clip": strength}}
         model, clip = [nid, 0], [nid, 1]

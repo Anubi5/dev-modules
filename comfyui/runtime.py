@@ -49,6 +49,13 @@ JOB = {}                                                               # prompt 
 MIN_FREE = 2 << 30                                                     # bytes free needed in the output folder
 
 
+def validate_timeout(value):
+    """Validate the same per-job timeout before any operation touches files or services."""
+    if value is not None and (type(value) is not int or not 60 <= value <= MAX_TIMEOUT):
+        sys.exit(f"--timeout must be 60-{MAX_TIMEOUT} s")
+    return value
+
+
 def env(key, default):
     """!
     @brief Reads one KEY="value" setting from sandbox.env.
@@ -107,7 +114,7 @@ def check_input(path):
     return real
 
 
-def upload(src):
+def upload(src, timeout=60):
     """!
     @brief Hands a reference image to ComfyUI as a temporary input (POST /upload/image, type temp; cleared on restart).
     @param src  Checked file path.  @return The image name for LoadImage ("gen/<id>.png [temp]").
@@ -120,7 +127,7 @@ def upload(src):
                  f'Content-Type: {IMAGE_TYPES[ext]}\r\n\r\n'.encode() + open(src, "rb").read() + b"\r\n")
     req = urllib.request.Request(URL + "/upload/image", b"".join(parts) + f"--{bnd}--\r\n".encode(),
                                  {"Content-Type": f"multipart/form-data; boundary={bnd}"})
-    r = json.loads(urllib.request.urlopen(req, timeout=60).read())
+    r = json.loads(urllib.request.urlopen(req, timeout=timeout).read())
     return f"{r.get('subfolder') + '/' if r.get('subfolder') else ''}{r['name']} [temp]"
 
 
@@ -282,8 +289,11 @@ def find_loras(specs):
             strength = float(st) if st else None          # None: the LoRA's note, else 1.0 (resolve_loras)
         except ValueError:
             sys.exit(f"--lora {spec}: strength must be a number, e.g. {name}:0.8")
-        if strength is not None and not -2.0 <= strength <= 2.0:
-            sys.exit(f"--lora {spec}: strength must be -2 to 2")
+        if strength is not None:
+            try:
+                strength = assets.lora_strength(strength)
+            except ValueError as error:
+                sys.exit(f"--lora {spec}: {error}")
         exact = [f for f in found if os.path.basename(f).lower() in (name.lower(), name.lower() + ".safetensors")]
         hit = exact or [f for f in found if name.lower() in f.lower()]
         if len(hit) != 1:
@@ -293,7 +303,6 @@ def find_loras(specs):
     return out
 
 
-FIXED = {"zimage", "flux3", "fibo2"}      # distilled / CFG-1 workflows: CFG and negative prompt are hard requirements
 
 
 def model_path(prof):
@@ -312,16 +321,16 @@ def resolve_loras(a, prof, neg, log=print):
     @return (loras [(file, strength)], prompt, negative, profile, checks [dict for the record])
     """
     prompt, specs, checks = a.prompt, find_loras(a.lora), []
-    fixed = prof["arch"] in FIXED
+    fixed = builders.capabilities(prof).get("fixed_cfg", False)
     if a.cfg is not None and not 0.5 <= a.cfg <= 30:
         sys.exit("--cfg must be 0.5-30")
     if a.cfg is not None:
         if fixed:
-            log(f"note: --cfg ignored - {prof['name']} runs at its fixed CFG {prof['cfg']}")
+            sys.exit(f"--cfg is not supported for {prof['name']}: fixed CFG {prof['cfg']}")
         else:
             prof = dict(prof, cfg=a.cfg)
-    if fixed and a.negative:
-        log(f"note: --negative ignored - {prof['name']} uses no negative prompt")
+    if fixed and a.negative is not None:
+        sys.exit(f"--negative is not supported for {prof['name']}")
     mpath, loras, want = model_path(prof), [], {"cfg": {}, "negative": {}}
     for name, strength in specs:
         path = next((os.path.join(d, name) for d in LORA_DIRS if os.path.exists(os.path.join(d, name))), None)
@@ -330,6 +339,10 @@ def resolve_loras(a, prof, neg, log=print):
             strength = note.get("strength", 1.0)
             if "strength" in note:
                 log(f"LoRA {name}: strength {strength} (from its note)")
+        try:
+            strength = assets.lora_strength(strength)
+        except ValueError as error:
+            sys.exit(f"LoRA {name} note: {error}")
         trig = note.get("trigger")
         if trig and trig.lower() not in prompt.lower():
             prompt = f"{trig}, {prompt}"
@@ -556,7 +569,7 @@ def missing_files(wf):
     return bad
 
 
-def prepare(log, wait, wf=None):
+def prepare(log, wait, wf=None, deadline=None):
     """!
     @brief Hands the GPU to ComfyUI: starts it if needed, checks the workflow's model files, waits while ComfyUI runs
            someone else's job, unloads the chat models.
@@ -571,10 +584,10 @@ def prepare(log, wait, wf=None):
     except (OSError, ValueError) as error:
         return str(error)
     if not comfy_up():
-        subprocess.run(["systemctl", "--user", "start", "comfyui"], stderr=subprocess.DEVNULL)
+        subprocess.run(["systemctl", "--user", "start", "comfyui"], stderr=subprocess.DEVNULL, timeout=budget(deadline, 30))
         for _ in range(90):
             if comfy_up(): break
-            time.sleep(2)
+            time.sleep(budget(deadline, 2))
     if not comfy_up():
         return f"ComfyUI is not answering on {URL} (ai logs comfyui)"
     miss = missing_files(wf) if wf else []
@@ -585,7 +598,7 @@ def prepare(log, wait, wf=None):
     while comfy_busy():
         if time.time() - t0 > wait:
             return "ComfyUI is busy with another job (browser?) - try again later"
-        time.sleep(5)
+        time.sleep(budget(deadline, 5))
     if not unload_llm(log):
         return "the chat model could not be unloaded - not starting (GPU would run out of memory)"
     return ""
@@ -745,14 +758,25 @@ def input_hashes(wf, uploads=(), log=print, fresh=False):
     return out
 
 
-def chat_pause(log=print):
+def budget(deadline, maximum):
+    """Bound a stage by the remaining optional job deadline."""
+    if deadline is None:
+        return maximum
+    left = deadline - time.monotonic()
+    if left <= 0:
+        raise TimeoutError('3D job timeout: generation and validation deadline exceeded')
+    return min(maximum, left)
+
+
+def chat_pause(log=print, timeout=30):
     """! @brief Stops the chat-model server while the GPU is busy, so a chat request cannot load a model into a running
            job (llama-swap does not take the GPU lock). @return True when it was running and is now paused """
-    if subprocess.run(["systemctl", "--user", "is-active", "-q", "llama-swap"]).returncode != 0:
+    deadline = time.monotonic() + timeout
+    if subprocess.run(["systemctl", "--user", "is-active", "-q", "llama-swap"], timeout=budget(deadline, 30)).returncode != 0:
         return False
     JOB["chat_paused"] = True                    # set before stopping: a stop from here on still resumes it (entry)
-    subprocess.run(["systemctl", "--user", "stop", "llama-swap"], stderr=subprocess.DEVNULL)
-    if subprocess.run(["systemctl", "--user", "is-active", "-q", "llama-swap"]).returncode == 0:
+    subprocess.run(["systemctl", "--user", "stop", "llama-swap"], stderr=subprocess.DEVNULL, timeout=budget(deadline, 30))
+    if subprocess.run(["systemctl", "--user", "is-active", "-q", "llama-swap"], timeout=budget(deadline, 30)).returncode == 0:
         raise RuntimeError("the chat model server could not be stopped - not starting the GPU job")
     log("chat model server paused for the GPU job")
     return True
@@ -761,8 +785,8 @@ def chat_pause(log=print):
 def chat_resume(paused, log=print):
     """! @brief Starts the chat-model server again when chat_pause() stopped it. """
     if paused:
+        subprocess.run(["systemctl", "--user", "start", "llama-swap"], stderr=subprocess.DEVNULL, timeout=30, check=True)
         JOB.pop("chat_paused", None)
-        subprocess.run(["systemctl", "--user", "start", "llama-swap"], stderr=subprocess.DEVNULL)
         log("chat model server running again")
 
 
@@ -789,7 +813,7 @@ def gpu_lease(wait=600):
         yield lock
 
 
-def generate(wf, timeout, wait=600, log=print, uploads=None, lease=None, finish=True):
+def generate(wf, timeout, wait=600, log=print, uploads=None, lease=None, finish=True, deadline=None):
     """!
     @brief The whole hand-off around one job: GPU lock, preflight, chat server paused, ComfyUI run, GPU given back.
     @param wf       Workflow.  @param timeout  Job time limit (s).  @param wait  How long to wait for the lock / a busy ComfyUI (s).
@@ -803,34 +827,35 @@ def generate(wf, timeout, wait=600, log=print, uploads=None, lease=None, finish=
     if lease is None:
         try:
             with gpu_lease(wait):
-                return _run(wf, timeout, wait, log, uploads, finish)
+                return _run(wf, timeout, wait, log, uploads, finish, deadline)
         except GpuBusy as e:
             job_state("failed", error=str(e))
             return False, [], str(e)
-    return _run(wf, timeout, wait, log, uploads, finish)
+    return _run(wf, timeout, wait, log, uploads, finish, deadline)
 
 
-def _run(wf, timeout, wait, log, uploads, finish):
+def _run(wf, timeout, wait, log, uploads, finish, deadline=None):
     """! @brief generate() under the lock. """
     job_state("preparing")
-    err = prepare(log, wait, wf)
+    err = prepare(log, budget(deadline, wait), wf, deadline=deadline) if deadline is not None else prepare(log, wait, wf)
     if err:
         job_state("failed", error=err)
         return False, [], err
     try:
-        paused = chat_pause(log)
-    except RuntimeError as e:
+        paused = chat_pause(log, timeout=budget(deadline, 30)) if deadline is not None else chat_pause(log)
+    except (RuntimeError, subprocess.TimeoutExpired, TimeoutError) as e:
+        chat_resume(bool(JOB.get("chat_paused")), log)
         job_state("failed", error=str(e))
         return False, [], str(e)
     try:
         for node, src in uploads or []:
-            wf[node]["inputs"]["image"] = upload(src)
+            wf[node]["inputs"]["image"] = upload(src, timeout=budget(deadline, 60)) if deadline is not None else upload(src)
     except Exception as e:
         release(log); chat_resume(paused, log)
         job_state("failed", error=f"upload: {e}")
         return False, [], f"could not hand the reference image to ComfyUI: {e}"
     try:
-        ok, files, err = run_job(wf, timeout, log)
+        ok, files, err = run_job(wf, budget(deadline, timeout), log)
         state = ("validating" if ok and not finish else "succeeded" if ok
                  else "cancelled" if err.startswith("timeout") else "failed")
         job_state(state, error=err or None, outputs=files)
@@ -889,7 +914,7 @@ def dump_schema(path):
     @param path  Where to write the JSON.  @return 0 on success.
     """
     if not comfy_up():
-        subprocess.run(["systemctl", "--user", "start", "comfyui"], stderr=subprocess.DEVNULL)
+        subprocess.run(["systemctl", "--user", "start", "comfyui"], stderr=subprocess.DEVNULL, timeout=30)
         for _ in range(90):
             if comfy_up(): break
             time.sleep(2)

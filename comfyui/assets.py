@@ -189,6 +189,19 @@ def note_for(path, persist=True):
     return notes().get(sha256(path, persist=persist), {})
 
 
+def lora_strength(value):
+    """CLI input and saved notes share finite, bounded numeric strengths."""
+    try:
+        if isinstance(value, bool):
+            raise ValueError
+        value = float(value)
+        if not -2.0 <= value <= 2.0:
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError("strength must be a finite number from -2 to 2") from None
+    return value
+
+
 def set_note(path, values):
     """! @brief Adds or changes a note (values typed by NOTE_KEYS; "" removes a field). @return the note """
     all_, key = notes(), sha256(path)
@@ -198,7 +211,7 @@ def set_note(path, values):
         if v == "" and k != "negative":
             n.pop(k, None)
         else:
-            n[k] = NOTE_KEYS[k](v)
+            n[k] = lora_strength(v) if k == "strength" else NOTE_KEYS[k](v)
     all_[key] = n
     _save(NOTES, all_)
     return n

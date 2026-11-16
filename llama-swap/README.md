@@ -19,3 +19,8 @@ Catalogue list/show/verify/accept require the optional `models.catalogue/1` prov
 (currently ComfyUI); absent providers produce an explicit error. `verify` records
 integrity metadata, while list/show remain read-only. Repeat installation reuses
 already installed compatible Python dependencies rather than resolving them online.
+
+
+## Local regression tests
+
+Use `python3 -B tests/run.py --module llama-swap --suite fast` from the repository root; use `--suite integration` explicitly for disposable multi-component fixtures. See the [shared test policy](../tests/README.md) for categories, prerequisites and skips. The module-root `test.sh` remains an explicit installer health check, outside the default runner.

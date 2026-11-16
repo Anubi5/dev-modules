@@ -27,3 +27,7 @@ The user wants an existing picture changed, or a person or object from one pictu
 ## Rules
 - One `ai gen` at a time; never call the ComfyUI API directly. `GPU busy`: wait, retry once. `FAILED`: report it.
 - Never put a real person into sexual or degrading images; only edit people who agreed or fictional characters.
+
+Timeout overrides use `--timeout N`, with N from 60 to 7200 seconds. Options belonging to another operation are rejected before execution.
+Fixed-CFG families (Z-Image, FLUX 3, Fibo 2 and Krea 2) reject `--cfg` and `--negative`; use only the controls declared by the selected family. LoRAs require declared loader compatibility and finite strengths from -2 to 2, including saved notes.
+Reference edits determine their dimensions from the reference workflow; `--size` is rejected rather than ignored.

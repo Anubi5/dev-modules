@@ -14,8 +14,8 @@ if ! port; then                                   # nobody's bridge running: ope
   for _ in $(seq 60); do port && break; sleep 1; done
 fi
 port || { echo "MCP bridge did not open port 9876 (see /tmp/blender-mcp-test.log)"; [ -n "$started" ] && kill $started; exit 1; }
-python3 "$MOD/mcp_smoke.py" "$MOD/bin/blender-mcp-prepared"; rc=$?
+python3 "$MOD/tests/acceptance/mcp_smoke.py" "$MOD/bin/blender-mcp-prepared"; rc=$?
 [ -n "$started" ] && { kill $started 2>/dev/null; wait $started 2>/dev/null; }
 [ $rc = 0 ] || { echo "official MCP path failed (see above)"; exit 1; }
 [ "${1:-}" = --full ] || exit 0
-cd "$MOD" && "$MOD/bin/blender" -b --factory-startup --python-exit-code 1 --python blender_test.py 2>&1 | grep 'BLENDER-TEST OK'
+cd "$MOD" && "$MOD/bin/blender" -b --factory-startup --python-exit-code 1 --python tests/acceptance/blender_test.py 2>&1 | grep 'BLENDER-TEST OK'

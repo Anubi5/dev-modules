@@ -18,3 +18,8 @@ Repeat installation currently invokes uv dependency resolution and can need netw
 The loopback MCP bridge can execute arbitrary Python and has no application login. Do not expose it; other local processes can reach it. Shared-user execution is not adversarial isolation.
 
 `AI_BLENDER_CPU_ONLY=1 blender -b ...` runs a background script that renders nothing (mesh preparation, import/export) without the GPU lock and without unloading the chat model; other modules use this instead of Blender's own executable.
+
+
+## Local regression tests
+
+Use `python3 -B tests/run.py --module blender --suite fast` from the repository root; use `--suite integration` explicitly for disposable multi-component fixtures. See the [shared test policy](../tests/README.md) for categories, prerequisites and skips. The module-root `test.sh` remains an explicit installer health check, outside the default runner.

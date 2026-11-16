@@ -17,3 +17,11 @@ Bash: the WSL launch alias is never used.
 Normal commits use these local checks. Bug fixes run their specific regression
 manually. GPU, installation, recovery and end-to-end acceptance remain explicit
 manual operations. GitHub Actions has been discontinued and is not a merge gate.
+
+For release metadata/syntax verification run `python3 -B .githooks/check.py --release`
+after staging the exact proposed source. This validates all indexed source and
+required applicable contracts within the same bounded subprocess budget. Missing
+native parsers or schema validators fail. Normal hooks remain lightweight and
+permissive about optional tools, but report INCOMPLETE rather than PASS when a
+check is skipped; RAN lines identify completed checks. Run `tests/run.py --strict`
+separately for required CPU suites. Neither path runs real acceptance or WSL.

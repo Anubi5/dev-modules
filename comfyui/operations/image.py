@@ -12,6 +12,11 @@ from generation.graph import apply_loras, use_skeleton
 from generation.models import PROFILES, negative_for
 
 
+OPTIONS = {"model", "checkpoint", "style", "negative", "count", "steps", "size", "upscale", "hires",
+           "pose", "pose_skeleton", "pose_strength", "face", "face_weight", "cfg", "force_lora", "lora",
+           "fix_faces", "fix_hands", "improve_prompt", "no_expand"}
+
+
 def size(a, example):
     """! @brief --size WxH rounded down to multiples of 64 and within the per-job limits. @return (width, height) """
     m = re.fullmatch(r"(\d{3,4})x(\d{3,4})", a.size)

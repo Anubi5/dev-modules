@@ -30,7 +30,8 @@
     "style": "photo"
   },
   "capabilities": {
-    "negative": false
+    "negative": false,
+    "fixed_cfg": true
   },
   "recipe": {
     "workflow": {

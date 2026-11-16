@@ -10,6 +10,7 @@ import random
 import shutil
 import subprocess
 import sys
+import time
 
 import runtime as rt
 from generation.graph import apply_recipe
@@ -67,16 +68,25 @@ def run(a):
     return code
 
 
+def remaining(deadline, maximum=None):
+    """Seconds left in the job budget; never start work after expiry."""
+    seconds = deadline - time.monotonic()
+    if seconds <= 0:
+        raise TimeoutError('3D job timeout: generation and validation deadline exceeded')
+    return min(seconds, maximum) if maximum is not None else seconds
+
+
 def job_3d(wf, uploads, info, timeout, log=print):
     """!
     @brief A 3D job as one unit: the GPU lock is held from generation through the Blender check, and the job file gets
            its final state only from the checks' verdict. @return (status, output files, error text)
     """
+    deadline = time.monotonic() + timeout
     files, extra = [], []
     try:
-        with rt.gpu_lease() as lock:
+        with rt.gpu_lease(wait=remaining(deadline, 600)) as lock:
             try:
-                ok, files, err = rt.generate(wf, timeout, log=log, uploads=uploads, lease=lock, finish=False)
+                ok, files, err = rt.generate(wf, remaining(deadline), log=log, uploads=uploads, lease=lock, finish=False, deadline=deadline)
             except Exception as e:                     # whatever breaks, the job ends with a state and a record
                 ok, err = False, f"generation stopped: {type(e).__name__}: {str(e)[:300]}"
             glb = next((f for f in files if f.endswith(".glb")), None)
@@ -85,11 +95,12 @@ def job_3d(wf, uploads, info, timeout, log=print):
             status = "failed"
             if ok and glb:
                 try:
-                    status, extra = check_3d(glb, info, log, lock)
+                    status, extra = check_3d(glb, info, log, lock, deadline=deadline)
                 except Exception as e:
                     status, info["check_error"] = "check_failed", f"{type(e).__name__}: {str(e)[:300]}"
                     info.setdefault("glb", {"valid": False, "error": "not read"})
-    except rt.GpuBusy as e:
+                    err = info["check_error"]
+    except (rt.GpuBusy, TimeoutError) as e:
         rt.job_state("failed", error=str(e))
         return "failed", [], str(e)
     files = files + extra
@@ -106,13 +117,16 @@ def handover_ok(blender):
         return False
 
 
-def check_3d(glb, info, log=print, lock=None):
+def check_3d(glb, info, log=print, lock=None, deadline=None):
     """!
     @brief Required checks of a 3D result: GLB header, then (Blender module) import, mesh measures, 4 renders and
            img-check, with the chat-model server paused (the blender command takes the GPU lock itself).
     @return (status, extra output files)
     """
+    deadline = deadline if deadline is not None else time.monotonic() + 900
+    remaining(deadline)
     info["glb"] = glb_stats(glb)
+    remaining(deadline)
     blender, views, rc, mesh, chk_rc = shutil.which("blender"), [], None, None, None
     if blender and lock and not handover_ok(blender):
         info["blender"] = {"ok": False, "error": "the Blender module is too old to take over the GPU lock this job holds "
@@ -121,8 +135,10 @@ def check_3d(glb, info, log=print, lock=None):
     if info["glb"].get("valid") and info["glb"].get("triangles") and blender:
         log("checking the model in Blender (import, mesh, 4 renders)")
         try:
-            paused = rt.chat_pause(log)
-        except RuntimeError as e:
+            paused = rt.chat_pause(log, timeout=remaining(deadline, 30))
+        except (RuntimeError, subprocess.TimeoutExpired, TimeoutError) as e:
+            # A stop can time out after actually pausing chat; retain recovery.
+            rt.chat_resume(bool(rt.JOB.get("chat_paused")), log)
             info["blender"] = {"ok": False, "error": str(e)}
             return "check_failed", []
         fd = lock.fileno() if lock else None          # the held lock is handed to blender, which then does not wait for itself
@@ -130,20 +146,21 @@ def check_3d(glb, info, log=print, lock=None):
         try:
             r = subprocess.run([blender, "-b", "--factory-startup", "--python-exit-code", "1", "--python",
                                 os.path.join(HERE, "mesh_check.py"), "--",
-                                glb, os.path.splitext(glb)[0] + "_view"], capture_output=True, text=True, timeout=900,
+                                glb, os.path.splitext(glb)[0] + "_view"], capture_output=True, text=True, timeout=remaining(deadline, 900),
                                pass_fds=(fd,) if fd is not None else (), env=env)
             rc = r.returncode
             line = next((l for l in r.stdout.splitlines() if l.startswith("MESH-CHECK ")), None)
             mesh = json.loads(line[11:]) if line else {"ok": False, "error": (r.stderr or r.stdout)[-300:]}
-        except (subprocess.TimeoutExpired, ValueError) as e:
+        except (subprocess.TimeoutExpired, TimeoutError, ValueError) as e:
             mesh = {"ok": False, "error": str(e)[:300]}
         finally:
             rt.chat_resume(paused, log)
         views = [v for v in mesh.get("renders", []) if os.path.exists(v)]
         if views:
             chk = subprocess.run([os.path.join(HERE, "bin", "img-check"), "--min-coverage", "0.02", *views],
-                                 capture_output=True, text=True)
+                                 capture_output=True, text=True, timeout=remaining(deadline))
             chk_rc, info["renders_check"] = chk.returncode, chk.stdout.strip()[-600:]
+        remaining(deadline)
         info["blender"] = mesh
     elif not blender:
         info["blender"] = "not installed (ai mod add blender for renders and mesh checks)"

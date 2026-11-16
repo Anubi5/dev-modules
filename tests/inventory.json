@@ -70,14 +70,14 @@
       "owner": "core",
       "category": "contract",
       "entrypoint": true,
-      "platform": "any",
+      "platform": "linux",
       "requires": [],
       "case_names": [
         "HelpTest.test_character_help_is_the_selected_subcommand",
         "HelpTest.test_documented_generation_example_uses_real_parser",
         "HelpTest.test_actual_dispatch_has_no_effects"
       ],
-      "effects": "Offline metadata/CLI/safety fixtures; no real services or downloads"
+      "effects": "Offline metadata/CLI/safety fixtures; no real services or downloads; Imports the Linux generation runtime (fcntl)"
     },
     {
       "id": "_tests/contract_check.sh",
@@ -555,13 +555,13 @@
       "owner": "blender",
       "category": "integration",
       "entrypoint": true,
-      "platform": "any",
+      "platform": "linux",
       "requires": [],
       "case_names": [
         "SmokeTests.test_prepared_command_and_protocol",
         "SmokeTests.test_failed_initialize_keeps_child_diagnostic"
       ],
-      "effects": "Controlled disposable multi-component fixtures; fake process/service/install boundaries"
+      "effects": "Controlled disposable multi-component fixtures; fake process/service/install boundaries; requires POSIX executable fixture/runtime imports"
     },
     {
       "id": "character/test.sh",
@@ -601,7 +601,7 @@
       "owner": "character",
       "category": "integration",
       "entrypoint": true,
-      "platform": "any",
+      "platform": "linux",
       "requires": [],
       "case_names": [
         "PipelineTests.test_stages_resume_without_repeating_producers_and_handoff_is_hashed",
@@ -613,7 +613,7 @@
         "PipelineTests.test_abandoned_running_stage_never_replays_automatically",
         "PipelineTests.test_timeout_stops_the_owned_cpu_process"
       ],
-      "effects": "Controlled disposable multi-component fixtures; fake process/service/install boundaries"
+      "effects": "Controlled disposable multi-component fixtures; fake process/service/install boundaries; requires POSIX executable fixture/runtime imports"
     },
     {
       "id": "character/tests/commands.py",
@@ -981,7 +981,7 @@
       "owner": "llama-swap",
       "category": "unit",
       "entrypoint": true,
-      "platform": "any",
+      "platform": "linux",
       "requires": [],
       "case_names": [
         "LocalAdoptionTests.test_complete_split_is_ordered_and_manifest_uses_existing_paths",
@@ -990,7 +990,7 @@
         "LocalAdoptionTests.test_required_projector_missing_empty_or_ambiguous_is_rejected",
         "LocalAdoptionTests.test_empty_model_is_rejected"
       ],
-      "effects": "Pure/isolated CPU assertions; disposable files only"
+      "effects": "Pure/isolated CPU assertions; disposable files only; Requires case-sensitive model filenames, including case-only collisions"
     },
     {
       "id": "llama-swap/test_retirement.py",
@@ -1014,7 +1014,7 @@
       "owner": "llama-swap",
       "category": "unit",
       "entrypoint": true,
-      "platform": "any",
+      "platform": "linux",
       "requires": [],
       "case_names": [
         "VariantTests.test_agent_inherits_the_exact_daily_projector_for_local_vision",
@@ -1024,7 +1024,7 @@
         "VariantTests.test_missing_canonical_source_fails_without_creating_an_alias_directory",
         "VariantTests.test_duplicate_ids_fail_without_changing_the_existing_record"
       ],
-      "effects": "Pure/isolated CPU assertions; disposable files only"
+      "effects": "Pure/isolated CPU assertions; disposable files only; Exercises Linux /models path and serving command contracts"
     },
     {
       "id": "llama-swap/tests/commands.py",
@@ -1205,6 +1205,51 @@
       "requires": [],
       "case_names": [],
       "effects": "Offline metadata/CLI/safety fixtures; no real services or downloads"
+    },
+    {
+      "id": "tests/contract/release_verification_test.py",
+      "original": "tests/contract/release_verification_test.py",
+      "path": "tests/contract/release_verification_test.py",
+      "owner": "core",
+      "category": "contract",
+      "entrypoint": true,
+      "platform": "any",
+      "requires": [],
+      "case_names": [
+        "ReleaseRunnerTests.test_strict_passes_complete_execution",
+        "ReleaseRunnerTests.test_strict_fails_partial_but_ordinary_run_remains_permissive",
+        "ReleaseRunnerTests.test_strict_distinguishes_platform_skip",
+        "ReleaseRunnerTests.test_strict_fails_missing_dependency",
+        "ReleaseRunnerTests.test_child_stub_is_not_successful_release_evidence",
+        "ReleaseRunnerTests.test_zero_selection_reports_nonzero",
+        "ReleaseRunnerTests.test_missing_and_nested_unregistered_tests_are_rejected",
+        "ReleaseRunnerTests.test_collection_cannot_pass_release_verification",
+        "ReleaseHookTests.test_optional_omissions_are_explicit_and_strict_omissions_fail",
+        "ReleaseHookTests.test_native_powershell_fallback_is_allowed",
+        "ReleaseHookTests.test_missing_schema_validator_cannot_report_release_pass"
+      ],
+      "effects": "CPU-only disposable/mocked deadline, routing and release-verification fixtures; no real services"
+    },
+    {
+      "id": "comfyui/tests/unit/test_model3d_deadline.py",
+      "original": "comfyui/tests/unit/test_model3d_deadline.py",
+      "path": "comfyui/tests/unit/test_model3d_deadline.py",
+      "owner": "comfyui",
+      "category": "unit",
+      "entrypoint": true,
+      "platform": "any",
+      "requires": [],
+      "case_names": [
+        "Model3DDeadlineTests.test_acceptance_uses_public_generation_cli_and_preserves_result",
+        "Model3DDeadlineTests.test_success_shares_remaining_budget_across_generation_and_checks",
+        "Model3DDeadlineTests.test_blender_timeout_recovers_chat_and_releases_lock",
+        "Model3DDeadlineTests.test_image_checker_timeout_records_failure_and_releases_lock",
+        "Model3DDeadlineTests.test_expired_generation_never_launches_validation",
+        "Model3DDeadlineTests.test_pause_timeout_attempts_recovery",
+        "ServiceBudgetTests.test_service_calls_have_remaining_timeout_and_failed_resume_retains_marker",
+        "ServiceBudgetTests.test_preparation_consumes_generation_budget"
+      ],
+      "effects": "CPU-only disposable/mocked deadline, routing and release-verification fixtures; no real services"
     }
   ]
 }

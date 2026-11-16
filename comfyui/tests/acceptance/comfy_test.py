@@ -17,6 +17,13 @@ import sys
 import runtime
 
 
+def generate_3d(image):
+    """Invoke the public CLI; called only by explicit full GPU acceptance."""
+    return subprocess.run([sys.executable, os.path.join(str(Path(__file__).resolve().parents[2]), "gen.py"), "3d",
+                            "--image", image, "--faces", "100000", "--seed", "5", "--name", "selftest-3d", "--timeout", "2400"],
+                           capture_output=True, text=True, timeout=2700)
+
+
 def main():
     """!
     @brief Runs both test jobs. @return 0 if both passed, else 1.
@@ -118,9 +125,7 @@ def main():
     results.append(ok and len(files) == 1)
     # ai gen 3d (when the 3D models are installed): the car picture above becomes a textured GLB, checked in Blender
     if files and runtime.model_path(runtime.profile(runtime.PROFILES.get("default_3d", "pixal3d"))):
-        r = subprocess.run([sys.executable, os.path.join(str(Path(__file__).resolve().parents[2]), "runtime.py"), "3d",
-                            "--image", files[0], "--faces", "100000", "--seed", "5", "--name", "selftest-3d"],
-                           capture_output=True, text=True, timeout=2700)
+        r = generate_3d(files[0])
         glb = next((l.strip() for l in r.stdout.splitlines() if l.strip().endswith(".glb")), None)
         summary = next((l.strip() for l in r.stdout.splitlines() if l.strip().startswith("model:")), "")
         print(f"  3D model from a picture (ai gen 3d): {'OK' if r.returncode == 0 and glb else 'FAILED'}  {glb or '-'}  {summary}"

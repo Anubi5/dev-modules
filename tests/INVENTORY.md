@@ -36,3 +36,12 @@ Python unittest identities: **244 -> 252**. Missing: **0**. Eight new ComfyUI re
 | rig | acceptance | 1 / 0 | 1 / 0 |
 
 Files include test-only helpers/data and explicit installed health/acceptance entries; Python cases count unittest methods, not subtests or shell assertions. `inventory.json` retains every original name, current entry point, prerequisites and effects. Acceptance rows are retained but were not run. Categories with no files are omitted, not created empty.
+
+## Targeted release-readiness regressions
+
+All identities in the previous migration inventory remain present and unchanged.
+The shared release-verification contract adds 11 CPU-only methods per repository.
+ComfyUI adds 8 mocked 3D routing/deadline/recovery methods. Total: **271** methods
+(previous migration: 252). Five previously cross-platform files now declare Linux
+because their real fixtures require fcntl, case-sensitive filenames, Linux model
+paths or executable shebangs; their assertions and identities are unchanged.

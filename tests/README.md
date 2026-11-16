@@ -59,3 +59,21 @@ Set `MOD` to the installed module before invoking them. Their effects are:
 STUB and SKIP output is evidence of omission, not real acceptance. Installation,
 network policy and GPU acceptance still require their own authorization. Keep
 historical failed runs and distinguish source fixtures from installed PC results.
+
+## Release verification
+
+Use `python3 -B tests/run.py --suite fast --strict --report fast.json` and
+`--suite integration --strict --report integration.json` on each required native
+platform. Strict execution fails any FAIL, SKIP, PARTIAL or collection-only result;
+zero selected tests also fails. Ordinary developer runs retain permissive skips.
+Reports distinguish platform/dependency/child skips and include discovered and
+executed unittest counts, passed cases, failures, errors and skipped identities.
+A platform skip requires counterpart evidence; it is never a passed test. Select
+applicable entries explicitly with `--match` where needed; do not reinterpret a
+nonzero full-platform strict report as a release pass.
+
+The separate `.githooks/check.py --release` checks all **indexed** source syntax
+and required metadata contracts, failing unavailable validators. Stage the intended
+release changes before running it; it does not run test suites or acceptance.
+Native Bash/PowerShell and schema dependencies must already exist. Nothing is
+installed. Ordinary staged hooks report INCOMPLETE if optional checks are omitted.

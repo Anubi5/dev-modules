@@ -114,7 +114,7 @@ def check_input(path):
     return real
 
 
-def upload(src):
+def upload(src, timeout=60):
     """!
     @brief Hands a reference image to ComfyUI as a temporary input (POST /upload/image, type temp; cleared on restart).
     @param src  Checked file path.  @return The image name for LoadImage ("gen/<id>.png [temp]").
@@ -127,7 +127,7 @@ def upload(src):
                  f'Content-Type: {IMAGE_TYPES[ext]}\r\n\r\n'.encode() + open(src, "rb").read() + b"\r\n")
     req = urllib.request.Request(URL + "/upload/image", b"".join(parts) + f"--{bnd}--\r\n".encode(),
                                  {"Content-Type": f"multipart/form-data; boundary={bnd}"})
-    r = json.loads(urllib.request.urlopen(req, timeout=60).read())
+    r = json.loads(urllib.request.urlopen(req, timeout=timeout).read())
     return f"{r.get('subfolder') + '/' if r.get('subfolder') else ''}{r['name']} [temp]"
 
 
@@ -569,7 +569,7 @@ def missing_files(wf):
     return bad
 
 
-def prepare(log, wait, wf=None):
+def prepare(log, wait, wf=None, deadline=None):
     """!
     @brief Hands the GPU to ComfyUI: starts it if needed, checks the workflow's model files, waits while ComfyUI runs
            someone else's job, unloads the chat models.
@@ -584,10 +584,10 @@ def prepare(log, wait, wf=None):
     except (OSError, ValueError) as error:
         return str(error)
     if not comfy_up():
-        subprocess.run(["systemctl", "--user", "start", "comfyui"], stderr=subprocess.DEVNULL)
+        subprocess.run(["systemctl", "--user", "start", "comfyui"], stderr=subprocess.DEVNULL, timeout=budget(deadline, 30))
         for _ in range(90):
             if comfy_up(): break
-            time.sleep(2)
+            time.sleep(budget(deadline, 2))
     if not comfy_up():
         return f"ComfyUI is not answering on {URL} (ai logs comfyui)"
     miss = missing_files(wf) if wf else []
@@ -598,7 +598,7 @@ def prepare(log, wait, wf=None):
     while comfy_busy():
         if time.time() - t0 > wait:
             return "ComfyUI is busy with another job (browser?) - try again later"
-        time.sleep(5)
+        time.sleep(budget(deadline, 5))
     if not unload_llm(log):
         return "the chat model could not be unloaded - not starting (GPU would run out of memory)"
     return ""
@@ -758,14 +758,25 @@ def input_hashes(wf, uploads=(), log=print, fresh=False):
     return out
 
 
-def chat_pause(log=print):
+def budget(deadline, maximum):
+    """Bound a stage by the remaining optional job deadline."""
+    if deadline is None:
+        return maximum
+    left = deadline - time.monotonic()
+    if left <= 0:
+        raise TimeoutError('3D job timeout: generation and validation deadline exceeded')
+    return min(maximum, left)
+
+
+def chat_pause(log=print, timeout=30):
     """! @brief Stops the chat-model server while the GPU is busy, so a chat request cannot load a model into a running
            job (llama-swap does not take the GPU lock). @return True when it was running and is now paused """
-    if subprocess.run(["systemctl", "--user", "is-active", "-q", "llama-swap"]).returncode != 0:
+    deadline = time.monotonic() + timeout
+    if subprocess.run(["systemctl", "--user", "is-active", "-q", "llama-swap"], timeout=budget(deadline, 30)).returncode != 0:
         return False
     JOB["chat_paused"] = True                    # set before stopping: a stop from here on still resumes it (entry)
-    subprocess.run(["systemctl", "--user", "stop", "llama-swap"], stderr=subprocess.DEVNULL)
-    if subprocess.run(["systemctl", "--user", "is-active", "-q", "llama-swap"]).returncode == 0:
+    subprocess.run(["systemctl", "--user", "stop", "llama-swap"], stderr=subprocess.DEVNULL, timeout=budget(deadline, 30))
+    if subprocess.run(["systemctl", "--user", "is-active", "-q", "llama-swap"], timeout=budget(deadline, 30)).returncode == 0:
         raise RuntimeError("the chat model server could not be stopped - not starting the GPU job")
     log("chat model server paused for the GPU job")
     return True
@@ -774,8 +785,8 @@ def chat_pause(log=print):
 def chat_resume(paused, log=print):
     """! @brief Starts the chat-model server again when chat_pause() stopped it. """
     if paused:
+        subprocess.run(["systemctl", "--user", "start", "llama-swap"], stderr=subprocess.DEVNULL, timeout=30, check=True)
         JOB.pop("chat_paused", None)
-        subprocess.run(["systemctl", "--user", "start", "llama-swap"], stderr=subprocess.DEVNULL)
         log("chat model server running again")
 
 
@@ -802,7 +813,7 @@ def gpu_lease(wait=600):
         yield lock
 
 
-def generate(wf, timeout, wait=600, log=print, uploads=None, lease=None, finish=True):
+def generate(wf, timeout, wait=600, log=print, uploads=None, lease=None, finish=True, deadline=None):
     """!
     @brief The whole hand-off around one job: GPU lock, preflight, chat server paused, ComfyUI run, GPU given back.
     @param wf       Workflow.  @param timeout  Job time limit (s).  @param wait  How long to wait for the lock / a busy ComfyUI (s).
@@ -816,34 +827,35 @@ def generate(wf, timeout, wait=600, log=print, uploads=None, lease=None, finish=
     if lease is None:
         try:
             with gpu_lease(wait):
-                return _run(wf, timeout, wait, log, uploads, finish)
+                return _run(wf, timeout, wait, log, uploads, finish, deadline)
         except GpuBusy as e:
             job_state("failed", error=str(e))
             return False, [], str(e)
-    return _run(wf, timeout, wait, log, uploads, finish)
+    return _run(wf, timeout, wait, log, uploads, finish, deadline)
 
 
-def _run(wf, timeout, wait, log, uploads, finish):
+def _run(wf, timeout, wait, log, uploads, finish, deadline=None):
     """! @brief generate() under the lock. """
     job_state("preparing")
-    err = prepare(log, wait, wf)
+    err = prepare(log, budget(deadline, wait), wf, deadline=deadline) if deadline is not None else prepare(log, wait, wf)
     if err:
         job_state("failed", error=err)
         return False, [], err
     try:
-        paused = chat_pause(log)
-    except RuntimeError as e:
+        paused = chat_pause(log, timeout=budget(deadline, 30)) if deadline is not None else chat_pause(log)
+    except (RuntimeError, subprocess.TimeoutExpired, TimeoutError) as e:
+        chat_resume(bool(JOB.get("chat_paused")), log)
         job_state("failed", error=str(e))
         return False, [], str(e)
     try:
         for node, src in uploads or []:
-            wf[node]["inputs"]["image"] = upload(src)
+            wf[node]["inputs"]["image"] = upload(src, timeout=budget(deadline, 60)) if deadline is not None else upload(src)
     except Exception as e:
         release(log); chat_resume(paused, log)
         job_state("failed", error=f"upload: {e}")
         return False, [], f"could not hand the reference image to ComfyUI: {e}"
     try:
-        ok, files, err = run_job(wf, timeout, log)
+        ok, files, err = run_job(wf, budget(deadline, timeout), log)
         state = ("validating" if ok and not finish else "succeeded" if ok
                  else "cancelled" if err.startswith("timeout") else "failed")
         job_state(state, error=err or None, outputs=files)
@@ -902,7 +914,7 @@ def dump_schema(path):
     @param path  Where to write the JSON.  @return 0 on success.
     """
     if not comfy_up():
-        subprocess.run(["systemctl", "--user", "start", "comfyui"], stderr=subprocess.DEVNULL)
+        subprocess.run(["systemctl", "--user", "start", "comfyui"], stderr=subprocess.DEVNULL, timeout=30)
         for _ in range(90):
             if comfy_up(): break
             time.sleep(2)

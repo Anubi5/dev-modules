@@ -19,6 +19,10 @@ def pose_wf(description, seed, width, height, prefix, src=None):
                 "35": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_pose", "images": ["31", 0]}}}
     p = profile(PROFILES["pose_model"])
     wf = zimage(POSE_PROMPT.format(d=description), seed, p["steps"], width, height, prefix, p)
+    # DWPose rescales to its detection resolution (e.g. 1024x1317). Save the
+    # skeleton on the same validated canvas as the selected source model.
     wf.update({"31": _dwpose(["9", 0]),
-               "35": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_pose", "images": ["31", 0]}}})
+               "34": {"class_type": "ImageScale", "inputs": {"image": ["31", 0],
+                      "upscale_method": "nearest-exact", "width": width, "height": height, "crop": "disabled"}},
+               "35": {"class_type": "SaveImage", "inputs": {"filename_prefix": prefix + "_pose", "images": ["34", 0]}}})
     return wf

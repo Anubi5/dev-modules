@@ -2,9 +2,9 @@
 from generation.models import package
 ARCHITECTURES = frozenset({"wan22"})
 
-def wan(prompt, negative, seed, steps, frames, prefix, model=None):
+def wan(prompt, negative, seed, steps, frames, prefix, model=None, image=None):
     """!
-    @brief Wan 2.2 5B (GGUF Q8) text-to-video workflow, 640x352 at 24 fps, saved as animated WebP.
+    @brief Wan 2.2 5B (GGUF Q8) text/image-to-video workflow, 640x352 at 24 fps, saved as animated WebP.
     @param prompt  What happens.  @param negative  What to avoid.  @param seed  Random seed.
     @param steps   Sampling steps.  @param frames  Length (4n+1, e.g. 33 = ~1.4 s, 121 = 5 s).
     @param prefix  Output prefix "<date>/<name>".
@@ -14,7 +14,7 @@ def wan(prompt, negative, seed, steps, frames, prefix, model=None):
     if selected.architecture not in ARCHITECTURES:
         raise ValueError("Wan video adapter needs architecture wan22, got " + selected.architecture)
     prof = selected.settings
-    return {
+    workflow = {
         "1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": prof["file"]}},
         "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": prof["text_encoder"],
               "type": "wan", "device": "default"}},
@@ -31,8 +31,12 @@ def wan(prompt, negative, seed, steps, frames, prefix, model=None):
         "10": {"class_type": "SaveAnimatedWEBP", "inputs": {"images": ["9", 0], "filename_prefix": prefix,
                "fps": prof["fps"], "lossless": False, "quality": 85, "method": "default"}},
     }
+    if image is not None:
+        workflow["11"] = {"class_type": "LoadImage", "inputs": {"image": image}}
+        workflow["7"]["inputs"]["start_image"] = ["11", 0]
+    return workflow
 
-def build(selected, prompt, negative, seed, steps, frames, prefix):
-    return wan(prompt, negative, seed, steps, frames, prefix, model=selected.name)
+def build(selected, prompt, negative, seed, steps, frames, prefix, image=None):
+    return wan(prompt, negative, seed, steps, frames, prefix, model=selected.name, image=image)
 
-CAPABILITIES = dict(timeout=3600)
+CAPABILITIES = dict(timeout=3600, image_conditioning=True)

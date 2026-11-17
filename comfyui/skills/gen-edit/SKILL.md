@@ -31,3 +31,5 @@ The user wants an existing picture changed, or a person or object from one pictu
 Timeout overrides use `--timeout N`, with N from 60 to 7200 seconds. Options belonging to another operation are rejected before execution.
 Fixed-CFG families (Z-Image, FLUX 3, Fibo 2 and Krea 2) reject `--cfg` and `--negative`; use only the controls declared by the selected family. LoRAs require declared loader compatibility and finite strengths from -2 to 2, including saved notes.
 Reference edits determine their dimensions from the reference workflow; `--size` is rejected rather than ignored.
+
+For character pose edits, an existing two-reference route is `ai gen edit "Put the character from image 1 in the pose of image 2" --model flux3 --image <character.png> --image <pose-photo.png>`. Inspect identity and gesture in the result; this is an available alternative, not an automatic model fallback or a universal quality ranking.

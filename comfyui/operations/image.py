@@ -68,11 +68,16 @@ def prepare(a, seed, prefix, edit=None):
         sys.exit("use --model or --checkpoint, not both")
     if edit:
         edit.before(a)
+    selection_reason = 'explicit model' if a.model or a.checkpoint else 'general default'
     if not a.model and not a.checkpoint:
-        a.model = next((PROFILES[key] for flag, key in PROFILES.get('feature_defaults', {}).items()
-                        if getattr(a, flag, False)), None)
+        choice = next(((flag, PROFILES[key]) for flag, key in PROFILES.get('feature_defaults', {}).items()
+                       if getattr(a, flag, False)), None)
+        if choice:
+            flag, a.model = choice
+            selection_reason = f"--{flag.replace('_', '-')} feature default (general default: {PROFILES['default']})"
     log0 = lambda t: print(f"  {t}", flush=True)
     prof = rt.find_checkpoint(a.checkpoint, log0) if a.checkpoint else rt.resolve_model(a.model or PROFILES["default"], log0)
+    log0(f"Selected model {prof['name']} (family {prof.get('family') or prof['arch']}): {selection_reason}")
     if not getattr(a, 'check', False):
         builders.registry.check_parts(prof, rt.MODELS)
     arch, style = prof["arch"], a.style or prof.get("style", "photo")
@@ -114,6 +119,7 @@ def prepare(a, seed, prefix, edit=None):
     apply_loras(wf, loras, arch)
     info = {"kind": a.kind, "prompt": a.prompt, "expanded_prompt": prompt if prompt != a.prompt else None,
             "negative": neg, "seed": seed, "model": prof["name"], "arch": arch,
+            "model_selection_reason": selection_reason,
             "model_file": prof["file"], "sampler": prof["sampler"], "scheduler": prof["scheduler"], "cfg": prof["cfg"],
             "steps": steps, "size": f"{w}x{h}", "style": style,
             "options": {k: getattr(a, k) for k in ("upscale", "hires", "fix_faces", "fix_hands")},

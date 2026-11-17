@@ -750,7 +750,9 @@
       "category": "unit",
       "entrypoint": true,
       "platform": "linux",
-      "requires": [],
+      "requires": [
+        "PIL"
+      ],
       "case_names": [
         "GenerationTests.test_existing_workflow_graphs_are_identical",
         "GenerationTests.test_capabilities_import_without_cli_gpu_or_service_runtime",
@@ -760,7 +762,11 @@
         "GenerationTests.test_packages_separate_capabilities_and_copy_nested_settings",
         "GenerationTests.test_incomplete_video_package_fails_before_workflow_construction",
         "GenerationTests.test_video_model_package_is_data_and_cannot_select_python_code",
-        "GenerationTests.test_video_cli_uses_the_selected_package_without_running_a_service"
+        "GenerationTests.test_video_cli_uses_the_selected_package_without_running_a_service",
+        "GenerationTests.test_video_image_conditioning_metadata_and_input_validation",
+        "GenerationTests.test_feature_default_is_explained_and_explicit_model_is_preserved",
+        "GenerationTests.test_generated_pose_skeleton_uses_validated_model_canvas",
+        "GenerationTests.test_mp4_export_decodes_all_frames_and_preserves_existing_files"
       ],
       "effects": "Pure/isolated CPU assertions; disposable files only"
     },

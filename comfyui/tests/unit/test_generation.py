@@ -88,6 +88,82 @@ class GenerationTests(unittest.TestCase):
             self.assertEqual(execute.call_args.args[0]["1"]["inputs"]["unet_name"], selected["file"])
             self.assertEqual(record.call_args.args[1]["model"], "fixture")
 
+    def test_video_image_conditioning_metadata_and_input_validation(self):
+        from unittest.mock import patch
+        from operations import video
+        args=gen.generation_parser().parse_args(['video','a wave','--image','frame.png','--frames','33','--check'])
+        with patch.object(runtime,'check_input',return_value='/fixture/frame.png') as check:
+            graph,uploads,info,limit,profile=video.prepare(args,7,'test')
+        check.assert_called_once_with('frame.png')
+        self.assertEqual(uploads,[('11','/fixture/frame.png')])
+        self.assertEqual(graph['7']['inputs']['start_image'],['11',0])
+        self.assertEqual(graph['11']['class_type'],'LoadImage')
+        self.assertEqual(info['fps'],graph['10']['inputs']['fps'])
+        self.assertEqual(info['duration_seconds'],33/info['fps'])
+        args.image=[]
+        graph,*_=video.prepare(args,7,'test')
+        self.assertNotIn('11',graph)
+        self.assertNotIn('start_image',graph['7']['inputs'])
+        args.image=['missing.png']
+        with patch.object(runtime,'check_input',side_effect=ValueError('missing image')), self.assertRaisesRegex(ValueError,'missing image'):
+            video.prepare(args,7,'test')
+        args.image=['one.png','two.png']
+        with self.assertRaisesRegex(SystemExit,'at most one'): video.validate(args)
+
+    def test_feature_default_is_explained_and_explicit_model_is_preserved(self):
+        import contextlib,io
+        from unittest.mock import patch
+        from operations import image as operation
+        for requested in (None,'realvis'):
+            argv=['image','a character','--pose','pose.png','--size','1024x1024','--check']
+            if requested: argv+=['--model',requested]
+            args=gen.generation_parser().parse_args(argv)
+            args.face_weight=.65  # Applied by gen.main before operation dispatch.
+            with patch.object(runtime,'resolve_model',side_effect=lambda name,log:models.profile(name)), \
+                 patch.object(runtime,'check_input',return_value='/fixture/pose.png'), \
+                 patch.object(runtime,'is_skeleton',return_value=True), \
+                 patch.object(runtime,'resolve_loras',side_effect=lambda a,p,n,log:([],a.prompt,n,p,[])), \
+                 contextlib.redirect_stdout(io.StringIO()) as output:
+                _,_,info,_,_=operation.prepare(args,7,'test')
+            expected=requested or models.PROFILES[models.PROFILES['feature_defaults']['pose']]
+            self.assertEqual(info['model'],expected)
+            self.assertIn('Selected model '+expected,output.getvalue())
+            self.assertIn('explicit model' if requested else '--pose feature default',info['model_selection_reason'])
+
+    def test_generated_pose_skeleton_uses_validated_model_canvas(self):
+        from features.pose.generate import pose_wf
+        graph=pose_wf('walking',7,896,1152,'test')
+        self.assertEqual(graph['35']['inputs']['images'],['34',0])
+        self.assertEqual(graph['34']['inputs'],dict(image=['31',0],upscale_method='nearest-exact',width=896,height=1152,crop='disabled'))
+        reference=pose_wf('',7,896,1152,'test',src='photo.png')
+        self.assertNotIn('34',reference)  # Reference extraction keeps its own canvas.
+
+    def test_mp4_export_decodes_all_frames_and_preserves_existing_files(self):
+        import tempfile
+        from unittest.mock import patch
+        from PIL import Image
+        from operations import video
+        with tempfile.TemporaryDirectory() as directory:
+            source=Path(directory)/'clip.webp'
+            frames=[Image.new('RGB',(8,8),colour) for colour in ('red','green','blue')]
+            frames[0].save(source,save_all=True,append_images=frames[1:],duration=42,lossless=True)
+            before=source.read_bytes()
+            captured={}
+            def encode(command,**kwargs):
+                captured['command']=command;captured['raw']=kwargs['stdin'].read()
+                Path(command[-1]).write_bytes(b'encoded fixture')
+            with patch.object(video.subprocess,'run',side_effect=encode):
+                files=video.export_mp4([str(source)],24)
+            self.assertEqual(len(captured['raw']),3*8*8*3)
+            self.assertIn('-n',captured['command'])
+            self.assertIn('rawvideo',captured['command'])
+            self.assertEqual(files,[str(source),str(source.with_suffix('.mp4'))])
+            self.assertEqual(source.read_bytes(),before)
+            with self.assertRaisesRegex(ValueError,'overwrite'): video.export_mp4([str(source)],24)
+            args=gen.generation_parser().parse_args(['video','a scene','--mp4'])
+            with patch.object(video.shutil,'which',return_value=None), self.assertRaisesRegex(SystemExit,'existing ffmpeg'):
+                video.validate(args)
+
 
 if __name__ == "__main__":
     unittest.main()

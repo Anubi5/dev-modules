@@ -26,6 +26,10 @@ Source integrity checks reject changed/missing/extra files, symlinks, ignored by
 
 FBX import compatibility must be tested in the consumer; an FBX header alone is insufficient. Procedural poses and independent re-imports check selected numerical/render properties. Unreal animation validation is a separate stage marked `not_run`; neither stage establishes visual quality automatically.
 
+## Local walk preview
+
+`ai animate <model_named.glb> --motion walk --duration 2` creates a bounded 24 fps Cycles preview with the existing Blender and ffmpeg/libx264. Duration is 1-10 seconds; start with two seconds before a longer render. The adjacent `verify_glb.json` must contain passing finish/render checks and the exact input hash (rerun the current `verify.py` for older reports). `--validation` selects another report; `--output` requires a new directory. The command saves `scene.blend`, `motion.glb`, `preview.mp4`, frames, logs and a provenance `record.json`; inspect the clip before claiming motion quality. Walk is deterministic and experimental, not mocap or a foot-contact guarantee. Unreal handoff remains available.
+
 ## Interruption and recovery
 
 Completed prepared mesh, skeleton, skin and merged GLB are copied to the job output's `not_validated/` directory. `record.json` records their hashes alongside input, module and model identity; `--json` exposes them separately as `intermediates`. They are not validated deliverables, including after a failed finish. Automatic stage resume is not implemented.

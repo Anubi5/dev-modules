@@ -1285,6 +1285,22 @@
         "AnswerTests.test_stopped_service_has_explicit_existing_start_command"
       ],
       "effects": "Mocked local HTTP; disposable image fixture; no inference or services"
+    },
+    {
+      "id": "rig/tests/unit/test_animation.py",
+      "original": "rig/tests/unit/test_animation.py",
+      "path": "rig/tests/unit/test_animation.py",
+      "owner": "rig",
+      "category": "unit",
+      "entrypoint": true,
+      "platform": "any",
+      "requires": [],
+      "case_names": [
+        "AnimationTests.test_only_hash_bound_completed_validation_is_accepted",
+        "AnimationTests.test_limits_and_invalid_input_fail_before_service_or_output",
+        "AnimationTests.test_existing_output_directory_is_never_overwritten"
+      ],
+      "effects": "Disposable validation fixtures; mocked process checks; no GPU or services"
     }
   ]
 }

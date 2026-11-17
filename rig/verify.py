@@ -1,5 +1,6 @@
 """Blender-side independent re-import validation of an exported FBX or GLB."""
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -54,7 +55,7 @@ def main():
             root_weighted |= any(names[g.group] == "root" for g in weights)
     unit = bpy.context.scene.unit_settings.scale_length
     bones = arm.data.bones
-    summary = dict(bones=[b.name for b in bones],
+    summary = dict(input_sha256=hashlib.sha256(args.input.read_bytes()).hexdigest(), bones=[b.name for b in bones],
                    root_parent=bones["root"].parent.name if bones.get("root") and bones["root"].parent else None,
                    pelvis_parent=bones["pelvis"].parent.name if bones.get("pelvis") and bones["pelvis"].parent else None,
                    root_deforms=bool(root_weighted), max_influences=influences,
@@ -75,6 +76,8 @@ def main():
         summary["errors"].append("Orientation re-import check failed: " + str(error))
     if args.renders:
         report = json.loads(args.renders.read_text())
+        summary["finish_passed"] = report.get("ok") is True
+        if not summary["finish_passed"]: summary["errors"].append("Rig finish checks did not pass")
         summary["render_checks"] = []
         for file in report["renders"]:
             image = bpy.data.images.load(file, check_existing=False)

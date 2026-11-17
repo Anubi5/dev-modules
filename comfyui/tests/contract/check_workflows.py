@@ -244,7 +244,7 @@ def failure_tests():
         runtime.OUTPUT, runtime.WORK, runtime.assets.CACHE, runtime.JOBS = d, d, os.path.join(d, "c.json"), os.path.join(d, "jobs")
         runtime.gpu_lease = lambda wait=600: contextlib.nullcontext(None)
         resumed = []
-        runtime.chat_pause, runtime.chat_resume = (lambda log=None: "paused"), (lambda p, log=None: resumed.append(p))
+        runtime.chat_pause, runtime.chat_resume = (lambda log=None, timeout=30: "paused"), (lambda p, log=None: resumed.append(p))
         good, broken = glb(os.path.join(d, "m.glb")), glb(os.path.join(d, "t.glb"), total=10 ** 6)
 
         def gen_with(result=None, exc=None):

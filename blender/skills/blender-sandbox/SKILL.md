@@ -5,14 +5,20 @@ description: Read this BEFORE any Blender work in this sandbox - what is already
 
 # Blender in this sandbox
 
-Work in Blender through the **official Blender Lab MCP tools** (MCP server `blender`, declared by this module; the tool descriptions explain each tool).
+Use the **official Blender Lab MCP tools** when the owner has approved them and the current client actually exposes them. The module declaration and an installed skill alone do not connect Claude Code or Codex. Check the available tools before attempting `get_objects_summary`.
 Everything they need is already installed and pinned here - do not download or install Blender or the add-on.
 
 ## What is set up
 - `blender` 5.2 on PATH, the Blender Lab MCP add-on v1.0.3, and the MCP server (prepared, works offline).
 - A private virtual display (`DISPLAY=:99`, service `blender-display`): open Blender normally with
   `blender --online-mode` (detached). It gets a real window inside the sandbox - **screenshots and viewport renders
-  work** - and nothing appears on the owner's Windows desktop. Use the window mode, not `--background`.
+  work** - and nothing appears on the owner's Windows desktop. Use window mode for interactive viewport tools.
+
+## When MCP tools are missing
+
+Use the explicit CLI fallback: `blender -b --factory-startup --disable-autoexec --python-exit-code 1 --python <project-script.py>`. Scripts can inspect objects, build scenes, save `.blend` and exports, and render images. Headless mode does not provide interactive window screenshots or MCP viewport tools. For inspection/import/export scripts that do not render, the module wrapper supports `AI_BLENDER_CPU_ONLY=1`; never use that bypass for GPU rendering.
+
+Save artifacts and inspect saved renders; command completion alone is not visual verification. If `img-ask` fails or returns unusable output, say that semantic verification is unavailable and retain the image for human review. Do not claim a quality pass from pixel statistics alone. Do not install or activate an MCP server to bypass missing owner approval.
 
 ## How to work
 1. Read the scene first (`get_objects_summary`), then make changes in small steps.

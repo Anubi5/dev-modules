@@ -8,8 +8,8 @@
   "mcp": [],
   "effects": {
     "ai-rig": ["writes:work", "gpu"],
-    "ai-rig-models": ["read_only"]
+    "ai-rig-models": ["read_only"], "ai-animate": ["writes:work", "gpu"]
   },
-  "skills": [],
+  "skills": ["skills/rig-character", "skills/animate-character"],
   "ui": {"title": "Rig", "url": null, "service": null}
 }

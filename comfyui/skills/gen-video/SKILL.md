@@ -14,10 +14,11 @@ The user asks for a short animated clip (a few seconds).
    `installed` models are not proven on this PC yet - say so if you use one.
 2. Choose the length: `--frames 33` (~1.4 s, ~2-6 min on the GPU) up to `--frames 121` (~5 s); lengths are 4n+1.
 3. Optional check without the GPU: `ai gen video "<prompt>" --name <name> --check`.
-4. Run ONE command and wait for it: `ai gen video "<prompt>" --name <name> [--frames 33] [--seed N]`.
+4. Run ONE command and wait for it: `ai gen video "<prompt>" --name <name> [--frames 33] [--seed N] [--image <first-frame.png>] [--mp4]`.
+   Wan 2.2 TI2V accepts one image inside the work directory as its first-frame condition. It is not an identity or motion-quality guarantee.
    Image options (`--pose`, `--face`, `--fix-*`, `--hires`, `--lora`) are refused for video.
 5. The file after `OUTPUT` is an animated WebP in `~/work/outputs/comfy/<date>/`; report it with the seed. Before you
-   report success run `img-check <file>` and quote its line.
+   report success inspect representative decoded frames; `img-check <file>` alone checks only the first frame. The job record includes FPS, frame count and duration. Optional `--mp4` uses the existing Pillow decoder and ffmpeg/libx264 encoder, retains the WebP, and refuses overwrites. Verify the MP4 and inspect motion before reporting success.
 
 ## Rules
 - One `ai gen` at a time; never call the ComfyUI API directly. `GPU busy`: wait, retry once. `FAILED`: report it.

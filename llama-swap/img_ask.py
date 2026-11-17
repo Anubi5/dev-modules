@@ -9,7 +9,10 @@
 import base64
 import json
 import os
+import errno
+import re
 import sys
+import urllib.error
 import urllib.request
 
 
@@ -41,20 +44,62 @@ def check_image(path):
     return real, None
 
 
+class InvalidAnswer(ValueError):
+    """The backend replied, but its text cannot be used as verification evidence."""
+
+
+def answer_text(response, question):
+    try:
+        choice = response["choices"][0]
+        content = choice["message"]["content"]
+        reason = choice["finish_reason"]
+    except (KeyError, IndexError, TypeError):
+        raise InvalidAnswer("malformed inference response") from None
+    if reason != "stop":
+        raise InvalidAnswer("incomplete inference response (" + str(reason) + ")")
+    if not isinstance(content, str) or not content.strip():
+        raise InvalidAnswer("empty answer")
+    text = content.strip()
+    # WeVisOne may return one grounded caption. Strip only its complete known
+    # envelope; never turn arbitrary markup or a partial generation into a pass.
+    grounded = re.fullmatch(r"<ref>([^<>]+)</ref><box>(?:<\d{1,4}>){4}</box>", text)
+    if grounded:
+        text = grounded[1].strip()
+    if not text or len(text) > 600 or any(c in text for c in "<>{}"):
+        raise InvalidAnswer("empty, oversized or malformed answer")
+    words = re.findall(r"\w+", text.lower())
+    asked = re.findall(r"\w+", question.lower())
+    if not words or len(words) > 100 or words in (asked, asked + ['answer', 'briefly']):
+        raise InvalidAnswer("empty, oversized or echoed question")
+    for width in range(1, min(8, len(words)//3) + 1):
+        for start in range(len(words) - width*3 + 1):
+            if words[start:start+width] == words[start+width:start+2*width] == words[start+2*width:start+3*width]:
+                raise InvalidAnswer("repeated tokens in answer")
+    return text
+
+
 def ask(image, question, model="vision-check", timeout=300):
     """!
     @brief Sends one image and question to the model server.
     @return The answer text.
     """
     mime = IMAGE_TYPES[os.path.splitext(image)[1].lower()]
-    data = base64.b64encode(open(image, "rb").read()).decode()
-    body = json.dumps({"model": model, "max_tokens": 200, "temperature": 0,
+    with open(image, "rb") as stream:
+        data = base64.b64encode(stream.read()).decode()
+    body = json.dumps({"model": model, "max_tokens": 128, "temperature": 0,
                        "messages": [{"role": "user", "content": [
                            {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{data}"}},
                            {"type": "text", "text": question + " Answer briefly."}]}]}).encode()
     req = urllib.request.Request(f"http://127.0.0.1:{port()}/v1/chat/completions", body, {"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
-        return (json.load(r)["choices"][0]["message"].get("content") or "").strip()
+        payload = r.read(65537)
+        if len(payload) > 65536:
+            raise InvalidAnswer("oversized inference response")
+        try:
+            response = json.loads(payload)
+        except (ValueError, UnicodeError):
+            raise InvalidAnswer("malformed inference response") from None
+        return answer_text(response, question)
 
 
 def main(argv):
@@ -74,8 +119,17 @@ def main(argv):
         print(f"img-ask: {why}"); return 1
     try:
         answer = ask(image, question)
-    except Exception as e:
-        print(f"img-ask: could not ask the vision-check model ({e}) - is llama-swap running? (ai start llama-swap)"); return 1
+    except InvalidAnswer as error:
+        print(f"img-ask: vision-check returned unusable output ({error}); NOT verified"); return 1
+    except urllib.error.URLError as error:
+        reason = error.reason
+        if isinstance(reason, ConnectionRefusedError) or getattr(reason, "errno", None) == errno.ECONNREFUSED:
+            print("img-ask: llama-swap is not listening; NOT verified. Start the existing service with: ai start llama-swap")
+        else:
+            print(f"img-ask: vision-check request failed ({error}); NOT verified")
+        return 1
+    except (OSError, ValueError) as error:
+        print(f"img-ask: could not ask vision-check ({error}); NOT verified"); return 1
     print(f"img-ask: {os.path.basename(image)}: {question} -> {answer}")
     if expect is not None and expect not in answer.lower():
         print(f"img-ask: expected '{expect}' in the answer - NOT confirmed"); return 3

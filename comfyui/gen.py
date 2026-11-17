@@ -60,10 +60,11 @@ def generation_parser():
     ap.add_argument("--check", action="store_true",
                     help="validate only (model, family, features, inputs, files, needed modules); no GPU, no service, no outputs or records")
     ap.add_argument("prompt", nargs="?", default="", help="what to make; for edit: what to change; for pose: the pose")
+    ap.add_argument("--mp4", action="store_true", help="video: also export H.264 MP4 with the installed ffmpeg")
     ap.add_argument("--from", dest="src", metavar="PHOTO", help="pose: make the skeleton from this photo (in ~/work)")
     ap.add_argument("--pose-skeleton", action="store_true", help="image: the --pose picture is already a skeleton")
     ap.add_argument("--image", metavar="IMAGE", action="append", default=[],
-                    help="edit: the image to change (in ~/work); repeat for extra references (up to 4)")
+                    help="edit: reference image (repeat up to 4); video: one first-frame image; 3d: source image (in ~/work)")
     ap.add_argument("--improve-prompt", action="store_true",
                     help="image/edit: first expand the request into a full caption with the local chat model (families that declare it; needs llama-swap)")
     ap.add_argument("--no-expand", action="store_true", help=argparse.SUPPRESS)   # the default since 3.6; older commands keep working
@@ -264,6 +265,11 @@ def main(a=None):
         # was already saved - so earlier files do not mean the job got past loading): retry the whole job once
         log(f"model loading failed ({err[:80]}) - retrying once")
         ok, files, err = rt.generate(wf, limit, log=log, uploads=uploads)
+    if ok and a.kind == "video" and a.mp4:
+        try:
+            files = video.export_mp4(files, info["fps"])
+        except (OSError, ValueError, RuntimeError) as error:
+            ok, err = False, "MP4 export failed: " + str(error)
     if err:
         print(f"  error: {err}")
     rec = rt.write_record(files, info, wf, "succeeded" if ok else "failed", err, prefix)

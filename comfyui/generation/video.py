@@ -11,7 +11,7 @@ def architectures():
 ARCHITECTURES = architectures()
 
 
-def build(prompt, negative, seed, steps, frames, prefix, model=None):
+def build(prompt, negative, seed, steps, frames, prefix, model=None, image=None):
     selected = package(model, kind='video')
     implementation = registry.implementation(registry.family(selected.settings)['builder'])
-    return implementation.build(selected, prompt, negative, seed, steps, frames, prefix)
+    return implementation.build(selected, prompt, negative, seed, steps, frames, prefix, **({"image": image} if image is not None else {}))

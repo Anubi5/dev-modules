@@ -1,6 +1,6 @@
-"""Orientation checks for the limited UniRig heel-ended reference skeleton.
+"""Orientation checks for the observed UniRig toe-ended humanoid skeleton.
 
-This backend's terminal foot segment points toward the heel, not the toes.
+The observed ankle-to-terminal segments point toward the toes.
 The declared input facing must agree with both segments; ambiguous rigs fail.
 """
 import math
@@ -22,32 +22,32 @@ def unit_xy(vector: Vector3) -> tuple[float, float, float]:
     return (vector[0] / length, vector[1] / length, 0.)
 
 
-def verify_facing(heel_segments: Sequence[Vector3], hips: Sequence[Vector3],
+def verify_facing(foot_segments: Sequence[Vector3], hips: Sequence[Vector3],
                   determinants: Sequence[float], facing: str = "-y",
                   min_alignment: float = .9) -> dict:
     """Verify declared facing and return the yaw that normalizes it to -Y.
 
     Coordinates are Blender world space, Z up. The .9 alignment is the existing
-    humanoid contract threshold. No claim is made for toe-ended skeletons.
+    humanoid contract threshold. Heel-ended or mixed conventions are unsupported.
     """
     if facing not in FACING or not .9 <= min_alignment <= 1:
         raise ValueError("Unsupported facing/alignment; use --facing=-y, +x, +y or -x")
     if not determinants or any(not math.isfinite(d) or d <= 0 for d in determinants):
         raise ValueError("Mirrored or singular transforms are unsupported; fix the source asset")
-    if len(heel_segments) != 2 or len(hips) != 2:
-        raise ValueError("Orientation needs exactly two heel-ended leg chains")
+    if len(foot_segments) != 2 or len(hips) != 2:
+        raise ValueError("Orientation needs exactly two toe-ended leg chains")
     forward = FACING[facing]
-    measured = [tuple(-v for v in unit_xy(segment)) for segment in heel_segments]
+    measured = [unit_xy(segment) for segment in foot_segments]
     alignments = [sum(a*b for a, b in zip(axis, forward)) for axis in measured]
     if min(alignments) < min_alignment:
-        raise ValueError("Declared facing disagrees with the UniRig heel reference; "
+        raise ValueError("Declared facing disagrees with the UniRig toe-ended reference; "
                          "verify the asset and set --facing explicitly, or reject this skeleton")
     lateral = unit_xy(tuple(b-a for a, b in zip(hips[0], hips[1])))
     right = (forward[1], -forward[0], 0.)
     alignment = abs(sum(a*b for a, b in zip(lateral, right)))
     if alignment < min_alignment:
         raise ValueError("Ambiguous left/right: hip separation disagrees with declared facing")
-    return dict(reference="unirig-heel-v1", input_facing=facing,
+    return dict(reference="unirig-toe-v1", input_facing=facing,
                 measured_forward_axes=measured, facing_alignments=alignments,
                 lateral_alignment=alignment, minimum_alignment=min_alignment,
                 yaw_radians=-math.pi/2-math.atan2(forward[1], forward[0]),

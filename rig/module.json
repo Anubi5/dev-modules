@@ -2,34 +2,14 @@
   "schema": 2,
   "name": "rig",
   "version": "1",
-  "capabilities": [
-    {
-      "id": "rig.humanoid",
-      "interface": 1
-    }
-  ],
-  "requires": [
-    "blender.scene"
-  ],
+  "capabilities": [{"id": "rig.humanoid", "interface": 1}],
+  "requires": ["blender.scene"],
   "optional": [],
   "mcp": [],
   "effects": {
-    "ai-rig": [
-      "writes:work",
-      "gpu"
-    ],
-    "ai-rig-models": [
-      "read_only"
-    ],
-    "ai-animate": [
-      "writes:work",
-      "gpu"
-    ]
+    "ai-rig": ["writes:work", "gpu"],
+    "ai-rig-models": ["read_only"], "ai-animate": ["writes:work", "gpu"]
   },
-  "skills": [],
-  "ui": {
-    "title": "Rig",
-    "url": null,
-    "service": null
-  }
+  "skills": ["skills/rig-character", "skills/animate-character"],
+  "ui": {"title": "Rig", "url": null, "service": null}
 }

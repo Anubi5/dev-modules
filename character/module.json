@@ -12,6 +12,6 @@
     "ai-character plan": ["read_only"],
     "ai-character run": ["writes:work", "gpu"]
   },
-  "skills": [],
+  "skills": ["skills/character-pipeline"],
   "ui": {"title": "Character pipeline", "url": null, "service": null}
 }

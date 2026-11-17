@@ -1,3 +1,5 @@
+import json
+from pathlib import Path
 import math
 import unittest
 
@@ -10,15 +12,15 @@ def rotated(vector, angle):
 
 
 class OrientationTests(unittest.TestCase):
-    heels = ((.01, .2, -.01), (-.01, .2, -.02))
+    feet = ((.01, -.2, -.01), (-.01, -.2, -.02))
     hips = ((-.12, 0, 1), (.16, 0, 1.02))  # Asymmetric and intentionally unordered by name.
 
     def test_rotated_asymmetric_reference_normalizes_without_swapping_sides(self):
         for degrees, facing in ((0, "-y"), (90, "+x"), (180, "+y"), (270, "-x")):
             angle = math.radians(degrees)
-            heels = [rotated(v, angle) for v in self.heels]
+            feet = [rotated(v, angle) for v in self.feet]
             hips = [rotated(v, angle) for v in self.hips]
-            result = verify_facing(heels, hips, [1, 1], facing)
+            result = verify_facing(feet, hips, [1, 1], facing)
             normalized = [rotated(v, result["yaw_radians"]) for v in hips]
             self.assertLess(normalized[0][0], 0)  # Character right when facing -Y.
             self.assertGreater(normalized[1][0], 0)
@@ -29,16 +31,29 @@ class OrientationTests(unittest.TestCase):
         for degrees in (90, 180, 270):
             angle = math.radians(degrees)
             with self.assertRaisesRegex(ValueError, "Declared facing"):
-                verify_facing([rotated(v, angle) for v in self.heels],
+                verify_facing([rotated(v, angle) for v in self.feet],
                               [rotated(v, angle) for v in self.hips], [1])
 
     def test_mirror_and_ambiguous_evidence_are_rejected(self):
         for determinants in ([-1], [0], [float("nan")]):
-            with self.assertRaises(ValueError): verify_facing(self.heels, self.hips, determinants)
-        for heels in ([], [(0, 0, 1)]*2, [self.heels[0], (0, -.2, 0)], [(float("nan"), 1, 0)]*2):
-            with self.assertRaises(ValueError): verify_facing(heels, self.hips, [1])
+            with self.assertRaises(ValueError): verify_facing(self.feet, self.hips, determinants)
+        for feet in ([], [(0, 0, 1)]*2, [self.feet[0], (0, .2, 0)], [(float("nan"), 1, 0)]*2):
+            with self.assertRaises(ValueError): verify_facing(feet, self.hips, [1])
         with self.assertRaisesRegex(ValueError, "left/right"):
-            verify_facing(self.heels, [(0, 0, 1), (0, 1, 1)], [1])
+            verify_facing(self.feet, [(0, 0, 1), (0, 1, 1)], [1])
+
+    def test_retained_unirig_coordinates_and_wrong_facing(self):
+        fixtures = json.loads((Path(__file__).parent / "fixtures/unirig_feet.json").read_text())
+        for fixture in fixtures:
+            with self.subTest(fixture=fixture["file"]):
+                chains = fixture["chains"]
+                segments = [tuple(b-a for a, b in zip(c[2]["head"], c[3]["head"])) for c in chains]
+                hips = [c[0]["head"] for c in chains]
+                result = verify_facing(segments, hips, fixture["determinants"])
+                self.assertEqual(result["reference"], "unirig-toe-v1")
+                self.assertGreater(min(result["facing_alignments"]), .96)
+                with self.assertRaisesRegex(ValueError, "Declared facing"):
+                    verify_facing(segments, hips, fixture["determinants"], "+y")
 
     def test_reimport_rejects_structurally_valid_swapped_names(self):
         points = dict(pelvis=(0, 0, 1), hand_l=(1, 0, 1), hand_r=(-1, 0, 1),

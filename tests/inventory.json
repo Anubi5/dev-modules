@@ -1138,7 +1138,8 @@
         "OrientationTests.test_rotated_asymmetric_reference_normalizes_without_swapping_sides",
         "OrientationTests.test_fixed_default_cannot_silently_accept_wrong_rotation",
         "OrientationTests.test_mirror_and_ambiguous_evidence_are_rejected",
-        "OrientationTests.test_reimport_rejects_structurally_valid_swapped_names"
+        "OrientationTests.test_reimport_rejects_structurally_valid_swapped_names",
+        "OrientationTests.test_retained_unirig_coordinates_and_wrong_facing"
       ],
       "effects": "Pure/isolated CPU assertions; disposable files only"
     },
@@ -1250,6 +1251,21 @@
         "ServiceBudgetTests.test_preparation_consumes_generation_budget"
       ],
       "effects": "CPU-only disposable/mocked deadline, routing and release-verification fixtures; no real services"
+    },
+    {
+      "id": "rig/tests/unit/test_recovery.py",
+      "original": "rig/tests/unit/test_recovery.py",
+      "path": "rig/tests/unit/test_recovery.py",
+      "owner": "rig",
+      "category": "unit",
+      "entrypoint": true,
+      "platform": "any",
+      "requires": [],
+      "case_names": [
+        "RecoveryTests.test_failed_orientation_retains_skeleton_and_skips_skin",
+        "RecoveryTests.test_merged_rig_is_retained_without_becoming_validated_output"
+      ],
+      "effects": "Mocked subprocesses; disposable CPU-only files; no inference or services"
     }
   ]
 }

@@ -30,6 +30,16 @@ class CheckFailure(RuntimeError):
     pass
 
 
+def preserve_intermediate(record, output, source):
+    """Keep completed expensive work discoverable, without claiming validation."""
+    directory = output / "not_validated"
+    directory.mkdir(exist_ok=True)
+    target = directory / source.name
+    shutil.copy2(source, target)
+    record.setdefault("intermediates", {})[source.name] = dict(
+        path=str(target), status="not_validated", sha256=sha256(target), bytes=target.stat().st_size)
+
+
 def parser():
     p = argparse.ArgumentParser(description="Rig a fictional adult humanoid locally; produce checked FBX, GLB and a record")
     p.add_argument("input", type=Path)
@@ -40,7 +50,7 @@ def parser():
     p.add_argument("--seed", type=int, default=12345)
     p.add_argument("--smooth-iterations", type=int)
     p.add_argument("--facing", choices=("-y", "+x", "+y", "-x"), default="-y",
-                   help="Declared input facing in Blender coordinates; verified against the limited UniRig heel reference")
+                   help="Declared input facing in Blender coordinates; verified against the observed UniRig toe-ended reference")
     return p
 
 
@@ -116,7 +126,7 @@ def execute(args):
     record_file = output / "record.json"
     record = dict(schema_version=1, job_id=job_id, pid=os.getpid(), status="preparing",
                   contract=contract["id"], contract_sha256=sha256(MOD/"contract.json"),
-                  source_revision=source_revision, input_sha256=sha256(input_path),
+                  source_revision=source_revision, input_path=str(input_path), input_sha256=sha256(input_path),
                   seed=args.seed, settings=dict(triangles=triangles, height_m=args.height,
                   smooth_iterations=smooth, profile=profile["id"], input_facing=args.facing), stages=[], outputs={},
                   unreal_animation_validation="not_run", peak_vram_mib=0)
@@ -171,8 +181,10 @@ def execute(args):
         event.update(exit_code=code, seconds=round(time.monotonic()-started, 2))
         if code or (expected is not None and (not Path(expected).is_file() or Path(expected).stat().st_size == 0)):
             event["status"] = "failed"; save()
-            failure = CheckFailure if label in ("finish", "verify_fbx", "verify_glb") else RuntimeError
+            failure = CheckFailure if label in ("orientation", "finish", "verify_fbx", "verify_glb") else RuntimeError
             raise failure(label + " failed; see " + str(logs/(label+".log")))
+        if label in ("prepare", "skeleton", "skin", "merge"):
+            preserve_intermediate(record, output, Path(expected))
         event["status"] = "succeeded"; save()
 
     save()
@@ -241,6 +253,12 @@ def execute(args):
             skeleton = temporary/"skeleton.fbx"
             step("skeleton", [py,source/"run.py","--task=configs/task/"+profile["tasks"]["skeleton"],
                  "--seed="+str(args.seed),"--input="+str(prepared),"--output="+str(skeleton),"--npz_dir="+str(npz)], skeleton)
+            # Reliable world-space foot evidence exists now; reject before skinning.
+            env["AI_BLENDER_CPU_ONLY"] = "1"
+            try:
+                step("orientation", common+["--python", MOD/"check_orientation.py", "--", skeleton, args.facing])
+            finally:
+                env.pop("AI_BLENDER_CPU_ONLY", None)
             extract(skeleton, "extract_skeleton")
             skin = temporary/"skin.fbx"
             step("skin", [py,source/"run.py","--task=configs/task/"+profile["tasks"]["skin"],"--seed="+str(args.seed),
@@ -283,7 +301,8 @@ def execute(args):
         record["peak_vram_mib"] = max(record["peak_vram_mib"], monitor.peak)
         save()
     RESULT.update(status=record["status"], record=str(record_file),
-                  outputs=[str(output/name) for name in record["outputs"]], error=record.get("error"))
+                  outputs=[str(output/name) for name in record["outputs"]],
+                  intermediates=record.get("intermediates", {}), error=record.get("error"))
     if not args.json:
         print("RIG " + json.dumps(dict(status=record["status"], output=str(output), record=str(record_file))), flush=True)
     return {"succeeded":0, "check_failed":2, "interrupted":130}.get(record["status"], 1)

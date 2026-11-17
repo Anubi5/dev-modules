@@ -7,7 +7,7 @@ from pathlib import Path
 import bpy
 from mathutils import Matrix, Vector
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from orientation import verify_facing
+from orientation_blender import verify_armature
 
 args = sys.argv[sys.argv.index("--") + 1:]
 src, prefix = args[:2]; height = float(args[2]) if len(args) > 2 else 1.70
@@ -44,19 +44,10 @@ rc = kids(root)
 spine0 = max(rc, key=lambda c: head[c.name].z)
 legs = [c for c in rc if c is not spine0 and head[c.name].z < head[root.name].z + 0.02]
 names = {root.name: "pelvis"}
-# This UniRig reference ends at the heel. Require declared facing to agree with
-# both heel segments before assigning semantic left/right; never infer from toes.
-toes = []
-for l in legs:
-    ch, _ = chain(l)
-    if len(ch) >= 4:
-        toes.append(head[ch[3].name] - head[ch[2].name])
-toe = sum(toes, Vector()) if toes else Vector(); toe.z = 0
-report["toe_direction"] = [round(x, 3) for x in (toe.normalized() if toe.length > 1e-6 else toe)]
+# Use exactly the same evidence and validation as the pre-skin skeleton check.
 input_facing = next((a.split("=", 1)[1] for a in args if a.startswith("--facing=")), "-y")
 try:
-    orientation = verify_facing(toes, [head[b.name] for b in legs],
-                               [o.matrix_world.to_3x3().determinant() for o in [arm] + meshes], input_facing)
+    orientation = verify_armature(arm, meshes, input_facing)
 except ValueError as error:
     report.update(ok=False, problems=[str(error)], orientation={"status": "unsupported", "input_facing": input_facing})
     print("RIG-FINISH " + json.dumps(report), flush=True)

@@ -1266,6 +1266,25 @@
         "RecoveryTests.test_merged_rig_is_retained_without_becoming_validated_output"
       ],
       "effects": "Mocked subprocesses; disposable CPU-only files; no inference or services"
+    },
+    {
+      "id": "llama-swap/tests/unit/test_img_ask.py",
+      "original": "llama-swap/tests/unit/test_img_ask.py",
+      "path": "llama-swap/tests/unit/test_img_ask.py",
+      "owner": "llama-swap",
+      "category": "unit",
+      "entrypoint": true,
+      "platform": "any",
+      "requires": [],
+      "case_names": [
+        "AnswerTests.test_retained_real_grounded_captions_become_plain_text",
+        "AnswerTests.test_empty_echo_repetition_partial_and_malformed_outputs_fail",
+        "AnswerTests.test_plain_concise_answer_is_preserved",
+        "AnswerTests.test_request_stays_on_existing_model_and_bounds_tokens",
+        "AnswerTests.test_invalid_answer_cannot_satisfy_expect",
+        "AnswerTests.test_stopped_service_has_explicit_existing_start_command"
+      ],
+      "effects": "Mocked local HTTP; disposable image fixture; no inference or services"
     }
   ]
 }
